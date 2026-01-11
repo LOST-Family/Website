@@ -3,6 +3,7 @@ use actix_web::HttpResponse;
 use actix_web::http::StatusCode;
 use bytes::Bytes;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use serde_json;
 
 pub fn format_url(base: &str, path: &str) -> String {
     format!("{}{}", base, path)
@@ -10,6 +11,75 @@ pub fn format_url(base: &str, path: &str) -> String {
 
 pub fn encode_tag(tag: &str) -> String {
     utf8_percent_encode(tag, NON_ALPHANUMERIC).to_string()
+}
+
+// Function to filter out specific fields from clan data
+fn filter_clan_data(body: Bytes) -> Bytes {
+    if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
+        let mut modified = false;
+
+        let fields_to_remove = [
+            "maxKickpoints",
+            "minSeasonWins",
+            "kickpointsExpireAfterDays",
+            "kickpointReasons",
+        ];
+
+        if let Some(clans) = value.as_array_mut() {
+            for clan in clans {
+                if let Some(obj) = clan.as_object_mut() {
+                    for field in &fields_to_remove {
+                        obj.remove(*field);
+                    }
+                    modified = true;
+                }
+            }
+        } else if let Some(obj) = value.as_object_mut() {
+            for field in &fields_to_remove {
+                obj.remove(*field);
+            }
+            modified = true;
+        }
+
+        if modified {
+            if let Ok(filtered) = serde_json::to_vec(&value) {
+                return Bytes::from(filtered);
+            }
+        }
+    }
+    body
+}
+
+// Function to filter out specific fields from member data
+fn filter_member_data(body: Bytes) -> Bytes {
+    if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
+        let mut modified = false;
+
+        let fields_to_remove = ["totalKickpoints", "activeKickpoints", "clanDB"];
+
+        if let Some(members) = value.as_array_mut() {
+            for member in members {
+                if let Some(obj) = member.as_object_mut() {
+                    for field in &fields_to_remove {
+                        obj.remove(*field);
+                    }
+                    modified = true;
+                }
+            }
+        } else if let Some(obj) = value.as_object_mut() {
+            for field in &fields_to_remove {
+                obj.remove(*field);
+            }
+            modified = true;
+        }
+
+        if modified {
+            if let Ok(filtered) = serde_json::to_vec(&value) {
+                return Bytes::from(filtered);
+            }
+        }
+    }
+    body
 }
 
 // Public function used by both handlers and background task
@@ -25,7 +95,26 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
     {
         Ok(res) => {
             let status = res.status().as_u16();
-            let body = res.bytes().await.map_err(|e| e.to_string())?;
+            let mut body = res.bytes().await.map_err(|e| e.to_string())?;
+
+            // Filter out internal fields if this is a clan or member related endpoint
+            if status == 200 {
+                let parts: Vec<&str> = url_path.split('/').collect();
+                // /api/clans OR /api/clans/{tag}
+                if url_path == "/api/clans"
+                    || (parts.len() == 4 && parts[1] == "api" && parts[2] == "clans")
+                {
+                    body = filter_clan_data(body);
+                }
+                // /api/clans/{tag}/members
+                else if parts.len() == 5
+                    && parts[1] == "api"
+                    && parts[2] == "clans"
+                    && parts[4] == "members"
+                {
+                    body = filter_member_data(body);
+                }
+            }
 
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -29,35 +29,35 @@
     <nav class="nav" class:open={mobileMenuOpen} class:light={theme === 'light'}>
       <div class="nav-item dropdown">
         <button class="nav-link">
-          Community
+          WIP
           <svg class="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
           </svg>
         </button>
         <div class="dropdown-menu">
-          <a href="#discord" class="dropdown-item">Discord Servers</a>
-          <a href="#features" class="dropdown-item">Events & Activities</a>
-          <a href="#coc-clans" class="dropdown-item">Clash of Clans</a>
-          <a href="#cr-clans" class="dropdown-item">Clash Royale</a>
+          <a href="#discord" class="dropdown-item">WIP</a>
+          <a href="#features" class="dropdown-item">WIP</a>
+          <a href="#coc-clans" class="dropdown-item">WIP</a>
+          <a href="#cr-clans" class="dropdown-item">WIP</a>
         </div>
       </div>
       
       <div class="nav-item dropdown">
         <button class="nav-link">
-          Resources
+          WIP
           <svg class="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
           </svg>
         </button>
         <div class="dropdown-menu">
-          <a href="#guides" class="dropdown-item">Guides</a>
-          <a href="#tools" class="dropdown-item">Tools</a>
-          <a href="#faq" class="dropdown-item">FAQ</a>
+          <a href="#guides" class="dropdown-item">WIP</a>
+          <a href="#tools" class="dropdown-item">WIP</a>
+          <a href="#faq" class="dropdown-item">WIP</a>
         </div>
       </div>
       
-      <a href="#about" class="nav-link">About</a>
-      <a href="#contact" class="nav-link">Contact</a>
+      <a href="#about" class="nav-link">WIP</a>
+      <a href="#contact" class="nav-link">WIP</a>
     </nav>
     
     <div class="header-actions">

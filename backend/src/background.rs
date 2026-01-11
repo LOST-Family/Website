@@ -29,7 +29,10 @@ pub fn spawn_background_task(data: AppState) {
 async fn refresh_clans(data: &AppState) {
     // println!("Background Refresh: Fetching clans list...");
 
-    // 1. Fetch & Cache All Clans
+    // 1. Fetch & Cache Guild Info
+    let _ = update_cache(data, "/api/guild").await;
+
+    // 2. Fetch & Cache All Clans
     let clans_url = "/api/clans";
     match update_cache(data, clans_url).await {
         Ok(body_bytes) => {

@@ -1,8 +1,25 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import DiscordCard from './DiscordCard.svelte';
   
   export let theme: 'dark' | 'light' = 'dark';
   export let fallbackIcon: string;
+
+  let memberCount: number | null = null;
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : '';
+
+  onMount(async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/guild`);
+      if (response.ok) {
+        const data = await response.json();
+        // The API returns the guild object, we want the member count
+        memberCount = data.membercount;
+      }
+    } catch (e) {
+      console.error('Failed to fetch guild info:', e);
+    }
+  });
 </script>
 
 <section class="content-section" id="discord" class:light={theme === 'light'}>
@@ -21,7 +38,7 @@
     
     <div class="discord-grid">
       <DiscordCard guildId="1108449987827876022" {theme} />
-      <DiscordCard guildId="733857906117574717" {fallbackIcon} {theme} />
+      <DiscordCard guildId="733857906117574717" {fallbackIcon} {theme} totalMembers={memberCount} />
     </div>
   </div>
 </section>
@@ -86,6 +103,26 @@
     font-weight: 700;
     color: #fff;
     transition: color 0.4s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .member-badge {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    background: rgba(88, 101, 242, 0.15);
+    color: #5865f2;
+    border: 1px solid rgba(88, 101, 242, 0.3);
+    border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+
+  .content-section.light .member-badge {
+    background: rgba(88, 101, 242, 0.1);
+    border-color: rgba(88, 101, 242, 0.2);
   }
   
   .content-section.light .section-title {

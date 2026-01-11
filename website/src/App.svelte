@@ -45,6 +45,14 @@
     
     <DiscordSection {theme} fallbackIcon={lostLogo} />
     
+    <ClansSection 
+      {theme} 
+      {apiBaseUrl}
+      gameType="coc"
+      title="Clash of Clans"
+      description="Unsere Clans in Clash of Clans"
+    />
+
     <FeaturesSection 
       {theme} 
       {kothImage} 
@@ -53,21 +61,13 @@
       {twoVtwoImage} 
     />
     
-    <ClansSection 
-      {theme} 
-      {apiBaseUrl}
-      gameType="coc"
-      title="Clash of Clans"
-      description="Unsere Clans in Clash of Clans"
-    />
-    
-    <ClansSection 
+    <!-- <ClansSection 
       {theme} 
       {apiBaseUrl}
       gameType="cr"
       title="Clash Royale"
       description="Unsere Clans in Clash Royale"
-    />
+    /> -->
     
     <Footer {theme} logo={lostLogo} />
   </main>

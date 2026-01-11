@@ -129,26 +129,27 @@ async fn main() -> std::io::Result<()> {
             .route("/auth/me", web::get().to(get_me))
             .route("/auth/logout", web::post().to(logout))
             .route("/api/clans", web::get().to(get_clans))
-            .route("/api/clans/{tag}", web::get().to(get_clan_info))
+            // .route("/api/clans/{tag}", web::get().to(get_clan_info))
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
-            .route(
-                "/api/clans/{tag}/kickpoint-reasons",
-                web::get().to(get_clan_kickpoint_reasons),
-            )
-            .route(
-                "/api/clans/{tag}/war-members",
-                web::get().to(get_clan_war_members),
-            )
-            .route(
-                "/api/clans/{tag}/raid-members",
-                web::get().to(get_raid_members),
-            )
-            .route(
-                "/api/clans/{tag}/cwl-members",
-                web::get().to(get_cwl_members),
-            )
-            .route("/api/players/{tag}", web::get().to(get_player))
-            .route("/api/users/{userId}", web::get().to(get_user))
+            // .route(
+            //     "/api/clans/{tag}/kickpoint-reasons",
+            //     web::get().to(get_clan_kickpoint_reasons),
+            // )
+            // .route(
+            //     "/api/clans/{tag}/war-members",
+            //     web::get().to(get_clan_war_members),
+            // )
+            // .route(
+            //     "/api/clans/{tag}/raid-members",
+            //     web::get().to(get_raid_members),
+            // )
+            // .route(
+            //     "/api/clans/{tag}/cwl-members",
+            //     web::get().to(get_cwl_members),
+            // )
+            // .route("/api/players/{tag}", web::get().to(get_player))
+            // .route("/api/users/{userId}", web::get().to(get_user))
+            .route("/api/guild", web::get().to(get_guild_info))
     })
     .bind(("0.0.0.0", port))?
     .run()

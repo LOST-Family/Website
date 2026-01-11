@@ -74,3 +74,8 @@ pub async fn get_player(data: web::Data<AppState>, tag: web::Path<String>) -> im
 pub async fn get_user(data: web::Data<AppState>, user_id: web::Path<String>) -> impl Responder {
     forward_request(&data, &format!("/api/users/{}", user_id)).await
 }
+
+// 10. Get Guild Info
+pub async fn get_guild_info(data: web::Data<AppState>) -> impl Responder {
+    forward_request(&data, "/api/guild").await
+}

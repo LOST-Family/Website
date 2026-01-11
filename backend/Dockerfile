@@ -1,19 +1,28 @@
-# Builder stage
-FROM rust:slim-bookworm as builder
-
+FROM lukemathwalker/cargo-chef:latest-rust-slim-bookworm AS chef
 WORKDIR /app
-
-# Install dependencies for building
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
+    clang \
+    lld \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the source code
+FROM chef AS planner
 COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build the application
-RUN cargo build --release
+FROM chef AS cacher
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+FROM chef AS builder
+COPY . .
+# Copy over the cached dependencies
+COPY --from=cacher /app/target target
+COPY --from=cacher /usr/local/cargo /usr/local/cargo
+# Use faster linker
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+RUN cargo build --release --bin backend
 
 # Runtime stage
 FROM debian:bookworm-slim

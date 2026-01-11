@@ -5,6 +5,7 @@
   export let inviteCode: string | null = null;
   export let fallbackIcon: string | null = null;
   export let theme: 'dark' | 'light' = 'dark';
+  export let totalMembers: number | null = null;
   
   interface Member {
     id: string;
@@ -22,7 +23,6 @@
   }
 
   let data: DiscordData | null = null;
-  let totalMembers: number | null = null;
   let serverIcon: string | null = null;
   let serverDescription: string | null = null;
   let inviteUrl: string | null = null;
@@ -38,7 +38,7 @@
       inviteUrl = data?.instant_invite ?? null;
       let code = inviteCode || data?.instant_invite?.split('/').pop();
 
-      if (code) {
+      if (code && !totalMembers) {
         const inviteRes = await fetch(`https://discord.com/api/v10/invites/${code}?with_counts=true`);
         if (inviteRes.ok) {
           const inviteData = await inviteRes.json();
