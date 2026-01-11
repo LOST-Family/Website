@@ -1,6 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fade, slide } from 'svelte/transition';
+  
+  // Import banners
+  import banner3 from '../assets/Clans/Lost-X-3.png';
+  import banner4 from '../assets/Clans/Lost-X-4.png';
+  import banner5 from '../assets/Clans/Lost-X-5.png';
+  import banner6 from '../assets/Clans/Lost-X-6.png';
+  import banner7 from '../assets/Clans/Lost-X-7.png';
+  import banner8 from '../assets/Clans/Lost-X-8.png';
+  import bannerF2P from '../assets/Clans/Lost-X-f2p.png';
+  import bannerF2P2 from '../assets/Clans/Lost-X-f2p2.png';
+  import bannerGP from '../assets/Clans/Lost-X-gp.png';
+  import bannerAnthrazit from '../assets/Clans/Lost-X-anthrazit.png';
+  import bannerDefault from '../assets/Assets/banner-lost.png';
 
   export let apiBaseUrl: string = '';
   export let theme: 'dark' | 'light' = 'dark';
@@ -13,7 +26,8 @@
   interface Clan {
     tag: string;
     nameDB: string;
-    nameAPI?: string;
+    index: number;
+    badgeUrl: string;
   }
 
   interface Player {
@@ -21,15 +35,15 @@
     userId: string | null;
     roleInClan: string;
     clanDB: string | null;
-    // These may or may not exist depending on API
-    nameAPI?: string;
-    nameDB?: string;
+    nameDB: string;
+    isHidden: boolean;
   }
 
   interface ClanWithMembers extends Clan {
     members: Player[];
     loading: boolean;
     error: string | null;
+    isCollapsed: boolean;
   }
 
   let clans: ClanWithMembers[] = [];
@@ -41,50 +55,123 @@
   $: playerCount = clans.reduce((sum, c) => sum + c.members.length, 0);
   
   const roleOrder: Record<string, number> = {
-    LEADER: 0,
-    COLEADER: 1,
-    ELDER: 2,
-    MEMBER: 3,
-    NOTINCLAN: 4,
+    'ANFÜHRER': 10,
+    'ANFÜHRER 2': 11,
+    'ANFÜHRER 3': 12,
+    'ANFÜHRER 4': 13,
+    'ANFÜHRER 5': 14,
+    'ANFÜHRER 6': 15,
+    'ANFÜHRER 7': 16,
+    'ANFÜHRER 8': 17,
+    'ANFÜHRER GP': 18,
+    'ANFÜHRER ANTHRAZIT': 19,
+    'VIZE 1': 20,
+    'VIZE 2': 21,
+    'VIZE 3': 22,
+    'VIZE 4': 23,
+    'VIZE 5': 24,
+    'VIZE 6': 25,
+    'VIZE 7': 26,
+    'VIZE 8': 27,
+    'VIZE GP': 28,
+    'VIZE ANTHRAZIT': 29,
+    'ÄLTESTER 1': 30,
+    'ÄLTESTER 2': 31,
+    'ÄLTESTER 3': 32,
+    'ÄLTESTER 4': 33,
+    'ÄLTESTER 5': 34,
+    'ÄLTESTER 6': 35,
+    'ÄLTESTER 7': 36,
+    'ÄLTESTER 8': 37,
+    'ÄLTESTER GP': 38,
+    'ÄLTESTER ANTHRAZIT': 39,
+    'MITGLIED': 40,
+    'MITGLIED 2': 41,
+    'MITGLIED 3': 42,
+    'MITGLIED 4': 43,
+    'MITGLIED 5': 44,
+    'MITGLIED 6': 45,
+    'MITGLIED 7': 46,
+    'MITGLIED 8': 47,
+    'MITGLIED GP': 48,
+    'MITGLIED ANTHRAZIT': 49,
   };
 
   const roleColors: Record<string, string> = {
-    LEADER: '#FFD700', // Gold
-    COLEADER: '#e91e63', // Pink/Purple
-    ELDER: '#00bcd4', // Cyan
-    MEMBER: '#8bc34a', // Light Green
-    NOTINCLAN: '#9e9e9e', // Grey
+    'ANFÜHRER': '#c90000',
+    'ANFÜHRER 2': '#05762b',
+    'ANFÜHRER 3': '#c89e00',
+    'ANFÜHRER 4': '#691a97',
+    'ANFÜHRER 5': '#024885',
+    'ANFÜHRER 6': '#b54800',
+    'ANFÜHRER 7': '#007076',
+    'ANFÜHRER 8': '#d100c7',
+    'ANFÜHRER GP': '#a5025a',
+    'ANFÜHRER ANTHRAZIT': '#3d3a3f',
+    'VIZE 1': '#f61313',
+    'VIZE 2': '#02990b',
+    'VIZE 3': '#eec010',
+    'VIZE 4': '#9f03ce',
+    'VIZE 5': '#075aca',
+    'VIZE 6': '#ff7600',
+    'VIZE 7': '#00b3c6',
+    'VIZE 8': '#fb2bff',
+    'VIZE GP': '#df0c5d',
+    'VIZE ANTHRAZIT': '#817d7d',
+    'ÄLTESTER 1': '#f53d4a',
+    'ÄLTESTER 2': '#51ff84',
+    'ÄLTESTER 3': '#e1e459',
+    'ÄLTESTER 4': '#a76cd8',
+    'ÄLTESTER 5': '#56a3d8',
+    'ÄLTESTER 6': '#f8994f',
+    'ÄLTESTER 7': '#5bb2be',
+    'ÄLTESTER 8': '#f261ff',
+    'ÄLTESTER GP': '#e04dbd',
+    'ÄLTESTER ANTHRAZIT': '#546e7a',
+    'MITGLIED': '#f58190',
+    'MITGLIED 2': '#a0f5b1',
+    'MITGLIED 3': '#fdf277',
+    'MITGLIED 4': '#d9a6f9',
+    'MITGLIED 5': '#9eb7f5',
+    'MITGLIED 6': '#f6c17b',
+    'MITGLIED 7': '#9ed6e2',
+    'MITGLIED 8': '#ff88ee',
+    'MITGLIED GP': '#f38ac5',
+    'MITGLIED ANTHRAZIT': '#546e7a',
   };
 
-  const roleLabels: Record<string, string> = {
-    LEADER: 'Leader',
-    COLEADER: 'Co-Leaders',
-    ELDER: 'Elders',
-    MEMBER: 'Members',
-    NOTINCLAN: 'Guests',
-  };
+  function getDisplayRole(role: string): string {
+    if (role.includes('ANFÜHRER')) return 'Anführer';
+    if (role.includes('VIZE')) return 'Vize-Anführer';
+    if (role.includes('ÄLTESTER')) return 'Ältester';
+    if (role.includes('MITGLIED')) return 'Mitglied';
+    return role;
+  }
 
   // Helper to get display name - use nameAPI, nameDB, or tag
   function getPlayerName(player: Player): string {
-    return player.nameAPI || player.nameDB || player.tag || 'Unknown';
+    return player.nameDB || player.tag || 'Unknown';
   }
 
   onMount(async () => {
     try {
       // 1. Fetch Clans (filtered by game type)
-      const response = await fetch(`${apiBaseUrl}/api/clans?game=${gameType}`);
+      const response = await fetch(`${apiBaseUrl}/api/clans`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const clanData: Clan[] = await response.json();
+      
+      // sort the clanData by index
+      clanData.sort((a, b) => a.index - b.index);
       
       // Initialize with loading state
       clans = clanData.map((clan) => ({
         ...clan,
         members: [],
         loading: true,
-        error: null
+        error: null,
+        isCollapsed: true
       }));
       mainLoading = false;
-
       // 2. Fetch Members for ALL clans in parallel
       await Promise.all(clans.map(async (clan, index) => {
         try {
@@ -98,11 +185,48 @@
           if (Array.isArray(members)) {
             // Normalize and sort - keep all players that have a tag
             members = members
-              .filter(m => m && m.tag) // Only need a tag to be valid
-              .map(m => ({
-                ...m,
-                roleInClan: m.roleInClan ? m.roleInClan.toUpperCase() : 'NOTINCLAN'
-              }))
+              .filter(m => m && m.tag && !m.isHidden)
+              .map(m => {
+                const baseRole = m.roleInClan ? m.roleInClan.toUpperCase() : 'NOTINCLAN';
+                let computedRole = baseRole;
+                
+                // Standard CoC roles from API are usually these
+                const standardRoles = ['LEADER', 'COLEADER', 'CO-LEADER', 'ELDER', 'ADMIN', 'MEMBER'];
+                
+                if (standardRoles.includes(baseRole)) {
+                  const clanIndex = index + 1;
+                  const clanNameUpper = (clan.nameDB || '').toUpperCase();
+                  const isGP = clanNameUpper.includes('GP');
+                  const isAnthrazit = clanNameUpper.includes('ANTHRAZIT');
+                  
+                  if (isGP) {
+                    if (baseRole === 'LEADER') computedRole = 'ANFÜHRER GP';
+                    else if (baseRole === 'COLEADER' || baseRole === 'CO-LEADER') computedRole = 'VIZE GP';
+                    else if (baseRole === 'ELDER' || baseRole === 'ADMIN') computedRole = 'ÄLTESTER GP';
+                    else if (baseRole === 'MEMBER') computedRole = 'MITGLIED GP';
+                  } else if (isAnthrazit) {
+                    if (baseRole === 'LEADER') computedRole = 'ANFÜHRER ANTHRAZIT';
+                    else if (baseRole === 'COLEADER' || baseRole === 'CO-LEADER') computedRole = 'VIZE ANTHRAZIT';
+                    else if (baseRole === 'ELDER' || baseRole === 'ADMIN') computedRole = 'ÄLTESTER ANTHRAZIT';
+                    else if (baseRole === 'MEMBER') computedRole = 'MITGLIED ANTHRAZIT';
+                  } else {
+                    if (baseRole === 'LEADER') {
+                      computedRole = clanIndex === 1 ? 'ANFÜHRER' : `ANFÜHRER ${clanIndex}`;
+                    } else if (baseRole === 'COLEADER' || baseRole === 'CO-LEADER') {
+                      computedRole = `VIZE ${clanIndex}`;
+                    } else if (baseRole === 'ELDER' || baseRole === 'ADMIN') {
+                      computedRole = `ÄLTESTER ${clanIndex}`;
+                    } else if (baseRole === 'MEMBER') {
+                      computedRole = clanIndex === 1 ? 'MITGLIED' : `MITGLIED ${clanIndex}`;
+                    }
+                  }
+                }
+                
+                return {
+                  ...m,
+                  roleInClan: computedRole
+                };
+              })
               .sort((a, b) => {
                 const roleA = roleOrder[a.roleInClan] ?? 99;
                 const roleB = roleOrder[b.roleInClan] ?? 99;
@@ -136,6 +260,26 @@
     }
     return [...grouped.entries()].sort((a, b) => (roleOrder[a[0]] ?? 99) - (roleOrder[b[0]] ?? 99));
   }
+
+  function toggleClan(index: number) {
+    clans[index].isCollapsed = !clans[index].isCollapsed;
+    clans = [...clans];
+  }
+
+  function getClanBanner(clanName: string): string {
+    const name = clanName.toUpperCase();
+    if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
+    if (name.includes('F2P')) return bannerF2P;
+    if (name.includes('GP')) return bannerGP;
+    if (name.includes('3')) return banner3;
+    if (name.includes('4')) return banner4;
+    if (name.includes('5')) return banner5;
+    if (name.includes('6')) return banner6;
+    if (name.includes('7')) return banner7;
+    if (name.includes('8')) return banner8;
+    if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
+    return bannerDefault;
+  }
 </script>
 
 <div class="card-container" class:light={theme === 'light'}>
@@ -150,56 +294,92 @@
     </div>
   {:else}
     <div class="clans-grid">
-      {#each clans as clan}
-        <div class="clan-card-item" transition:fade>
-          <div class="clan-card-header">
-            <h3 class="clan-name">{clan.nameAPI || clan.nameDB || 'Unknown Clan'}</h3>
-            <span class="clan-tag">{clan.tag}</span>
+      {#each clans as clan, i}
+        <div class="clan-card-item" class:expanded={!clan.isCollapsed} transition:fade>
+          <div 
+            class="clan-card-header" 
+            on:click={() => toggleClan(i)} 
+            role="button" 
+            tabindex="0"
+            on:keydown={(e) => e.key === 'Enter' && toggleClan(i)}
+          >
+            {#if clan.badgeUrl}
+              <img src={clan.badgeUrl} alt="Badge" class="clan-badge" />
+            {/if}
+            <div class="clan-titles">
+              <h3 class="clan-name">{clan.nameDB || 'Unknown Clan'}</h3>
+              <span class="clan-tag">{clan.tag}</span>
+            </div>
             {#if !clan.loading}
               <div class="member-count-badge">
                 {clan.members.length} members
               </div>
             {/if}
+            <div class="collapse-icon" class:is-collapsed={clan.isCollapsed}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
           </div>
 
-          <div class="clan-card-body">
-            {#if clan.loading}
-              <div class="loading-members">
-                <div class="mini-spinner"></div>
+          {#if clan.isCollapsed}
+            <div 
+              class="clan-banner-container" 
+              on:click={() => toggleClan(i)} 
+              role="button" 
+              tabindex="0"
+              on:keydown={(e) => e.key === 'Enter' && toggleClan(i)}
+              transition:slide
+            >
+              <img src={getClanBanner(clan.nameDB || '')} alt="Lost Clan Banner" class="clan-banner" />
+              <div class="banner-overlay" transition:fade>
+                <span>Mitglieder anzeigen</span>
               </div>
-            {:else if clan.error}
-              <div class="member-error">
-                <span>{clan.error}</span>
-              </div>
-            {:else if clan.members.length === 0}
-              <div class="empty-members">
-                <span>No members</span>
-              </div>
-            {:else}
-              <div class="roles-flow">
-                {#each getPlayersByRole(clan.members) as [role, players]}
-                  <div class="role-section">
-                    <div class="role-header">
-                      <span class="role-dot" style="background-color: {roleColors[role] || '#fff'}"></span>
-                      <span class="role-title">{roleLabels[role] || role}</span>
-                      <span class="role-count">{players.length}</span>
-                    </div>
-                    
-                    <div class="members-list">
-                      {#each players as player}
-                        <div class="member-item">
-                          <div class="member-avatar" style="border-color: {roleColors[role] || '#fff'}">
-                            {getPlayerName(player).charAt(0).toUpperCase()}
+            </div>
+          {:else}
+            <div class="clan-card-body" transition:slide>
+              {#if clan.loading}
+                <div class="loading-members">
+                  <div class="mini-spinner"></div>
+                </div>
+              {:else if clan.error}
+                <div class="member-error">
+                  <span>{clan.error}</span>
+                </div>
+              {:else if clan.members.length === 0}
+                <div class="empty-members">
+                  <span>No members</span>
+                </div>
+              {:else}
+                <div class="roles-flow">
+                  {#each getPlayersByRole(clan.members) as [role, players]}
+                    <div class="role-section">
+                      <div class="role-header">
+                        <span class="role-dot" style="background-color: {roleColors[role] || (theme === 'light' ? '#666' : '#aaa')}"></span>
+                        <span class="role-title">{getDisplayRole(role)}</span>
+                        <span class="role-count">{players.length}</span>
+                      </div>
+                      
+                      <div class="members-list">
+                        {#each players as player}
+                          <div class="member-item" transition:fade>
+                            <div class="member-avatar" style="border-color: {roleColors[role] || (theme === 'light' ? '#eee' : '#444')}">
+                              {getPlayerName(player).charAt(0).toUpperCase()}
+                            </div>
+                            <span 
+                              class="member-name" 
+                              style="color: {roleColors[role] || 'inherit'}"
+                              title={getPlayerName(player)}
+                            >
+                              {getPlayerName(player)}
+                            </span>
                           </div>
-                          <span class="member-name" title={getPlayerName(player)}>{getPlayerName(player)}</span>
-                        </div>
-                      {/each}
+                        {/each}
+                      </div>
                     </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -238,16 +418,24 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: 20px;
+    align-items: start;
   }
 
   .clan-card-item {
-    background: #36393f;
-    border-radius: 10px;
+    background: #2f3136;
+    border-radius: 8px;
     overflow: hidden;
     border: 1px solid #202225;
     display: flex;
     flex-direction: column;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: fit-content;
+  }
+
+  .clan-card-item.expanded {
+    border-color: #5865f2;
+    box-shadow: 0 4px 20px rgba(88, 101, 242, 0.15);
+    z-index: 10;
   }
 
   .card-container.light .clan-card-item {
@@ -257,8 +445,14 @@
   }
 
   .clan-card-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+    border-color: #4f545c;
+  }
+
+  .clan-card-item.expanded:hover {
+    border-color: #7d8ef5;
+    box-shadow: 0 12px 32px rgba(88, 101, 242, 0.25);
   }
 
   .card-container.light .clan-card-item:hover {
@@ -274,11 +468,101 @@
     gap: 8px;
     border-bottom: 1px solid #202225;
     transition: all 0.4s ease;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .clan-card-header:hover {
+    background: #32353b;
+  }
+
+  .card-container.light .clan-card-header:hover {
+    background: #f8f9fa;
+  }
+
+  .collapse-icon {
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #72767d;
+    transition: transform 0.3s ease;
+  }
+
+  .collapse-icon.is-collapsed {
+    transform: rotate(-90deg);
+  }
+
+  /* Banner styles */
+  .clan-banner-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .hue-red-banner .clan-banner {
+    filter: hue-rotate(145deg) saturate(1.2);
+  }
+
+  .clan-banner {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+
+  .banner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .banner-overlay span {
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.8rem;
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .clan-banner-container:hover .clan-banner {
+    transform: scale(1.05);
+  }
+
+  .clan-banner-container:hover .banner-overlay {
+    opacity: 1;
   }
 
   .card-container.light .clan-card-header {
     background: linear-gradient(180deg, #f2f3f5 0%, #e9ecef 100%);
     border-bottom: 1px solid #e3e5e8;
+  }
+
+  .clan-badge {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  .clan-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .clan-name {
@@ -322,9 +606,10 @@
   .clan-card-body {
     padding: 16px;
     flex-grow: 1;
-    max-height: 400px;
+    max-height: 600px;
     overflow-y: auto;
     transition: background 0.4s ease;
+    scrollbar-gutter: stable;
   }
 
   .card-container.light .clan-card-body {
@@ -359,10 +644,16 @@
   }
 
   .role-section {
-    background: rgba(0, 0, 0, 0.15);
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 8px;
     padding: 12px;
-    transition: background 0.4s ease;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .role-section:hover {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .card-container.light .role-section {
@@ -406,11 +697,11 @@
 
   .role-count {
     margin-left: auto;
-    font-size: 0.7rem;
-    color: #72767d;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 2px 8px;
-    border-radius: 10px;
+    font-size: 0.75rem;
+    color: #b9bbbe;
+    background: #202225;
+    padding: 2px 10px;
+    border-radius: 12px;
     transition: all 0.4s ease;
   }
 
@@ -420,27 +711,28 @@
   }
 
   .members-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
   }
 
   .member-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px 4px 4px;
-    background: #2f3136;
-    border-radius: 20px;
+    gap: 8px;
+    padding: 4px 8px;
+    background: rgba(180, 180, 180, 0.1);
+    border-radius: 6px;
     transition: all 0.2s ease;
   }
 
   .card-container.light .member-item {
-    background: #f2f3f5;
+    background: rgba(0, 0, 0, 0.04);
   }
 
   .member-item:hover {
     background: #40444b;
+    transform: translateX(4px);
   }
 
   .card-container.light .member-item:hover {
@@ -470,17 +762,19 @@
 
   .member-name {
     color: #dcddde;
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.85rem;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    flex: 1;
     transition: color 0.4s ease;
+    text-shadow: 0.3px 0.3px 0.3px rgba(0, 0, 0, 0.8);
   }
 
   .card-container.light .member-name {
     color: #2e3338;
+    text-shadow: 0.5px 0.5px 0px rgba(255, 255, 255, 0.8);
   }
 
   .spinner, .mini-spinner {

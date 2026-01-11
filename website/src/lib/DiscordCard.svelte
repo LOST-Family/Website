@@ -35,7 +35,7 @@
       if (!response.ok) throw new Error('Failed to fetch widget');
       data = await response.json();
       
-      inviteUrl = data?.instant_invite;
+      inviteUrl = data?.instant_invite ?? null;
       let code = inviteCode || data?.instant_invite?.split('/').pop();
 
       if (code) {

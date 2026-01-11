@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fetchUser } from './lib/auth';
   
   // Components
   import Header from './lib/Header.svelte';
@@ -28,6 +29,7 @@
   
   onMount(() => {
     mounted = true;
+    fetchUser();
   });
   
   function handleThemeToggle(event: CustomEvent<{ theme: 'dark' | 'light' }>) {

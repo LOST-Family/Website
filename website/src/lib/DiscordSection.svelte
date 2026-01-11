@@ -14,8 +14,8 @@
         </svg>
       </div>
       <div class="section-title-group">
-        <h2 class="section-title">Join Our Community</h2>
-        <p class="section-description">Connect with fellow players on Discord</p>
+        <h2 class="section-title">Komm in die Community</h2>
+        <p class="section-description">Die Angriffsplannung erfolgt über Discord</p>
       </div>
     </div>
     
