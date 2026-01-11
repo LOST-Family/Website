@@ -28,7 +28,8 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
         .unwrap();
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@localhost/website".to_string());
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:password@localhost/website".to_string());
 
     // Auth Env Vars
     let discord_client_id =

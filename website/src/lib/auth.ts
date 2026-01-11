@@ -14,7 +14,10 @@ export interface User {
 export const user = writable<User | null>(null);
 export const loading = writable<boolean>(true);
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : 'http://localhost:8080';
+const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL !== undefined
+        ? import.meta.env.VITE_API_BASE_URL
+        : 'http://localhost:8080';
 
 export async function fetchUser() {
     loading.set(true);
