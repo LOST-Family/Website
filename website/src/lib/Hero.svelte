@@ -6,11 +6,11 @@
 
 <section class="hero" class:light={theme === 'light'} class:mounted>
   <div class="hero-banner">
-    <img src={banner} alt="Lost Family Banner" class="banner-image" />
+    <img src={banner} alt="LOST Family Banner" class="banner-image" />
     <div class="hero-overlay"></div>
   </div>
   <div class="hero-content">
-    <h1 class="hero-title">Lost Family</h1>
+    <h1 class="hero-title">LOST Family</h1>
     <p class="hero-subtitle">Clash of Clans Alliance</p>
     <div class="hero-scroll-indicator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

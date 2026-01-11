@@ -329,7 +329,7 @@
               on:keydown={(e) => e.key === 'Enter' && toggleClan(i)}
               transition:slide
             >
-              <img src={getClanBanner(clan.nameDB || '')} alt="Lost Clan Banner" class="clan-banner" />
+              <img src={getClanBanner(clan.nameDB || '')} alt="LOST Clan Banner" class="clan-banner" />
               <div class="banner-overlay" transition:fade>
                 <span>Mitglieder anzeigen</span>
               </div>

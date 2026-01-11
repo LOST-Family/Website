@@ -6,10 +6,10 @@
 <footer class="footer" class:light={theme === 'light'}>
   <div class="footer-content">
     <div class="footer-brand">
-      <img src={logo} alt="Lost Family" class="footer-logo" />
-      <span class="footer-name">Lost Family</span>
+      <img src={logo} alt="LOST Family" class="footer-logo" />
+      <span class="footer-name">LOST Family</span>
     </div>
-    <p class="footer-text">© 2026 Lost Family · Clash of Clans Alliance</p>
+    <p class="footer-text">© 2026 LOST Family · Clash of Clans Alliance</p>
   </div>
 </footer>
 

@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
         .unwrap();
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:cache.db".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@localhost/website".to_string());
 
     // Auth Env Vars
     let discord_client_id =
@@ -56,8 +56,8 @@ async fn main() -> std::io::Result<()> {
     )
     .set_redirect_uri(redirect_url);
 
-    // Initialize SQLite Database
-    let pool = sqlx::sqlite::SqlitePool::connect(&database_url)
+    // Initialize Postgres Database
+    let pool = sqlx::postgres::PgPool::connect(&database_url)
         .await
         .expect("Failed to connect to pool");
 
@@ -65,9 +65,9 @@ async fn main() -> std::io::Result<()> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS cache (
             key TEXT PRIMARY KEY,
-            body BLOB NOT NULL,
+            body BYTEA NOT NULL,
             status INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
+            updated_at BIGINT NOT NULL
         )",
     )
     .execute(&pool)
@@ -77,7 +77,7 @@ async fn main() -> std::io::Result<()> {
     // Create users table if not exists
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             discord_id TEXT UNIQUE NOT NULL,
             username TEXT NOT NULL,
             global_name TEXT,
@@ -86,32 +86,12 @@ async fn main() -> std::io::Result<()> {
             highest_role TEXT,
             is_admin BOOLEAN DEFAULT FALSE,
             linked_players TEXT,
-            updated_at INTEGER NOT NULL
+            updated_at BIGINT NOT NULL
         )",
     )
     .execute(&pool)
     .await
     .expect("Failed to run migrations (users)");
-
-    // Migration for existing table
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN nickname TEXT")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN highest_role TEXT")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN linked_players TEXT")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN avatar TEXT")
-        .execute(&pool)
-        .await;
-    let _ = sqlx::query("ALTER TABLE users ADD COLUMN global_name TEXT")
-        .execute(&pool)
-        .await;
 
     let client = Client::builder()
         .timeout(Duration::from_secs(200))

@@ -32,9 +32,14 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
                 .unwrap()
                 .as_secs() as i64;
 
-            // We use INSERT OR REPLACE to update existing keys
+            // We use ON CONFLICT to update existing keys
             let _ = sqlx::query(
-                "INSERT OR REPLACE INTO cache (key, body, status, updated_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO cache (key, body, status, updated_at) 
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (key) DO UPDATE SET 
+                    body = EXCLUDED.body, 
+                    status = EXCLUDED.status, 
+                    updated_at = EXCLUDED.updated_at",
             )
             .bind(url_path)
             .bind(body.to_vec())
@@ -52,7 +57,7 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
 pub async fn forward_request(data: &AppState, url_path: &str) -> HttpResponse {
     // 1. serve from cache ONLY
     let result =
-        sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = ?")
+        sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = $1")
             .bind(url_path)
             .fetch_optional(&data.db_pool)
             .await;

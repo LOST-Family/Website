@@ -1,0 +1,50 @@
+services:
+    db:
+        image: postgres:16-alpine
+        container_name: website-db
+        restart: always
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+            POSTGRES_DB: ${POSTGRES_DB:-website}
+        ports:
+            - '5444:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+
+    backend:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        container_name: website-backend
+        restart: always
+        depends_on:
+            - db
+        environment:
+            DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-website}
+            UPSTREAM_API_URL: ${UPSTREAM_API_URL}
+            BOT_SERVER_API_TOKEN: ${BOT_SERVER_API_TOKEN}
+            DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+            DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+            DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
+            JWT_SECRET: ${JWT_SECRET}
+            FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+            SERVER_PORT: 8888
+        ports:
+            - '8888:8888'
+
+    website:
+        build:
+            context: ./website
+            dockerfile: Dockerfile
+            args:
+                - VITE_API_BASE_URL=${VITE_API_BASE_URL:-}
+        container_name: website-frontend
+        restart: always
+        depends_on:
+            - backend
+        ports:
+            - '5173:5173'
+
+volumes:
+    postgres_data:

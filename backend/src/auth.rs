@@ -175,16 +175,16 @@ pub async fn discord_callback(
     // Save user to DB
     let db_res = sqlx::query(
         "INSERT INTO users (discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players, updated_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT(discord_id) DO UPDATE SET
-            username = excluded.username,
-            global_name = excluded.global_name,
-            nickname = excluded.nickname,
-            avatar = excluded.avatar,
-            highest_role = excluded.highest_role,
-            is_admin = excluded.is_admin,
-            linked_players = excluded.linked_players,
-            updated_at = excluded.updated_at",
+            username = EXCLUDED.username,
+            global_name = EXCLUDED.global_name,
+            nickname = EXCLUDED.nickname,
+            avatar = EXCLUDED.avatar,
+            highest_role = EXCLUDED.highest_role,
+            is_admin = EXCLUDED.is_admin,
+            linked_players = EXCLUDED.linked_players,
+            updated_at = EXCLUDED.updated_at",
     )
     .bind(&user_info.id)
     .bind(&user_info.username)
@@ -238,7 +238,7 @@ pub async fn discord_callback(
 
 pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl Responder {
     let user_db = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool, String)>(
-        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players FROM users WHERE discord_id = ?",
+        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players FROM users WHERE discord_id = $1",
     )
     .bind(&user.claims.sub)
     .fetch_one(&data.db_pool)

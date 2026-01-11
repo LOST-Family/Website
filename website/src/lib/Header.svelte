@@ -22,8 +22,8 @@
 <header class="header" class:light={theme === 'light'}>
   <div class="header-content">
     <div class="logo">
-      <img src={logo} alt="Lost Family" class="logo-icon" />
-      <span class="logo-text">Lost Family</span>
+      <img src={logo} alt="LOST Family" class="logo-icon" />
+      <span class="logo-text">LOST Family</span>
     </div>
     
     <nav class="nav" class:open={mobileMenuOpen} class:light={theme === 'light'}>
