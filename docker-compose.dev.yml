@@ -1,0 +1,37 @@
+services:
+    backend:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile.dev
+        container_name: website-backend-dev
+        volumes:
+            # Mount source code so edits are visible
+            - ./backend:/app
+            # Cache build artifacts in a volume (faster, avoids recompiling deps)
+            - backend_target:/app/target
+            # Cache cargo registry (avoids re-downloading crates)
+            - cargo_registry:/usr/local/cargo/registry
+        environment:
+            - RUST_LOG=debug
+            - SERVER_PORT=8888
+            # Ensure database URL is inherited from main compose file
+        ports:
+            - '8888:8888'
+
+    website:
+        build:
+            context: ./website
+            dockerfile: Dockerfile.dev
+        container_name: website-frontend-dev
+        volumes:
+            # Mount source code
+            - ./website:/app
+            # Use an anonymous volume for node_modules so the container's installed deps
+            # aren't overwritten by the host's (potentially empty or incompatible) node_modules
+            - /app/node_modules
+        ports:
+            - '5173:5173'
+
+volumes:
+    backend_target:
+    cargo_registry:

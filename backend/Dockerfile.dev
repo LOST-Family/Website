@@ -1,0 +1,19 @@
+FROM rust:1.84-slim-bookworm
+WORKDIR /app
+
+# Install system dependencies required for compiling actix-web, sqlx, etc.
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    clang \
+    lld \
+    && rm -rf /var/lib/apt/lists/*
+
+# We do NOT copy source here because we will bind-mount it in docker-compose.dev.yml
+# This allows you to edit files on your host and have them available in the container immediately.
+
+# Simple development command. 
+# Note: For strict hot-reloading (auto-restart on save), we would check if cargo-watch is installed.
+# For now, we use 'cargo run' to start the server. 
+# If you change Rust code, run 'docker compose restart backend' to recompile only changed files.
+CMD ["cargo", "run", "--bin", "backend"]

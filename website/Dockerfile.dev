@@ -1,0 +1,12 @@
+FROM node:20-slim
+WORKDIR /app
+
+# Copy package files to install dependencies in the image
+COPY package*.json ./
+RUN npm install
+
+# We do NOT copy the rest of source here because we bind-mount it.
+# The volume binding in docker-compose.dev.yml will bring in your source code.
+
+# Run vite in development mode exposed to the network
+CMD ["npm", "run", "dev", "--", "--host"]
