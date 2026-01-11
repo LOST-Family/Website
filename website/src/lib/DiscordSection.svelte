@@ -32,7 +32,7 @@
       </div>
       <div class="section-title-group">
         <h2 class="section-title">Komm in die Community</h2>
-        <p class="section-description">Die Angriffsplannung erfolgt über Discord</p>
+        <p class="section-description">Die Angriffsplanung erfolgt über Discord</p>
       </div>
     </div>
     
