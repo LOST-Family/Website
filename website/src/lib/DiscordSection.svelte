@@ -109,22 +109,6 @@
     flex-wrap: wrap;
   }
 
-  .member-badge {
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 0.25rem 0.75rem;
-    background: rgba(88, 101, 242, 0.15);
-    color: #5865f2;
-    border: 1px solid rgba(88, 101, 242, 0.3);
-    border-radius: 20px;
-    letter-spacing: 0.02em;
-  }
-
-  .content-section.light .member-badge {
-    background: rgba(88, 101, 242, 0.1);
-    border-color: rgba(88, 101, 242, 0.2);
-  }
-  
   .content-section.light .section-title {
     color: #0f172a;
   }
