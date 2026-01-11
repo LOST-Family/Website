@@ -8,6 +8,7 @@
   import DiscordSection from './lib/DiscordSection.svelte';
   import FeaturesSection from './lib/FeaturesSection.svelte';
   import ClansSection from './lib/ClansSection.svelte';
+  import ProfilePage from './lib/ProfilePage.svelte';
   import Footer from './lib/Footer.svelte';
   
   // Logos
@@ -24,50 +25,64 @@
   
   let theme: 'dark' | 'light' = 'dark';
   let mounted = false;
+  let currentPath = window.location.pathname;
   
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : '';
   
   onMount(() => {
     mounted = true;
     fetchUser();
+    
+    // Simple SPA routing
+    const handlePopState = () => {
+      currentPath = window.location.pathname;
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   });
   
   function handleThemeToggle(event: CustomEvent<{ theme: 'dark' | 'light' }>) {
     theme = event.detail.theme;
   }
+
+  function handleNavigate(event: CustomEvent<string>) {
+    const newPath = event.detail === 'home' ? '/' : `/${event.detail}`;
+    if (currentPath !== newPath) {
+      window.history.pushState({}, '', newPath);
+      currentPath = newPath;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
 </script>
 
 <div class="app" class:light={theme === 'light'} class:mounted>
-  <Header {theme} logo={lostLogo} on:themeToggle={handleThemeToggle} />
+  <Header {theme} logo={lostLogo} on:themeToggle={handleThemeToggle} on:navigate={handleNavigate} />
   
   <main>
-    <Hero banner={lostBanner} {theme} {mounted} />
-    
-    <DiscordSection {theme} fallbackIcon={lostLogo} />
-    
-    <ClansSection 
-      {theme} 
-      {apiBaseUrl}
-      gameType="coc"
-      title="Clash of Clans"
-      description="Unsere Clans in Clash of Clans"
-    />
+    {#if currentPath === '/' || currentPath === ''}
+      <Hero banner={lostBanner} {theme} {mounted} />
+      
+      <DiscordSection {theme} fallbackIcon={lostLogo} />
+      
+      <ClansSection 
+        {theme} 
+        {apiBaseUrl}
+        gameType="coc"
+        title="Clash of Clans"
+        description="Unsere Clans in Clash of Clans"
+      />
 
-    <FeaturesSection 
-      {theme} 
-      {kothImage} 
-      {pushEventImage} 
-      {bigFarmImage} 
-      {twoVtwoImage} 
-    />
-    
-    <!-- <ClansSection 
-      {theme} 
-      {apiBaseUrl}
-      gameType="cr"
-      title="Clash Royale"
-      description="Unsere Clans in Clash Royale"
-    /> -->
+      <FeaturesSection 
+        {theme} 
+        {kothImage} 
+        {pushEventImage} 
+        {bigFarmImage} 
+        {twoVtwoImage} 
+      />
+    {:else if currentPath === '/account'}
+      <ProfilePage {theme} {apiBaseUrl} />
+    {/if}
     
     <Footer {theme} logo={lostLogo} />
   </main>

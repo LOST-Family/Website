@@ -8,10 +8,18 @@
   
   let mobileMenuOpen = false;
   
-  const dispatch = createEventDispatcher<{ themeToggle: { theme: 'dark' | 'light' } }>();
+  const dispatch = createEventDispatcher<{ 
+    themeToggle: { theme: 'dark' | 'light' },
+    navigate: string 
+  }>();
   
   function handleThemeToggle(event: CustomEvent<{ theme: 'dark' | 'light' }>) {
     dispatch('themeToggle', event.detail);
+  }
+
+  function navigate(page: string) {
+    dispatch('navigate', page);
+    mobileMenuOpen = false;
   }
   
   function toggleMobileMenu() {
@@ -21,7 +29,7 @@
 
 <header class="header" class:light={theme === 'light'}>
   <div class="header-content">
-    <div class="logo">
+    <div class="logo" role="button" on:click={() => navigate('home')} style="cursor: pointer;">
       <img src={logo} alt="LOST Family" class="logo-icon" />
       <span class="logo-text">LOST Family</span>
     </div>
@@ -104,12 +112,12 @@
             
             <div class="dropdown-divider"></div>
             
-            <a href="#profile" class="dropdown-item">
+            <button on:click={() => navigate('account')} class="dropdown-item">
               <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
               </svg>
               My Profile
-            </a>
+            </button>
             
             {#if $user.is_admin}
               <a href="/admin" class="dropdown-item admin-link">

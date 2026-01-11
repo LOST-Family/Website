@@ -41,7 +41,7 @@
       {/if}
     </div>
     
-    <ClanCard {apiBaseUrl} {theme} {gameType} bind:clanCount bind:playerCount />
+    <ClanCard {apiBaseUrl} {theme} bind:clanCount bind:playerCount />
   </div>
 </section>
 

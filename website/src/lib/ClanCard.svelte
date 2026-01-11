@@ -17,7 +17,6 @@
 
   export let apiBaseUrl: string = '';
   export let theme: 'dark' | 'light' = 'dark';
-  export let gameType: 'coc' | 'cr' = 'coc'; // Clash of Clans or Clash Royale
   
   // Exported stats for parent component
   export let clanCount: number = 0;
@@ -502,10 +501,6 @@
     overflow: hidden;
   }
 
-  .hue-red-banner .clan-banner {
-    filter: hue-rotate(145deg) saturate(1.2);
-  }
-
   .clan-banner {
     width: 100%;
     height: 100%;
@@ -806,21 +801,17 @@
   }
 
   /* Custom Scrollbar */
-  .card-body::-webkit-scrollbar,
   .clan-card-body::-webkit-scrollbar {
     width: 6px;
   }
-  .card-body::-webkit-scrollbar-track,
   .clan-card-body::-webkit-scrollbar-track {
     background: transparent;
   }
-  .card-body::-webkit-scrollbar-thumb,
   .clan-card-body::-webkit-scrollbar-thumb {
     background: #18191c;
     border-radius: 3px;
   }
   
-  .card-container.light .card-body::-webkit-scrollbar-thumb,
   .card-container.light .clan-card-body::-webkit-scrollbar-thumb {
     background: #c3cfe2;
   }
@@ -835,21 +826,6 @@
   @media (max-width: 600px) {
     .clans-grid {
       grid-template-columns: 1fr;
-    }
-    
-    .card-header {
-      padding: 16px;
-    }
-    
-    .card-body {
-      padding: 16px;
-    }
-    
-    .total-stats {
-      width: 100%;
-      margin-left: 0;
-      margin-top: 12px;
-      justify-content: center;
     }
   }
 </style>

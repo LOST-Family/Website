@@ -1,6 +1,6 @@
 use crate::auth::{AuthenticatedUser, has_required_role};
 use crate::models::{AppState, ErrorResponse};
-use crate::utils::{encode_tag, forward_request};
+use crate::utils::{encode_tag, forward_request, update_cache};
 use actix_web::{HttpResponse, Responder, web};
 
 // 1. Get All Clans
@@ -78,4 +78,41 @@ pub async fn get_user(data: web::Data<AppState>, user_id: web::Path<String>) -> 
 // 10. Get Guild Info
 pub async fn get_guild_info(data: web::Data<AppState>) -> impl Responder {
     forward_request(&data, "/api/guild").await
+}
+
+// 11. Get My Player Accounts (Protected: User only)
+pub async fn get_my_player_accounts(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    // 1. Get user's linked players from DB
+    let user_db =
+        sqlx::query_as::<_, (String,)>("SELECT linked_players FROM users WHERE discord_id = $1")
+            .bind(&user.claims.sub)
+            .fetch_one(&data.db_pool)
+            .await;
+
+    let linked_players: Vec<String> = match user_db {
+        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
+        Err(_) => return HttpResponse::NotFound().finish(),
+    };
+
+    let mut players_data = Vec::new();
+    for tag in linked_players {
+        let encoded_tag = encode_tag(&tag);
+        let url_path = format!("/api/players/{}", encoded_tag);
+
+        match update_cache(&data, &url_path).await {
+            Ok(body) => {
+                if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                    players_data.push(json);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error fetching player data for {}: {}", tag, e);
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(players_data)
 }

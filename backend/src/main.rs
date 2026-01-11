@@ -128,6 +128,7 @@ async fn main() -> std::io::Result<()> {
             .route("/auth/discord/callback", web::get().to(discord_callback))
             .route("/auth/me", web::get().to(get_me))
             .route("/auth/logout", web::post().to(logout))
+            .route("/api/me/accounts", web::get().to(get_my_player_accounts))
             .route("/api/clans", web::get().to(get_clans))
             // .route("/api/clans/{tag}", web::get().to(get_clan_info))
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
