@@ -6,7 +6,7 @@ import { ViteImageOptimizer } from 'vite-plugin-image-optimizer';
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [
-        svelte(), 
+        svelte(),
         tailwindcss(),
         ViteImageOptimizer({
             png: {
