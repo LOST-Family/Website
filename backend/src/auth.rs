@@ -272,32 +272,110 @@ pub async fn logout() -> impl Responder {
 }
 
 use actix_web::FromRequest;
-use std::future::{Ready, ready};
+use futures_util::future::LocalBoxFuture;
+use std::future::ready;
 
 pub struct AuthenticatedUser {
     pub claims: Claims,
+    pub linked_players: Vec<String>,
 }
 
 impl FromRequest for AuthenticatedUser {
     type Error = actix_web::Error;
-    type Future = Ready<Result<Self, Self::Error>>;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
         let data = req
             .app_data::<web::Data<AppState>>()
-            .expect("AppState not found");
+            .expect("AppState not found")
+            .clone();
 
         let token = match req.cookie("auth_token") {
             Some(c) => c.value().to_string(),
-            None => return ready(Err(actix_web::error::ErrorUnauthorized("No auth token"))),
+            None => {
+                return Box::pin(ready(Err(actix_web::error::ErrorUnauthorized("No auth token"))));
+            }
         };
 
-        let decoding_key = jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes());
-        let validation = jsonwebtoken::Validation::default();
+        Box::pin(async move {
+            let decoding_key = jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes());
+            let validation = jsonwebtoken::Validation::default();
 
-        match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
-            Ok(c) => ready(Ok(AuthenticatedUser { claims: c.claims })),
-            Err(_) => ready(Err(actix_web::error::ErrorUnauthorized("Invalid token"))),
-        }
+            match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
+                Ok(c) => {
+                    let user_id = c.claims.sub.clone();
+                    // Fetch linked players from DB
+                    let user_db = sqlx::query_as::<_, (String,)>(
+                        "SELECT linked_players FROM users WHERE discord_id = $1",
+                    )
+                    .bind(&user_id)
+                    .fetch_one(&data.db_pool)
+                    .await;
+
+                    let linked_players = match user_db {
+                        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
+                        Err(_) => vec![],
+                    };
+
+                    Ok(AuthenticatedUser {
+                        claims: c.claims,
+                        linked_players,
+                    })
+                }
+                Err(_) => Err(actix_web::error::ErrorUnauthorized("Invalid token")),
+            }
+        })
+    }
+}
+
+pub struct OptionalAuthenticatedUser {
+    pub user: Option<AuthenticatedUser>,
+}
+
+impl FromRequest for OptionalAuthenticatedUser {
+    type Error = actix_web::Error;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let data = req
+            .app_data::<web::Data<AppState>>()
+            .expect("AppState not found")
+            .clone();
+
+        let token = match req.cookie("auth_token") {
+            Some(c) => c.value().to_string(),
+            None => return Box::pin(ready(Ok(OptionalAuthenticatedUser { user: None }))),
+        };
+
+        Box::pin(async move {
+            let decoding_key = jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes());
+            let validation = jsonwebtoken::Validation::default();
+
+            match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
+                Ok(c) => {
+                    let user_id = c.claims.sub.clone();
+                    // Fetch linked players from DB
+                    let user_db = sqlx::query_as::<_, (String,)>(
+                        "SELECT linked_players FROM users WHERE discord_id = $1",
+                    )
+                    .bind(&user_id)
+                    .fetch_one(&data.db_pool)
+                    .await;
+
+                    let linked_players = match user_db {
+                        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
+                        Err(_) => vec![],
+                    };
+
+                    Ok(OptionalAuthenticatedUser {
+                        user: Some(AuthenticatedUser {
+                            claims: c.claims,
+                            linked_players,
+                        }),
+                    })
+                }
+                Err(_) => Ok(OptionalAuthenticatedUser { user: None }),
+            }
+        })
     }
 }

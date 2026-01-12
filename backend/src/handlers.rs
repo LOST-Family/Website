@@ -1,26 +1,139 @@
-use crate::auth::{AuthenticatedUser, has_required_role};
+use crate::auth::{AuthenticatedUser, OptionalAuthenticatedUser, has_required_role};
 use crate::models::{AppState, ErrorResponse};
-use crate::utils::{encode_tag, forward_request, update_cache, update_clash_cache};
+use crate::utils::{
+    encode_tag, forward_request, forward_request_with_filter, update_cache, update_clash_cache,
+};
 use actix_web::{HttpResponse, Responder, web};
+use bytes::Bytes;
 
 // 1. Get All Clans
-pub async fn get_clans(data: web::Data<AppState>) -> impl Responder {
-    // Pass relative path logic is handled in utils now (mostly),
-    // but utils::update_cache takes the path.
-    // We update forward_request to expect just the path, not the full URL.
-    forward_request(&data, "/api/clans").await
+pub async fn get_clans(
+    data: web::Data<AppState>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    forward_request_with_filter(&data, "/api/clans", user_role, &[]).await
 }
 
 // 2. Get Clan Info
-pub async fn get_clan_info(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
+pub async fn get_clan_info(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    _opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/clans/{}", encoded_tag)).await
+    let clash_url_path = format!("/clans/{}", encoded_tag);
+    let upstream_url_path = format!("/api/clans/{}", encoded_tag);
+
+    // Get from cache (Background task handles refreshes)
+    let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(format!("clash:{}", clash_url_path))
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let mut clan_json = match coc_res {
+        Ok(Some((body,))) => {
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
+        }
+        _ => serde_json::Value::Null,
+    };
+
+    if let Ok(Some((body,))) = upstream_res {
+        if let Ok(upstream_json) = serde_json::from_slice::<serde_json::Value>(&body) {
+            if let Some(obj) = clan_json.as_object_mut() {
+                if let Some(up_obj) = upstream_json.as_object() {
+                    for (k, v) in up_obj {
+                        obj.insert(k.clone(), v.clone());
+                    }
+                }
+            } else if clan_json.is_null() {
+                clan_json = upstream_json;
+            }
+        }
+    }
+
+    if clan_json.is_null() {
+        return HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan not found" }));
+    }
+
+    HttpResponse::Ok().json(clan_json)
 }
 
 // 3. Get Clan Members
-pub async fn get_clan_members(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
+pub async fn get_clan_members(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/clans/{}/members", encoded_tag)).await
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.linked_players.as_slice())
+        .unwrap_or(&[]);
+
+    let clash_url_path = format!("/clans/{}", encoded_tag);
+    let upstream_url_path = format!("/api/clans/{}/members", encoded_tag);
+
+    // Get bodies from cache (Background task handles refreshes)
+    let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(format!("clash:{}", clash_url_path))
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let mut coc_members = match coc_res {
+        Ok(Some((body,))) => {
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+            json["memberList"].as_array().cloned().unwrap_or_default()
+        }
+        _ => vec![],
+    };
+
+    let upstream_body = match upstream_res {
+        Ok(Some((body,))) => Bytes::from(body),
+        _ => Bytes::new(),
+    };
+
+    // Filter upstream members first (privacy logic)
+    let filtered_upstream_body = crate::utils::filter_member_data(upstream_body, exempt_tags, user_role);
+    let upstream_members: Vec<serde_json::Value> = serde_json::from_slice(&filtered_upstream_body).unwrap_or_default();
+
+    // Merge members
+    let mut final_members = Vec::new();
+    for mut u_member in upstream_members {
+        if let Some(tag) = u_member.get("tag").and_then(|t| t.as_str()) {
+            // Find corresponding CoC member for assets/names
+            if let Some(c_member) = coc_members.iter().find(|m| m.get("tag").and_then(|t| t.as_str()) == Some(tag)) {
+                if let Some(u_obj) = u_member.as_object_mut() {
+                    if let Some(c_obj) = c_member.as_object() {
+                        for (k, v) in c_obj {
+                            if !u_obj.contains_key(k) || u_obj.get(k).map_or(true, |val| val.is_null() || val.as_str() == Some("")) {
+                                u_obj.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        final_members.push(u_member);
+    }
+
+    if final_members.is_empty() && !coc_members.is_empty() {
+        return HttpResponse::Ok().json(coc_members);
+    }
+
+    HttpResponse::Ok().json(final_members)
 }
 
 // 4. Get Clan Kickpoint Reasons (Protected: COLEADER or higher)
@@ -47,44 +160,195 @@ pub async fn get_clan_kickpoint_reasons(
 pub async fn get_clan_war_members(
     data: web::Data<AppState>,
     tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
 ) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/clans/{}/war-members", encoded_tag)).await
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.linked_players.as_slice())
+        .unwrap_or(&[]);
+    forward_request_with_filter(
+        &data,
+        &format!("/api/clans/{}/war-members", encoded_tag),
+        user_role,
+        exempt_tags,
+    )
+    .await
 }
 
 // 6. Get Raid Members
-pub async fn get_raid_members(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
+pub async fn get_raid_members(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/clans/{}/raid-members", encoded_tag)).await
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.linked_players.as_slice())
+        .unwrap_or(&[]);
+    forward_request_with_filter(
+        &data,
+        &format!("/api/clans/{}/raid-members", encoded_tag),
+        user_role,
+        exempt_tags,
+    )
+    .await
 }
 
 // 7. Get CWL Members
-pub async fn get_cwl_members(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
+pub async fn get_cwl_members(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/clans/{}/cwl-members", encoded_tag)).await
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.linked_players.as_slice())
+        .unwrap_or(&[]);
+    forward_request_with_filter(
+        &data,
+        &format!("/api/clans/{}/cwl-members", encoded_tag),
+        user_role,
+        exempt_tags,
+    )
+    .await
 }
 
 // 8. Get Player
-pub async fn get_player(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
+pub async fn get_player(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    let url_path = format!("/players/{}", encoded_tag);
-    let cache_key = format!("clash:{}", url_path);
+    let clash_url_path = format!("/players/{}", encoded_tag);
+    let upstream_url_path = format!("/api/players/{}", encoded_tag);
 
-    // Try to update cache first (or we could just rely on forward_request if we have a background task)
-    // But for players, we probably want to fetch on demand if not in cache.
-    let _ = update_clash_cache(&data, &url_path).await;
+    // Try to update cache first
+    let _ = update_clash_cache(&data, &clash_url_path).await;
+    let _ = update_cache(&data, &upstream_url_path).await;
 
-    forward_request(&data, &cache_key).await
+    // Get bodies from cache
+    let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(format!("clash:{}", clash_url_path))
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let mut player_json = match coc_res {
+        Ok(Some((body,))) => {
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
+        }
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    if let Ok(Some((u_body,))) = upstream_res {
+        let u_json =
+            serde_json::from_slice::<serde_json::Value>(&u_body).unwrap_or(serde_json::Value::Null);
+        if let Some(obj) = player_json.as_object_mut() {
+            if let Some(u_obj) = u_json.as_object() {
+                for (k, v) in u_obj {
+                    if !obj.contains_key(k) {
+                        obj.insert(k.clone(), v.clone());
+                    } else {
+                        obj.insert(format!("upstream_{}", k), v.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Now filter if needed
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.linked_players.as_slice())
+        .unwrap_or(&[]);
+
+    if !has_required_role(user_role, "COLEADER") {
+        let tag_is_exempt = if let Some(tag_str) = player_json.get("tag").and_then(|t| t.as_str()) {
+            exempt_tags.iter().any(|et| et == tag_str)
+        } else {
+            false
+        };
+
+        if !tag_is_exempt {
+            // filter fields
+            if let Some(obj) = player_json.as_object_mut() {
+                obj.remove("clanDB");
+                
+                if has_required_role(user_role, "MEMBER") {
+                    // For members: Keep the count/amounts, but mask details (description, reason)
+                    if let Some(akp) = obj.get_mut("activeKickpoints").and_then(|v| v.as_array_mut()) {
+                        for kp in akp {
+                            if let Some(kp_obj) = kp.as_object_mut() {
+                                kp_obj.remove("description");
+                                kp_obj.remove("reason");
+                            }
+                        }
+                    }
+                } else {
+                    // Not a member: Hide everything sensitive
+                    obj.remove("totalKickpoints");
+                    obj.remove("activeKickpoints");
+                    obj.remove("userId");
+                    obj.remove("discordId");
+                }
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(player_json)
 }
 
 // 9. Get User
-pub async fn get_user(data: web::Data<AppState>, user_id: web::Path<String>) -> impl Responder {
+pub async fn get_user(
+    data: web::Data<AppState>,
+    user_id: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let is_self = opt_user
+        .user
+        .as_ref()
+        .map(|u| u.claims.sub == *user_id)
+        .unwrap_or(false);
+    let is_coleader = opt_user
+        .user
+        .as_ref()
+        .and_then(|u| u.claims.role.as_deref())
+        .map(|r| crate::auth::get_role_priority(r) >= crate::auth::get_role_priority("COLEADER"))
+        .unwrap_or(false);
+
+    if !is_self && !is_coleader {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: You can only view your own profile or require COLEADER role"
+                .into(),
+        });
+    }
+
     forward_request(&data, &format!("/api/users/{}", user_id)).await
 }
 
 // 10. Get Guild Info
-pub async fn get_guild_info(data: web::Data<AppState>) -> impl Responder {
-    forward_request(&data, "/api/guild").await
+pub async fn get_guild_info(
+    data: web::Data<AppState>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    forward_request_with_filter(&data, "/api/guild", user_role, &[]).await
 }
 
 // 11. Get My Player Accounts (Protected: User only)
@@ -92,20 +356,8 @@ pub async fn get_my_player_accounts(
     data: web::Data<AppState>,
     user: AuthenticatedUser,
 ) -> impl Responder {
-    // 1. Get user's linked players from DB
-    let user_db =
-        sqlx::query_as::<_, (String,)>("SELECT linked_players FROM users WHERE discord_id = $1")
-            .bind(&user.claims.sub)
-            .fetch_one(&data.db_pool)
-            .await;
-
-    let linked_players: Vec<String> = match user_db {
-        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
-        Err(_) => return HttpResponse::NotFound().finish(),
-    };
-
     let mut players_data = Vec::new();
-    for tag in linked_players {
+    for tag in user.linked_players {
         let encoded_tag = encode_tag(&tag);
         let clash_url_path = format!("/players/{}", encoded_tag);
         let upstream_url_path = format!("/api/players/{}", encoded_tag);
@@ -127,10 +379,6 @@ pub async fn get_my_player_accounts(
                                     if !coc_obj.contains_key(k) {
                                         coc_obj.insert(k.clone(), v.clone());
                                     } else {
-                                        // If it's something like 'tag' or 'name', they should match anyway,
-                                        // but if we want specific upstream fields that might overlap,
-                                        // we could handle them differently.
-                                        // For now, let's just insert non-colliding ones or keep CoC as primary.
                                         coc_obj.insert(format!("upstream_{}", k), v.clone());
                                     }
                                 }
@@ -154,20 +402,20 @@ async fn get_uptime_stats(pool: &sqlx::PgPool, api_name: &str) -> (i32, i32) {
         .as_secs() as i64;
     let one_day_ago = now - 24 * 60 * 60;
 
-    let rows = sqlx::query!(
+    let rows = sqlx::query_as::<_, (i32,)>(
         "SELECT latency_ms FROM latency_measurements 
          WHERE api_name = $1 AND timestamp > $2 
          ORDER BY timestamp DESC",
-        api_name,
-        one_day_ago
     )
+    .bind(api_name)
+    .bind(one_day_ago)
     .fetch_all(pool)
     .await;
 
     match rows {
         Ok(data) if !data.is_empty() => {
-            let successes = data.iter().filter(|r| r.latency_ms != -1).count() as i32;
-            let current_latency = data[0].latency_ms;
+            let successes = data.iter().filter(|r| r.0 != -1).count() as i32;
+            let current_latency = data[0].0;
             (current_latency, successes) // Each success is 1 minute
         }
         _ => (-1, 0),

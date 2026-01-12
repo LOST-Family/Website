@@ -1,9 +1,11 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import ClansSection from './ClansSection.svelte';
+    import ClanDetailPage from './ClanDetailPage.svelte';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
+    export let clanTag: string | null = null;
 
     interface Clan {
         tag: string;
@@ -16,16 +18,20 @@
     let loading = true;
     let error: string | null = null;
 
-    $: f2pClans = allClans.filter((clan) =>
+    $: filteredClans = clanTag
+        ? allClans.filter((c) => c.tag === clanTag)
+        : allClans;
+
+    $: f2pClans = filteredClans.filter((clan) =>
         (clan.nameDB || '').toUpperCase().includes('F2P')
     );
 
-    $: extraClans = allClans.filter((clan) => {
+    $: extraClans = filteredClans.filter((clan) => {
         const name = (clan.nameDB || '').toUpperCase();
         return name.includes('GP') || name.includes('ANTHRAZIT');
     });
 
-    $: normalClans = allClans.filter(
+    $: normalClans = filteredClans.filter(
         (clan) => !f2pClans.includes(clan) && !extraClans.includes(clan)
     );
 
@@ -53,37 +59,46 @@
             <p>Fehler beim Laden der Clans: {error}</p>
         </div>
     {:else}
-        {#if f2pClans.length > 0}
-            <ClansSection
-                {theme}
-                {apiBaseUrl}
-                gameType="coc"
-                title="F2P Clans"
-                description="Unsere Free-to-Play Clans in Clash of Clans. Free-to-Play heißt, dass kein Cent in einen Account investiert wurde."
-                clansData={f2pClans}
+        {#if clanTag}
+            <ClanDetailPage 
+                {theme} 
+                {apiBaseUrl} 
+                {clanTag} 
+                on:navigate
             />
-        {/if}
+        {:else}
+            {#if f2pClans.length > 0}
+                <ClansSection
+                    {theme}
+                    {apiBaseUrl}
+                    gameType="coc"
+                    title="F2P Clans"
+                    description="Unsere Free-to-Play Clans in Clash of Clans. Free-to-Play heißt, dass kein Cent in einen Account investiert wurde."
+                    clansData={f2pClans}
+                />
+            {/if}
 
-        {#if extraClans.length > 0}
-            <ClansSection
-                {theme}
-                {apiBaseUrl}
-                gameType="coc"
-                title="Extra Clans"
-                description="LOST GP ist eine option zwischen einem F2P Clan und einem normalen Clan. Hier sind Goldpässe und Eventpässe erlaubt. Anthrazit dient hauptsächlich für 2. Accounts"
-                clansData={extraClans}
-            />
-        {/if}
+            {#if extraClans.length > 0}
+                <ClansSection
+                    {theme}
+                    {apiBaseUrl}
+                    gameType="coc"
+                    title="Extra Clans"
+                    description="LOST GP ist eine option zwischen einem F2P Clan und einem normalen Clan. Hier sind Goldpässe und Eventpässe erlaubt. Anthrazit dient hauptsächlich für 2. Accounts"
+                    clansData={extraClans}
+                />
+            {/if}
 
-        {#if normalClans.length > 0}
-            <ClansSection
-                {theme}
-                {apiBaseUrl}
-                gameType="coc"
-                title="Normale Clans"
-                description="In diesen Clans sind alle Spieler willkommen. LOST 3 ist unser Push-Clan und versucht jede Saison Spitzenergebnisse zu erzielen."
-                clansData={normalClans}
-            />
+            {#if normalClans.length > 0}
+                <ClansSection
+                    {theme}
+                    {apiBaseUrl}
+                    gameType="coc"
+                    title="Normale Clans"
+                    description="In diesen Clans sind alle Spieler willkommen. LOST 3 ist unser Push-Clan und versucht jede Saison Spitzenergebnisse zu erzielen."
+                    clansData={normalClans}
+                />
+            {/if}
         {/if}
     {/if}
 </div>

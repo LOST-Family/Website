@@ -1,12 +1,18 @@
 <script lang="ts">
     import ThemeToggle from './ThemeToggle.svelte';
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';
     import { user, loading, login, logout } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let logo: string;
 
     let mobileMenuOpen = false;
+    let userClans: { tag: string; name: string }[] = [];
+
+    const apiBaseUrl =
+        import.meta.env.VITE_API_BASE_URL !== undefined
+            ? import.meta.env.VITE_API_BASE_URL
+            : 'http://localhost:8888';
 
     const dispatch = createEventDispatcher<{
         themeToggle: { theme: 'dark' | 'light' };
@@ -26,6 +32,46 @@
 
     function toggleMobileMenu() {
         mobileMenuOpen = !mobileMenuOpen;
+    }
+
+    async function fetchUserClans() {
+        if (!$user) return;
+        try {
+            if ($user.is_admin) {
+                const response = await fetch(`${apiBaseUrl}/api/clans`);
+                if (response.ok) {
+                    const clansData = await response.json();
+                    userClans = clansData.map((c: any) => ({
+                        tag: c.tag,
+                        name: c.nameDB || c.tag,
+                    }));
+                }
+            } else {
+                const response = await fetch(`${apiBaseUrl}/api/me/accounts`, {
+                    credentials: 'include',
+                });
+                if (response.ok) {
+                    const accounts = await response.json();
+                    const clansMap = new Map<string, string>();
+                    accounts.forEach((acc: any) => {
+                        if (acc.clan) {
+                            clansMap.set(acc.clan.tag, acc.clan.name);
+                        }
+                    });
+                    userClans = Array.from(clansMap.entries()).map(
+                        ([tag, name]) => ({ tag, name })
+                    );
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch user clans:', error);
+        }
+    }
+
+    $: if ($user) {
+        fetchUserClans();
+    } else {
+        userClans = [];
     }
 </script>
 
@@ -88,6 +134,39 @@
                     <a href="/cr/clans" class="dropdown-item">Clans (WIP)</a>
                 </div>
             </div>
+
+            {#if $user && userClans.length > 0}
+                <div class="nav-item dropdown">
+                    <button class="nav-link">
+                        {$user.is_admin ? 'Alle Clans' : 'Meine Clans'}
+                        <svg
+                            class="dropdown-arrow"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                        >
+                            <path
+                                fill-rule="evenodd"
+                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu">
+                        {#each userClans as clan}
+                            <a
+                                href="/clan/{clan.tag.replace('#', '')}"
+                                class="dropdown-item"
+                                on:click|preventDefault={() =>
+                                    navigate(
+                                        `clan/${clan.tag.replace('#', '')}`
+                                    )}
+                            >
+                                {clan.name}
+                            </a>
+                        {/each}
+                    </div>
+                </div>
+            {/if}
         </nav>
 
         <div class="header-actions">

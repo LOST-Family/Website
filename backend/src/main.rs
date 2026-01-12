@@ -151,8 +151,24 @@ async fn main() -> std::io::Result<()> {
             .route("/auth/logout", web::post().to(logout))
             .route("/api/me/accounts", web::get().to(get_my_player_accounts))
             .route("/api/clans", web::get().to(get_clans))
-            // .route("/api/clans/{tag}", web::get().to(get_clan_info))
+            .route("/api/clans/{tag}", web::get().to(get_clan_info))
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
+            .route(
+                "/api/clans/{tag}/kickpoint-reasons",
+                web::get().to(get_clan_kickpoint_reasons),
+            )
+            .route(
+                "/api/clans/{tag}/war-members",
+                web::get().to(get_clan_war_members),
+            )
+            .route(
+                "/api/clans/{tag}/raid-members",
+                web::get().to(get_raid_members),
+            )
+            .route(
+                "/api/clans/{tag}/cwl-members",
+                web::get().to(get_cwl_members),
+            )
             .route("/api/players/{tag}", web::get().to(get_player))
             .route("/api/guild", web::get().to(get_guild_info))
             .route("/api/admin/status", web::get().to(get_admin_status))

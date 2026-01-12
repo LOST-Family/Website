@@ -19,7 +19,7 @@ pub fn encode_tag(tag: &str) -> String {
 }
 
 // Function to filter out specific fields from clan data
-fn filter_clan_data(body: Bytes) -> Bytes {
+pub fn filter_clan_data(body: Bytes) -> Bytes {
     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
         let mut modified = false;
 
@@ -33,6 +33,17 @@ fn filter_clan_data(body: Bytes) -> Bytes {
         if let Some(clans) = value.as_array_mut() {
             for clan in clans {
                 if let Some(obj) = clan.as_object_mut() {
+                    // Fix badgeUrl mismatch (singular vs plural)
+                    if !obj.contains_key("badgeUrls") {
+                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                            obj.insert("badgeUrls".to_string(), serde_json::json!({
+                                "small": url,
+                                "medium": url,
+                                "large": url
+                            }));
+                        }
+                    }
+
                     for field in &fields_to_remove {
                         obj.remove(*field);
                     }
@@ -40,6 +51,17 @@ fn filter_clan_data(body: Bytes) -> Bytes {
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
+            // Fix badgeUrl mismatch (singular vs plural)
+            if !obj.contains_key("badgeUrls") {
+                if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                    obj.insert("badgeUrls".to_string(), serde_json::json!({
+                        "small": url,
+                        "medium": url,
+                        "large": url
+                    }));
+                }
+            }
+
             for field in &fields_to_remove {
                 obj.remove(*field);
             }
@@ -56,26 +78,69 @@ fn filter_clan_data(body: Bytes) -> Bytes {
 }
 
 // Function to filter out specific fields from member data
-fn filter_member_data(body: Bytes) -> Bytes {
+pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option<&str>) -> Bytes {
+    use crate::auth::has_required_role;
+
+    // Coleaders and higher see everything
+    if has_required_role(user_role, "COLEADER") {
+        return body;
+    }
+
     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
         let mut modified = false;
+        let is_member = has_required_role(user_role, "MEMBER");
 
-        let fields_to_remove = ["totalKickpoints", "activeKickpoints", "clanDB"];
+        let fields_to_remove_not_member = [
+            "totalKickpoints",
+            "activeKickpoints",
+            "userId",
+            "discordId",
+            "nickname",
+            "avatar",
+        ];
+
+        let process_obj = |obj: &mut serde_json::Map<String, serde_json::Value>, tag: &str| {
+            if exempt_tags.iter().any(|et| et == tag) {
+                return false;
+            }
+
+            // Always remove internal DB fields
+            obj.remove("clanDB");
+
+            if is_member {
+                // For members: Keep the count/amounts, but mask details (description, reason)
+                if let Some(akp) = obj.get_mut("activeKickpoints").and_then(|v| v.as_array_mut()) {
+                    for kp in akp {
+                        if let Some(kp_obj) = kp.as_object_mut() {
+                            kp_obj.remove("description");
+                            kp_obj.remove("reason");
+                            // We keep amount and date so they can still see when/how many points were given
+                        }
+                    }
+                }
+            } else {
+                // Not a member: Remove counts and identity links
+                for field in &fields_to_remove_not_member {
+                    obj.remove(*field);
+                }
+            }
+            true
+        };
 
         if let Some(members) = value.as_array_mut() {
             for member in members {
+                let tag = member.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string();
                 if let Some(obj) = member.as_object_mut() {
-                    for field in &fields_to_remove {
-                        obj.remove(*field);
+                    if process_obj(obj, &tag) {
+                        modified = true;
                     }
-                    modified = true;
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
-            for field in &fields_to_remove {
-                obj.remove(*field);
+            let tag = obj.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            if process_obj(obj, &tag) {
+                modified = true;
             }
-            modified = true;
         }
 
         if modified {
@@ -100,26 +165,7 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
     {
         Ok(res) => {
             let status = res.status().as_u16();
-            let mut body = res.bytes().await.map_err(|e| e.to_string())?;
-
-            // Filter out internal fields if this is a clan or member related endpoint
-            if status == 200 {
-                let parts: Vec<&str> = url_path.split('/').collect();
-                // /api/clans OR /api/clans/{tag}
-                if url_path == "/api/clans"
-                    || (parts.len() == 4 && parts[1] == "api" && parts[2] == "clans")
-                {
-                    body = filter_clan_data(body);
-                }
-                // /api/clans/{tag}/members
-                else if parts.len() == 5
-                    && parts[1] == "api"
-                    && parts[2] == "clans"
-                    && parts[4] == "members"
-                {
-                    body = filter_member_data(body);
-                }
-            }
+            let body = res.bytes().await.map_err(|e| e.to_string())?;
 
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -149,6 +195,15 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
 }
 
 pub async fn forward_request(data: &AppState, url_path: &str) -> HttpResponse {
+    forward_request_with_filter(data, url_path, None, &[]).await
+}
+
+pub async fn forward_request_with_filter(
+    data: &AppState,
+    url_path: &str,
+    user_role: Option<&str>,
+    exempt_tags: &[String],
+) -> HttpResponse {
     // 1. serve from cache ONLY
     let result =
         sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = $1")
@@ -158,10 +213,32 @@ pub async fn forward_request(data: &AppState, url_path: &str) -> HttpResponse {
 
     match result {
         Ok(Some((body, status))) => {
+            let mut body = Bytes::from(body);
+
+            let parts: Vec<&str> = url_path.split('/').collect();
+            let is_clan_path = url_path == "/api/clans"
+                || (parts.len() == 4 && parts[1] == "api" && parts[2] == "clans");
+            let is_member_path = (parts.len() == 5
+                && parts[1] == "api"
+                && parts[2] == "clans"
+                && (parts[4] == "members"
+                    || parts[4] == "war-members"
+                    || parts[4] == "raid-members"
+                    || parts[4] == "cwl-members"))
+                || (parts.len() == 4 && parts[1] == "api" && parts[2] == "players")
+                || (parts.len() == 3 && parts[1] == "players")
+                || (url_path.starts_with("clash:/players/"));
+
+            if is_clan_path && !crate::auth::has_required_role(user_role, "MEMBER") {
+                body = filter_clan_data(body);
+            } else if is_member_path {
+                body = filter_member_data(body, exempt_tags, user_role);
+            }
+
             let status = StatusCode::from_u16(status as u16).unwrap_or(StatusCode::OK);
             HttpResponse::build(status)
                 .content_type("application/json")
-                .body(bytes::Bytes::from(body))
+                .body(body)
         }
         Ok(None) => {
             // Data is not in cache (either not yet refreshed or not supported for proactive caching)
