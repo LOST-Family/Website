@@ -1,5 +1,5 @@
 use crate::models::AppState;
-use crate::utils::update_cache;
+use crate::utils::{update_cache, update_clash_cache};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::interval;
@@ -154,7 +154,7 @@ async fn refresh_clans(data: &AppState) {
                     let _ = stdout().flush();
 
                     // List of endpoints to proactively cache for each clan (concurrently)
-                    let endpoints = [
+                    let upstream_endpoints = [
                         format!("/api/clans/{}", encoded_tag),
                         format!("/api/clans/{}/members", encoded_tag),
                         format!("/api/clans/{}/kickpoint-reasons", encoded_tag),
@@ -163,12 +163,27 @@ async fn refresh_clans(data: &AppState) {
                         format!("/api/clans/{}/cwl-members", encoded_tag),
                     ];
 
+                    let clash_endpoints = [
+                        format!("/clans/{}", encoded_tag),
+                    ];
+
                     let mut set = tokio::task::JoinSet::new();
-                    for endpoint in endpoints {
+
+                    // Spawn upstream refreshes
+                    for endpoint in upstream_endpoints {
                         let data = data.clone();
                         set.spawn(async move {
                             let res = update_cache(&data, &endpoint).await;
-                            (endpoint, res)
+                            (format!("upstream:{}", endpoint), res)
+                        });
+                    }
+
+                    // Spawn Clash API refreshes
+                    for endpoint in clash_endpoints {
+                        let data = data.clone();
+                        set.spawn(async move {
+                            let res = update_clash_cache(&data, &endpoint).await;
+                            (format!("clash:{}", endpoint), res)
                         });
                     }
 
