@@ -10,6 +10,7 @@
     import ClansSection from './lib/ClansSection.svelte';
     import ClansPage from './lib/ClansPage.svelte';
     import ProfilePage from './lib/ProfilePage.svelte';
+    import AdminPage from './lib/AdminPage.svelte';
     import Footer from './lib/Footer.svelte';
 
     // Logos
@@ -31,7 +32,7 @@
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
             ? import.meta.env.VITE_API_BASE_URL
-            : '';
+            : 'http://localhost:8888';
 
     onMount(() => {
         mounted = true;
@@ -95,6 +96,8 @@
             <ClansPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/account'}
             <ProfilePage {theme} {apiBaseUrl} />
+        {:else if currentPath === '/admin'}
+            <AdminPage {theme} {apiBaseUrl} />
         {/if}
 
         <Footer {theme} logo={lostLogo} />

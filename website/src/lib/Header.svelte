@@ -199,7 +199,12 @@
                         </button>
 
                         {#if $user.is_admin}
-                            <a href="/admin" class="dropdown-item admin-link">
+                            <a
+                                href="/admin"
+                                class="dropdown-item admin-link"
+                                on:click|preventDefault={() =>
+                                    navigate('admin')}
+                            >
                                 <svg
                                     class="item-icon"
                                     viewBox="0 0 24 24"

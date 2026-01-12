@@ -95,6 +95,24 @@ async fn main() -> std::io::Result<()> {
     .await
     .expect("Failed to run migrations (users)");
 
+    // Create latency_measurements table if not exists
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS latency_measurements (
+            id SERIAL PRIMARY KEY,
+            api_name TEXT NOT NULL,
+            latency_ms INTEGER NOT NULL,
+            timestamp BIGINT NOT NULL
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to run migrations (latency)");
+
+    // Reset only Website uptime on startup (User request)
+    let _ = sqlx::query("DELETE FROM latency_measurements WHERE api_name = 'website'")
+        .execute(&pool)
+        .await;
+
     let client = Client::builder()
         .timeout(Duration::from_secs(200))
         .build()
@@ -137,6 +155,8 @@ async fn main() -> std::io::Result<()> {
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
             .route("/api/players/{tag}", web::get().to(get_player))
             .route("/api/guild", web::get().to(get_guild_info))
+            .route("/api/admin/status", web::get().to(get_admin_status))
+            .route("/api/admin/latency", web::get().to(get_latency_history))
     })
     .bind(("0.0.0.0", port))?
     .run()

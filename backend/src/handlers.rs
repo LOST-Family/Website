@@ -145,3 +145,102 @@ pub async fn get_my_player_accounts(
 
     HttpResponse::Ok().json(players_data)
 }
+
+// 12. Get Admin Status (Protected: Admin only)
+async fn get_uptime_stats(pool: &sqlx::PgPool, api_name: &str) -> (i32, i32) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let one_day_ago = now - 24 * 60 * 60;
+
+    let rows = sqlx::query!(
+        "SELECT latency_ms FROM latency_measurements 
+         WHERE api_name = $1 AND timestamp > $2 
+         ORDER BY timestamp DESC",
+        api_name,
+        one_day_ago
+    )
+    .fetch_all(pool)
+    .await;
+
+    match rows {
+        Ok(data) if !data.is_empty() => {
+            let successes = data.iter().filter(|r| r.latency_ms != -1).count() as i32;
+            let current_latency = data[0].latency_ms;
+            (current_latency, successes) // Each success is 1 minute
+        }
+        _ => (-1, 0),
+    }
+}
+
+pub async fn get_admin_status(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    if !has_required_role(user.claims.role.as_deref(), "ADMIN") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires ADMIN role".into(),
+        });
+    }
+
+    let (upstream_latency, upstream_minutes) = get_uptime_stats(&data.db_pool, "upstream").await;
+    let (sc_latency, sc_minutes) = get_uptime_stats(&data.db_pool, "supercell").await;
+    let (website_latency, website_uptime_minutes) = get_uptime_stats(&data.db_pool, "website").await;
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "upstream": {
+            "status": if upstream_latency != -1 { "ONLINE" } else { "OFFLINE" },
+            "latency": if upstream_latency != -1 { upstream_latency } else { 0 },
+            "uptime_minutes": upstream_minutes
+        },
+        "supercell": {
+            "status": if sc_latency != -1 { "ONLINE" } else { "OFFLINE" },
+            "latency": if sc_latency != -1 { sc_latency } else { 0 },
+            "uptime_minutes": sc_minutes
+        },
+        "website": {
+            "status": if website_latency != -1 { "ONLINE" } else { "OFFLINE" },
+            "latency": if website_latency != -1 { website_latency } else { 0 },
+            "uptime_minutes": website_uptime_minutes
+        }
+    }))
+}
+
+// 13. Get Latency History (Protected: Admin only)
+pub async fn get_latency_history(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    if !has_required_role(user.claims.role.as_deref(), "ADMIN") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires ADMIN role".into(),
+        });
+    }
+
+    let measurements = sqlx::query_as::<_, (String, i32, i64)>(
+        "SELECT api_name, latency_ms, timestamp FROM latency_measurements ORDER BY timestamp ASC",
+    )
+    .fetch_all(&data.db_pool)
+    .await;
+
+    match measurements {
+        Ok(rows) => {
+            let data: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|(api_name, latency_ms, timestamp)| {
+                    serde_json::json!({
+                        "api": api_name,
+                        "latency": latency_ms,
+                        "timestamp": timestamp
+                    })
+                })
+                .collect();
+            HttpResponse::Ok().json(data)
+        }
+        Err(e) => {
+            eprintln!("Database error fetching latency: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
