@@ -211,7 +211,9 @@
                         <div class="metric">
                             <span class="label">Uptime</span>
                             <span class="value"
-                                >{formatDuration(statusData.website.uptime_minutes)}</span
+                                >{formatDuration(
+                                    statusData.website.uptime_minutes
+                                )}</span
                             >
                         </div>
                         <div class="metric">
@@ -239,7 +241,9 @@
                         <div class="metric">
                             <span class="label">Uptime</span>
                             <span class="value"
-                                >{formatDuration(statusData.upstream.uptime_minutes)}</span
+                                >{formatDuration(
+                                    statusData.upstream.uptime_minutes
+                                )}</span
                             >
                         </div>
                         <div class="metric">
@@ -267,7 +271,9 @@
                         <div class="metric">
                             <span class="label">Uptime</span>
                             <span class="value"
-                                >{formatDuration(statusData.supercell.uptime_minutes)}</span
+                                >{formatDuration(
+                                    statusData.supercell.uptime_minutes
+                                )}</span
                             >
                         </div>
                         <div class="metric">

@@ -186,7 +186,8 @@ pub async fn get_admin_status(
 
     let (upstream_latency, upstream_minutes) = get_uptime_stats(&data.db_pool, "upstream").await;
     let (sc_latency, sc_minutes) = get_uptime_stats(&data.db_pool, "supercell").await;
-    let (website_latency, website_uptime_minutes) = get_uptime_stats(&data.db_pool, "website").await;
+    let (website_latency, website_uptime_minutes) =
+        get_uptime_stats(&data.db_pool, "website").await;
 
     HttpResponse::Ok().json(serde_json::json!({
         "upstream": {
