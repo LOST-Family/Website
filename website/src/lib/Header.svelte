@@ -85,7 +85,7 @@
                     </svg>
                 </button>
                 <div class="dropdown-menu">
-                    <a href="/cr/clans" class="dropdown-item">Clans</a>
+                    <a href="/cr/clans" class="dropdown-item">Clans (WIP)</a>
                 </div>
             </div>
         </nav>
