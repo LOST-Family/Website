@@ -9,11 +9,12 @@ RUN apt-get update && apt-get install -y \
     lld \
     && rm -rf /var/lib/apt/lists/*
 
+# Install cargo-watch for hot reloading
+RUN cargo install cargo-watch
+
 # We do NOT copy source here because we will bind-mount it in docker-compose.dev.yml
 # This allows you to edit files on your host and have them available in the container immediately.
 
 # Simple development command. 
-# Note: For strict hot-reloading (auto-restart on save), we would check if cargo-watch is installed.
-# For now, we use 'cargo run' to start the server. 
-# If you change Rust code, run 'docker compose restart backend' to recompile only changed files.
-CMD ["cargo", "run", "--bin", "backend"]
+# We use cargo-watch to auto-restart the server on file changes.
+CMD ["cargo", "watch", "-x", "run --bin backend"]
