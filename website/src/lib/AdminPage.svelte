@@ -174,7 +174,6 @@
         <header class="admin-header">
             <div class="header-main">
                 <h1>Admin Dashboard</h1>
-                <p class="subtitle">System-Status und Verwaltung</p>
             </div>
         </header>
 
