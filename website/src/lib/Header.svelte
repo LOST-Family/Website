@@ -182,7 +182,7 @@
                         <button
                             on:click={() => navigate('account')}
                             class="dropdown-item"
-                            style="width: 100%; border: none; background: transparent; cursor: pointer;"
+                            style="width: 100%; border: none; background: transparent; cursor: pointer; outline: none;"
                         >
                             <svg
                                 class="item-icon"
@@ -311,6 +311,11 @@
         padding: 0;
         cursor: pointer;
         font: inherit;
+        outline: none;
+    }
+
+    .logo:focus {
+        outline: none;
     }
 
     .logo-icon {
@@ -361,6 +366,11 @@
         background: transparent;
         cursor: pointer;
         transition: all 0.2s ease;
+        outline: none;
+    }
+
+    .nav-link:focus {
+        outline: none;
     }
 
     .nav-link:hover {
@@ -427,6 +437,11 @@
         font-weight: 500;
         border-radius: 8px;
         transition: all 0.2s ease;
+        outline: none;
+    }
+
+    .dropdown-item:focus {
+        outline: none;
     }
 
     .dropdown-item:hover {
@@ -470,6 +485,11 @@
         transition: all 0.3s ease;
         border: none;
         cursor: pointer;
+        outline: none;
+    }
+
+    .login-btn:focus {
+        outline: none;
     }
 
     .login-btn:hover {
@@ -496,6 +516,11 @@
         font-weight: 500;
         cursor: pointer;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        outline: none;
+    }
+
+    .user-btn:focus {
+        outline: none;
     }
 
     .header.light .user-btn {
@@ -696,6 +721,11 @@
         cursor: pointer;
         font-family: inherit;
         margin-top: 4px;
+        outline: none;
+    }
+
+    .logout-btn:focus {
+        outline: none;
     }
 
     .header.light .logout-btn {
@@ -733,6 +763,11 @@
         color: rgba(255, 255, 255, 0.7);
         cursor: pointer;
         transition: all 0.2s ease;
+        outline: none;
+    }
+
+    .mobile-menu-btn:focus {
+        outline: none;
     }
 
     .mobile-menu-btn:hover {
