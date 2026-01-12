@@ -1,8 +1,8 @@
 use crate::models::{AppState, ErrorResponse};
-use actix_web::HttpResponse;
 use actix_web::http::StatusCode;
+use actix_web::HttpResponse;
 use bytes::Bytes;
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_json;
 
 pub fn format_url(base: &str, path: &str) -> String {
@@ -10,7 +10,12 @@ pub fn format_url(base: &str, path: &str) -> String {
 }
 
 pub fn encode_tag(tag: &str) -> String {
-    utf8_percent_encode(tag, NON_ALPHANUMERIC).to_string()
+    let tag = if tag.starts_with('#') {
+        tag.to_string()
+    } else {
+        format!("#{}", tag)
+    };
+    utf8_percent_encode(&tag, NON_ALPHANUMERIC).to_string()
 }
 
 // Function to filter out specific fields from clan data
@@ -170,5 +175,48 @@ pub async fn forward_request(data: &AppState, url_path: &str) -> HttpResponse {
                 error: "Internal Database Error".into(),
             })
         }
+    }
+}
+
+pub async fn update_clash_cache(data: &AppState, url_path: &str) -> Result<Bytes, String> {
+    let full_url = format!("https://api.clashofclans.com/v1{}", url_path);
+
+    match data
+        .client
+        .get(&full_url)
+        .header("Authorization", format!("Bearer {}", data.clash_api_token))
+        .send()
+        .await
+    {
+        Ok(res) => {
+            let status = res.status().as_u16();
+            let body = res.bytes().await.map_err(|e| e.to_string())?;
+
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+
+            let cache_key = format!("clash:{}", url_path);
+
+            // We use ON CONFLICT to update existing keys
+            let _ = sqlx::query(
+                "INSERT INTO cache (key, body, status, updated_at) 
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (key) DO UPDATE SET 
+                    body = EXCLUDED.body, 
+                    status = EXCLUDED.status, 
+                    updated_at = EXCLUDED.updated_at",
+            )
+            .bind(&cache_key)
+            .bind(body.to_vec())
+            .bind(status as i32)
+            .bind(timestamp)
+            .execute(&data.db_pool)
+            .await;
+
+            Ok(body)
+        }
+        Err(e) => Err(e.to_string()),
     }
 }

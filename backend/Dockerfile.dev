@@ -1,4 +1,4 @@
-FROM rust:1.84-slim-bookworm
+FROM rust:slim-bookworm
 WORKDIR /app
 
 # Install system dependencies required for compiling actix-web, sqlx, etc.

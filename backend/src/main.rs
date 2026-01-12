@@ -1,6 +1,6 @@
-use actix_web::{App, HttpServer, web};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
-use oauth2::{AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl, basic::BasicClient};
+use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl};
 use reqwest::Client;
 use std::env;
 
@@ -24,6 +24,7 @@ async fn main() -> std::io::Result<()> {
 
     let upstream_url = env::var("UPSTREAM_API_URL").expect("UPSTREAM_API_URL must be set");
     let api_token = env::var("BOT_SERVER_API_TOKEN").expect("BOT_SERVER_API_TOKEN must be set");
+    let clash_api_token = env::var("CLASH_API_TOKEN").expect("CLASH_API_TOKEN must be set");
     let port = env::var("SERVER_PORT")
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
@@ -103,6 +104,7 @@ async fn main() -> std::io::Result<()> {
         client,
         upstream_url,
         api_token,
+        clash_api_token,
         db_pool: pool,
         oauth_client,
         jwt_secret,
@@ -123,6 +125,7 @@ async fn main() -> std::io::Result<()> {
 
         App::new()
             .wrap(cors)
+            .wrap(Logger::default())
             .app_data(web::Data::new(app_state.clone()))
             .route("/auth/discord/login", web::get().to(discord_login))
             .route("/auth/discord/callback", web::get().to(discord_callback))
@@ -132,24 +135,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/clans", web::get().to(get_clans))
             // .route("/api/clans/{tag}", web::get().to(get_clan_info))
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
-            // .route(
-            //     "/api/clans/{tag}/kickpoint-reasons",
-            //     web::get().to(get_clan_kickpoint_reasons),
-            // )
-            // .route(
-            //     "/api/clans/{tag}/war-members",
-            //     web::get().to(get_clan_war_members),
-            // )
-            // .route(
-            //     "/api/clans/{tag}/raid-members",
-            //     web::get().to(get_raid_members),
-            // )
-            // .route(
-            //     "/api/clans/{tag}/cwl-members",
-            //     web::get().to(get_cwl_members),
-            // )
-            // .route("/api/players/{tag}", web::get().to(get_player))
-            // .route("/api/users/{userId}", web::get().to(get_user))
+            .route("/api/players/{tag}", web::get().to(get_player))
             .route("/api/guild", web::get().to(get_guild_info))
     })
     .bind(("0.0.0.0", port))?

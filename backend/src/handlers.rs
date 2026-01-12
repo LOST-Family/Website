@@ -1,7 +1,7 @@
-use crate::auth::{AuthenticatedUser, has_required_role};
+use crate::auth::{has_required_role, AuthenticatedUser};
 use crate::models::{AppState, ErrorResponse};
-use crate::utils::{encode_tag, forward_request, update_cache};
-use actix_web::{HttpResponse, Responder, web};
+use crate::utils::{encode_tag, forward_request, update_cache, update_clash_cache};
+use actix_web::{web, HttpResponse, Responder};
 
 // 1. Get All Clans
 pub async fn get_clans(data: web::Data<AppState>) -> impl Responder {
@@ -67,7 +67,14 @@ pub async fn get_cwl_members(data: web::Data<AppState>, tag: web::Path<String>) 
 // 8. Get Player
 pub async fn get_player(data: web::Data<AppState>, tag: web::Path<String>) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
-    forward_request(&data, &format!("/api/players/{}", encoded_tag)).await
+    let url_path = format!("/players/{}", encoded_tag);
+    let cache_key = format!("clash:{}", url_path);
+
+    // Try to update cache first (or we could just rely on forward_request if we have a background task)
+    // But for players, we probably want to fetch on demand if not in cache.
+    let _ = update_clash_cache(&data, &url_path).await;
+
+    forward_request(&data, &cache_key).await
 }
 
 // 9. Get User
@@ -100,9 +107,9 @@ pub async fn get_my_player_accounts(
     let mut players_data = Vec::new();
     for tag in linked_players {
         let encoded_tag = encode_tag(&tag);
-        let url_path = format!("/api/players/{}", encoded_tag);
+        let url_path = format!("/players/{}", encoded_tag);
 
-        match update_cache(&data, &url_path).await {
+        match update_clash_cache(&data, &url_path).await {
             Ok(body) => {
                 if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
                     players_data.push(json);

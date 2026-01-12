@@ -8,6 +8,7 @@ pub struct AppState {
     pub client: Client,
     pub upstream_url: String,
     pub api_token: String,
+    pub clash_api_token: String,
     pub db_pool: PgPool,
     pub oauth_client: BasicClient,
     pub jwt_secret: String,
