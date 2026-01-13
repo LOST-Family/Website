@@ -10,6 +10,7 @@
     import FeaturesSection from './lib/FeaturesSection.svelte';
     import ClansSection from './lib/ClansSection.svelte';
     import ClansPage from './lib/ClansPage.svelte';
+    import AllClansAdminPage from './lib/AllClansAdminPage.svelte';
     import ProfilePage from './lib/ProfilePage.svelte';
     import AdminPage from './lib/AdminPage.svelte';
     import Footer from './lib/Footer.svelte';
@@ -125,6 +126,8 @@
             />
         {:else if currentPath === '/admin'}
             <AdminPage {theme} {apiBaseUrl} />
+        {:else if currentPath === '/admin/clans'}
+            <AllClansAdminPage {theme} {apiBaseUrl} on:navigate={handleNavigate} />
         {:else if currentPath.startsWith('/coc/clan/')}
             {#if $loading}
                 <div class="auth-message-container">

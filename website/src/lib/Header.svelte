@@ -37,34 +37,22 @@
     async function fetchUserClans() {
         if (!$user) return;
         try {
-            if ($user.is_admin) {
-                const response = await fetch(`${apiBaseUrl}/api/coc/clans`);
-                if (response.ok) {
-                    const clansData = await response.json();
-                    userClans = clansData.map((c: any) => ({
-                        tag: c.tag,
-                        name: c.nameDB || c.tag,
-                    }));
-                }
-            } else {
-                const response = await fetch(`${apiBaseUrl}/api/me/accounts`, {
-                    credentials: 'include',
+            const response = await fetch(`${apiBaseUrl}/api/me/accounts`, {
+                credentials: 'include',
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const clansMap = new Map<string, string>();
+                // Handle new format { coc: [...], cr: [...] }
+                const accounts = data.coc || (Array.isArray(data) ? data : []);
+                accounts.forEach((acc: any) => {
+                    if (acc.clan) {
+                        clansMap.set(acc.clan.tag, acc.clan.name);
+                    }
                 });
-                if (response.ok) {
-                    const data = await response.json();
-                    const clansMap = new Map<string, string>();
-                    // Handle new format { coc: [...], cr: [...] }
-                    const accounts =
-                        data.coc || (Array.isArray(data) ? data : []);
-                    accounts.forEach((acc: any) => {
-                        if (acc.clan) {
-                            clansMap.set(acc.clan.tag, acc.clan.name);
-                        }
-                    });
-                    userClans = Array.from(clansMap.entries()).map(
-                        ([tag, name]) => ({ tag, name })
-                    );
-                }
+                userClans = Array.from(clansMap.entries()).map(
+                    ([tag, name]) => ({ tag, name })
+                );
             }
         } catch (error) {
             console.error('Failed to fetch user clans:', error);
@@ -142,39 +130,6 @@
                     >
                 </div>
             </div>
-
-            {#if $user && userClans.length > 0}
-                <div class="nav-item dropdown">
-                    <button class="nav-link">
-                        {$user.is_admin ? 'Alle Clans' : 'Meine Clans'}
-                        <svg
-                            class="dropdown-arrow"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                        >
-                            <path
-                                fill-rule="evenodd"
-                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                clip-rule="evenodd"
-                            />
-                        </svg>
-                    </button>
-                    <div class="dropdown-menu">
-                        {#each userClans as clan}
-                            <a
-                                href="/coc/clan/{clan.tag.replace('#', '')}"
-                                class="dropdown-item"
-                                on:click|preventDefault={() =>
-                                    navigate(
-                                        `coc/clan/${clan.tag.replace('#', '')}`
-                                    )}
-                            >
-                                {clan.name}
-                            </a>
-                        {/each}
-                    </div>
-                </div>
-            {/if}
         </nav>
 
         <div class="header-actions">
@@ -285,7 +240,98 @@
                             Verknüpfte Accounts
                         </button>
 
+                        {#if userClans.length > 0}
+                            {#if userClans.length === 1}
+                                <a
+                                    href="/coc/clan/{userClans[0].tag.replace(
+                                        '#',
+                                        ''
+                                    )}"
+                                    class="dropdown-item"
+                                    on:click|preventDefault={() =>
+                                        navigate(
+                                            `coc/clan/${userClans[0].tag.replace(
+                                                '#',
+                                                ''
+                                            )}`
+                                        )}
+                                >
+                                    <svg
+                                        class="item-icon"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path
+                                            d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                        />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                    </svg>
+                                    Dein Clan
+                                </a>
+                            {:else}
+                                {#each userClans as clan}
+                                    <a
+                                        href="/coc/clan/{clan.tag.replace(
+                                            '#',
+                                            ''
+                                        )}"
+                                        class="dropdown-item"
+                                        on:click|preventDefault={() =>
+                                            navigate(
+                                                `coc/clan/${clan.tag.replace(
+                                                    '#',
+                                                    ''
+                                                )}`
+                                            )}
+                                    >
+                                        <svg
+                                            class="item-icon"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        >
+                                            <path
+                                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                            />
+                                            <circle cx="9" cy="7" r="4" />
+                                            <path
+                                                d="M23 21v-2a4 4 0 0 0-3-3.87"
+                                            />
+                                            <path
+                                                d="M16 3.13a4 4 0 0 1 0 7.75"
+                                            />
+                                        </svg>
+                                        {clan.name}
+                                    </a>
+                                {/each}
+                            {/if}
+                        {/if}
+
                         {#if $user.is_admin}
+                            <a
+                                href="/admin/clans"
+                                class="dropdown-item"
+                                on:click|preventDefault={() =>
+                                    navigate('admin/clans')}
+                            >
+                                <svg
+                                    class="item-icon"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"
+                                    />
+                                </svg>
+                                Alle Clans
+                            </a>
                             <a
                                 href="/admin"
                                 class="dropdown-item admin-link"
