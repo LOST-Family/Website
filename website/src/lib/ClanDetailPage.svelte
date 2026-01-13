@@ -364,7 +364,7 @@
                                     </div>
                                     <div class="mini-rank-list">
                                         {#each sortedByTrophies as player, i}
-                                            <div
+                                            <button
                                                 class="rank-item"
                                                 on:click={() =>
                                                     selectPlayer(player)}
@@ -378,7 +378,7 @@
                                                 <span class="rank-val"
                                                     >{player.trophies}</span
                                                 >
-                                            </div>
+                                            </button>
                                         {/each}
                                     </div>
                                 </div>
@@ -400,7 +400,7 @@
                                     </div>
                                     <div class="mini-rank-list">
                                         {#each sortedByDonations as player, i}
-                                            <div
+                                            <button
                                                 class="rank-item"
                                                 on:click={() =>
                                                     selectPlayer(player)}
@@ -414,7 +414,7 @@
                                                 <span class="rank-val"
                                                     >▲{player.donations}</span
                                                 >
-                                            </div>
+                                            </button>
                                         {/each}
                                     </div>
                                 </div>
@@ -706,6 +706,9 @@
         <div
             class="overlay"
             on:click|self={closePlayerDetails}
+            on:keydown={(e) => e.key === 'Escape' && closePlayerDetails()}
+            role="button"
+            tabindex="-1"
             transition:fade={{ duration: 200 }}
         >
             <div
@@ -716,7 +719,11 @@
                     easing: quintOut,
                 }}
             >
-                <button class="close-btn" on:click={closePlayerDetails}>
+                <button 
+                    class="close-btn" 
+                    on:click={closePlayerDetails}
+                    aria-label="Schließen"
+                >
                     <svg
                         viewBox="0 0 24 24"
                         fill="none"
@@ -913,7 +920,7 @@
                                 </h3>
                                 <div class="other-accounts">
                                     {#each playerOtherAccounts as acc}
-                                        <div
+                                        <button
                                             class="acc-mini-card"
                                             on:click={() => selectPlayer(acc)}
                                         >
@@ -933,7 +940,7 @@
                                                 </div>
                                             </div>
                                             <div class="acc-tag">{acc.tag}</div>
-                                        </div>
+                                        </button>
                                     {/each}
                                 </div>
                             </section>
@@ -1246,6 +1253,10 @@
         cursor: pointer;
         transition: all 0.2s;
         border: 1px solid transparent;
+        width: 100%;
+        text-align: left;
+        color: inherit;
+        font: inherit;
     }
 
     .light .rank-item {
@@ -1714,19 +1725,6 @@
         flex-shrink: 0;
     }
 
-    .m-stats-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border-dark);
-    }
-
-    .light .m-stats-row {
-        border-top-color: var(--border-light);
-    }
-
     .m-th-badge {
         background: rgba(255, 255, 255, 0.05);
         padding: 4px 10px;
@@ -1739,12 +1737,6 @@
     .light .m-th-badge {
         background: rgba(0, 0, 0, 0.05);
         color: var(--text-dim-light);
-    }
-
-    .m-donations {
-        font-weight: 800;
-        color: #00ff88;
-        font-size: 0.95rem;
     }
 
     .linked-indicator {
@@ -2009,6 +2001,10 @@
         cursor: pointer;
         transition: all 0.2s;
         border: 1px solid var(--border-dark);
+        width: 100%;
+        text-align: left;
+        color: inherit;
+        font: inherit;
     }
 
     .acc-mini-card:hover {
