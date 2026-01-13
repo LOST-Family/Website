@@ -50,6 +50,15 @@ pub async fn get_coc_clan_members(
     get_clan_members_impl(&data, &tag, opt_user, GameType::ClashOfClans).await
 }
 
+// 3b. Get CoC Clan Members Lite (No Supercell API data)
+pub async fn get_coc_clan_members_lite(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    get_clan_members_lite_impl(&data, &tag, opt_user, GameType::ClashOfClans).await
+}
+
 // 4. Get CoC Clan Kickpoint Reasons
 pub async fn get_coc_clan_kickpoint_reasons(
     data: web::Data<AppState>,
@@ -214,6 +223,15 @@ pub async fn get_cr_clan_members(
     opt_user: OptionalAuthenticatedUser,
 ) -> impl Responder {
     get_clan_members_impl(&data, &tag, opt_user, GameType::ClashRoyale).await
+}
+
+// 3b. Get CR Clan Members Lite (No Supercell API data)
+pub async fn get_cr_clan_members_lite(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    get_clan_members_lite_impl(&data, &tag, opt_user, GameType::ClashRoyale).await
 }
 
 // 4. Get CR Clan Kickpoint Reasons
@@ -503,6 +521,33 @@ async fn get_clan_members_impl(
     }
 
     HttpResponse::Ok().json(supercell_members)
+}
+
+async fn get_clan_members_lite_impl(
+    data: &web::Data<AppState>,
+    tag: &str,
+    opt_user: OptionalAuthenticatedUser,
+    game: GameType,
+) -> HttpResponse {
+    let encoded_tag = encode_tag(tag);
+    let user_role = opt_user
+        .user
+        .as_ref()
+        .and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user
+        .user
+        .as_ref()
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
+        .unwrap_or(&[]);
+
+    let upstream_url_path = format!("/api/clans/{}/members-lite", encoded_tag);
+    forward_request_with_filter(data, game, &upstream_url_path, user_role, exempt_tags).await
 }
 
 async fn get_clan_kickpoint_reasons_impl(

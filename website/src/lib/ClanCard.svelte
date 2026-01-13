@@ -187,7 +187,7 @@
                     try {
                         const encodedTag = encodeURIComponent(clan.tag);
                         const res = await fetch(
-                            `${apiBaseUrl}${apiPrefix}/clans/${encodedTag}/members`
+                            `${apiBaseUrl}${apiPrefix}/clans/${encodedTag}/members-lite`
                         );
 
                         if (!res.ok) throw new Error(`Failed to load`);
@@ -333,6 +333,12 @@
 
     function getClanBanner(clanName: string): string {
         const name = clanName.toUpperCase();
+
+        // Clash Royale clans use their own banners (currently default, until uploaded)
+        if (gameType === 'cr') {
+            return bannerDefault;
+        }
+
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;

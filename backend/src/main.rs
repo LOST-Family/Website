@@ -190,6 +190,10 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(get_coc_clan_members),
             )
             .route(
+                "/api/coc/clans/{tag}/members-lite",
+                web::get().to(get_coc_clan_members_lite),
+            )
+            .route(
                 "/api/coc/clans/{tag}/kickpoint-reasons",
                 web::get().to(get_coc_clan_kickpoint_reasons),
             )
@@ -228,6 +232,10 @@ async fn main() -> std::io::Result<()> {
             .route(
                 "/api/cr/clans/{tag}/members",
                 web::get().to(get_cr_clan_members),
+            )
+            .route(
+                "/api/cr/clans/{tag}/members-lite",
+                web::get().to(get_cr_clan_members_lite),
             )
             .route(
                 "/api/cr/clans/{tag}/kickpoint-reasons",
