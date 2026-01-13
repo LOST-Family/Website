@@ -84,48 +84,30 @@
             const encodedTag = encodeURIComponent(player.tag);
             const apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
 
-            if (gameType === 'coc') {
-                // Fetch identity and kickpoints in parallel for CoC
-                const [kpRes, idRes] = await Promise.all([
-                    fetch(
-                        `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/kickpoints/details`,
-                        { credentials: 'include' }
-                    ),
-                    fetch(
-                        `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
-                        { credentials: 'include' }
-                    ),
-                ]);
-
-                let kickpoints = [];
-                if (kpRes.ok) kickpoints = await kpRes.json();
-
-                let identity = {};
-                if (idRes.ok) identity = await idRes.json();
-
-                if (selectedPlayer && selectedPlayer.tag === player.tag) {
-                    selectedPlayer = {
-                        ...selectedPlayer,
-                        ...identity,
-                        activeKickpoints: kickpoints,
-                    };
-                }
-            } else {
-                // For CR, just fetch identity
-                const idRes = await fetch(
+            // Fetch identity and kickpoints in parallel for ALL games
+            const [kpRes, idRes] = await Promise.all([
+                fetch(
+                    `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/kickpoints/details`,
+                    { credentials: 'include' }
+                ),
+                fetch(
                     `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
                     { credentials: 'include' }
-                );
+                ),
+            ]);
 
-                let identity = {};
-                if (idRes.ok) identity = await idRes.json();
+            let kickpoints = [];
+            if (kpRes.ok) kickpoints = await kpRes.json();
 
-                if (selectedPlayer && selectedPlayer.tag === player.tag) {
-                    selectedPlayer = {
-                        ...selectedPlayer,
-                        ...identity,
-                    };
-                }
+            let identity = {};
+            if (idRes.ok) identity = await idRes.json();
+
+            if (selectedPlayer && selectedPlayer.tag === player.tag) {
+                selectedPlayer = {
+                    ...selectedPlayer,
+                    ...identity,
+                    activeKickpoints: kickpoints,
+                };
             }
         } catch (error) {
             console.error('Failed to fetch player details:', error);

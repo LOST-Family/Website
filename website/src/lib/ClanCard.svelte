@@ -204,7 +204,7 @@
                                         : 'NOTINCLAN';
                                     let computedRole = baseRole;
 
-                                    // Standard CoC roles from API are usually these
+                                    // Standard roles from API (CoC and CR)
                                     const standardRoles = [
                                         'LEADER',
                                         'COLEADER',
@@ -212,9 +212,33 @@
                                         'ELDER',
                                         'ADMIN',
                                         'MEMBER',
+                                        'LEADER',
+                                        'COLEADER',
+                                        'ELDER',
+                                        'MEMBER',
+                                        // CR specific (camelCase from Supercell API)
+                                        'COLEADER',
                                     ];
 
-                                    if (standardRoles.includes(baseRole)) {
+                                    // Normalize for matching
+                                    const upperRole = baseRole.toUpperCase();
+                                    const isCoCStandard = [
+                                        'LEADER',
+                                        'COLEADER',
+                                        'CO-LEADER',
+                                        'ELDER',
+                                        'ADMIN',
+                                        'MEMBER',
+                                    ].includes(upperRole);
+                                    
+                                    const isCRStandard = [
+                                        'LEader', // Sometimes mixed case in CR bot
+                                        'COLEADER',
+                                        'ELDER',
+                                        'MEMBER',
+                                    ].map(r => r.toUpperCase()).includes(upperRole);
+
+                                    if (isCoCStandard || isCRStandard) {
                                         const clanIndex = index + 1;
                                         const clanNameUpper = (
                                             clan.nameDB || ''
@@ -225,55 +249,55 @@
                                             clanNameUpper.includes('ANTHRAZIT');
 
                                         if (isGP) {
-                                            if (baseRole === 'LEADER')
+                                            if (upperRole === 'LEADER')
                                                 computedRole = 'ANFÜHRER GP';
                                             else if (
-                                                baseRole === 'COLEADER' ||
-                                                baseRole === 'CO-LEADER'
+                                                upperRole === 'COLEADER' ||
+                                                upperRole === 'CO-LEADER'
                                             )
                                                 computedRole = 'VIZE GP';
                                             else if (
-                                                baseRole === 'ELDER' ||
-                                                baseRole === 'ADMIN'
+                                                upperRole === 'ELDER' ||
+                                                upperRole === 'ADMIN'
                                             )
                                                 computedRole = 'ÄLTESTER GP';
-                                            else if (baseRole === 'MEMBER')
+                                            else if (upperRole === 'MEMBER')
                                                 computedRole = 'MITGLIED GP';
                                         } else if (isAnthrazit) {
-                                            if (baseRole === 'LEADER')
+                                            if (upperRole === 'LEADER')
                                                 computedRole =
                                                     'ANFÜHRER ANTHRAZIT';
                                             else if (
-                                                baseRole === 'COLEADER' ||
-                                                baseRole === 'CO-LEADER'
+                                                upperRole === 'COLEADER' ||
+                                                upperRole === 'CO-LEADER'
                                             )
                                                 computedRole = 'VIZE ANTHRAZIT';
                                             else if (
-                                                baseRole === 'ELDER' ||
-                                                baseRole === 'ADMIN'
+                                                upperRole === 'ELDER' ||
+                                                upperRole === 'ADMIN'
                                             )
                                                 computedRole =
                                                     'ÄLTESTER ANTHRAZIT';
-                                            else if (baseRole === 'MEMBER')
+                                            else if (upperRole === 'MEMBER')
                                                 computedRole =
                                                     'MITGLIED ANTHRAZIT';
                                         } else {
-                                            if (baseRole === 'LEADER') {
+                                            if (upperRole === 'LEADER') {
                                                 computedRole =
                                                     clanIndex === 1
                                                         ? 'ANFÜHRER'
                                                         : `ANFÜHRER ${clanIndex}`;
                                             } else if (
-                                                baseRole === 'COLEADER' ||
-                                                baseRole === 'CO-LEADER'
+                                                upperRole === 'COLEADER' ||
+                                                upperRole === 'CO-LEADER'
                                             ) {
                                                 computedRole = `VIZE ${clanIndex}`;
                                             } else if (
-                                                baseRole === 'ELDER' ||
-                                                baseRole === 'ADMIN'
+                                                upperRole === 'ELDER' ||
+                                                upperRole === 'ADMIN'
                                             ) {
                                                 computedRole = `ÄLTESTER ${clanIndex}`;
-                                            } else if (baseRole === 'MEMBER') {
+                                            } else if (upperRole === 'MEMBER') {
                                                 computedRole =
                                                     clanIndex === 1
                                                         ? 'MITGLIED'

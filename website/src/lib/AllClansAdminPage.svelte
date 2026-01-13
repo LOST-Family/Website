@@ -26,11 +26,15 @@
         nameDB: string;
         index: number;
         badgeUrl: string;
+        gameType?: 'coc' | 'cr';
     }
 
     let allClans: Clan[] = [];
     let loading = true;
     let error: string | null = null;
+
+    $: cocClans = allClans.filter(c => c.gameType === 'coc');
+    $: crClans = allClans.filter(c => c.gameType === 'cr');
 
     function getClanBanner(clanName: string): string {
         const name = (clanName || '').toUpperCase();
@@ -70,16 +74,35 @@
         loading = true;
         error = null;
         try {
-            const response = await fetch(`${apiBaseUrl}/api/coc/clans`);
-            if (!response.ok) {
-                if (response.status === 403) {
-                    throw new Error('Keine Berechtigung (Admin erforderlich)');
-                }
-                throw new Error(`HTTP ${response.status}`);
+            const [cocRes, crRes] = await Promise.all([
+                fetch(`${apiBaseUrl}/api/coc/clans`),
+                fetch(`${apiBaseUrl}/api/cr/clans`)
+            ]);
+
+            if (!cocRes.ok) {
+                if (cocRes.status === 403) throw new Error('Keine Berechtigung (Admin für CoC erforderlich)');
+                throw new Error(`CoC HTTP ${cocRes.status}`);
             }
-            const data: Clan[] = await response.json();
+            if (!crRes.ok) {
+                if (crRes.status === 403) throw new Error('Keine Berechtigung (Admin für CR erforderlich)');
+                throw new Error(`CR HTTP ${crRes.status}`);
+            }
+
+            const cocData: Clan[] = await cocRes.json();
+            const crData: Clan[] = await crRes.json();
+
             // Sort by index in the right order
-            allClans = data.sort((a, b) => a.index - b.index);
+            allClans = [
+                ...cocData.map(c => ({ ...c, gameType: 'coc' as const })),
+                ...crData.map(c => ({ ...c, gameType: 'cr' as const }))
+            ].sort((a, b) => {
+                // First group by game type
+                if (a.gameType !== b.gameType) {
+                    return a.gameType === 'coc' ? -1 : 1;
+                }
+                // Then sort by index
+                return a.index - b.index;
+            });
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
@@ -96,8 +119,9 @@
         }
     });
 
-    function navigateToClan(tag: string) {
-        dispatch('navigate', `coc/clan/${tag.replace('#', '')}`);
+    function navigateToClan(clan: Clan) {
+        const type = clan.gameType || 'coc';
+        dispatch('navigate', `${type}/clan/${clan.tag.replace('#', '')}`);
     }
 </script>
 
@@ -129,33 +153,86 @@
                 <button class="retry-btn" on:click={loadClans}>Erneut versuchen</button>
             </div>
         {:else}
-            <div class="clan-grid">
-                {#each allClans as clan}
-                    <button 
-                        class="clan-selector-card" 
-                        on:click={() => navigateToClan(clan.tag)}
-                        style="--clan-color: {getClanColor(clan.nameDB, clan.index)}"
-                    >
-                        <div class="card-banner">
-                            <img src={getClanBanner(clan.nameDB)} alt="Banner" />
-                            <div class="banner-overlay"></div>
+            <div class="sections-container">
+                {#if cocClans.length > 0}
+                    <section class="game-section">
+                        <div class="section-header-inline">
+                            <div class="game-icon coc">⚔️</div>
+                            <h2 class="section-subtitle">Clash of Clans</h2>
                         </div>
-                        <div class="card-content">
-                            <div class="clan-badge">
-                                {#if clan.badgeUrl}
-                                    <img src={clan.badgeUrl} alt={clan.nameDB || clan.tag} />
-                                {:else}
-                                    <div class="badge-placeholder">{(clan.nameDB || 'C').charAt(0)}</div>
-                                {/if}
-                            </div>
-                            <div class="clan-info">
-                                <span class="clan-name">{clan.nameDB || clan.tag}</span>
-                                <span class="clan-tag">{clan.tag}</span>
-                            </div>
-                            <div class="clan-index">#{clan.index}</div>
+                        <div class="clan-grid">
+                            {#each cocClans as clan}
+                                <button 
+                                    class="clan-selector-card" 
+                                    on:click={() => navigateToClan(clan)}
+                                    style="--clan-color: {getClanColor(clan.nameDB, clan.index)}"
+                                >
+                                    <div class="card-banner">
+                                        <img src={getClanBanner(clan.nameDB)} alt="Banner" />
+                                        <div class="banner-overlay"></div>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="clan-badge">
+                                            {#if clan.badgeUrl}
+                                                <img src={clan.badgeUrl} alt={clan.nameDB || clan.tag} />
+                                            {:else}
+                                                <div class="badge-placeholder">{(clan.nameDB || 'C').charAt(0)}</div>
+                                            {/if}
+                                        </div>
+                                        <div class="clan-info">
+                                            <span class="clan-name">{clan.nameDB || clan.tag}</span>
+                                            <span class="clan-tag">{clan.tag}</span>
+                                        </div>
+                                        <div class="clan-meta">
+                                            <span class="game-tag" class:cr={clan.gameType === 'cr'}>{clan.gameType?.toUpperCase() || 'CoC'}</span>
+                                            <span class="clan-index-badge">#{clan.index}</span>
+                                        </div>
+                                    </div>
+                                </button>
+                            {/each}
                         </div>
-                    </button>
-                {/each}
+                    </section>
+                {/if}
+
+                {#if crClans.length > 0}
+                    <section class="game-section">
+                        <div class="section-header-inline">
+                            <div class="game-icon cr">👑</div>
+                            <h2 class="section-subtitle">Clash Royale</h2>
+                        </div>
+                        <div class="clan-grid">
+                            {#each crClans as clan}
+                                <button 
+                                    class="clan-selector-card" 
+                                    on:click={() => navigateToClan(clan)}
+                                    style="--clan-color: {getClanColor(clan.nameDB, clan.index)}"
+                                >
+                                    <div class="card-banner">
+                                        <img src={getClanBanner(clan.nameDB)} alt="Banner" />
+                                        <div class="banner-overlay"></div>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="clan-badge">
+                                            {#if clan.badgeUrl}
+                                                <img src={clan.badgeUrl} alt={clan.nameDB || clan.tag} />
+                                            {:else}
+                                                <div class="badge-placeholder">{(clan.nameDB || 'C').charAt(0)}</div>
+                                            {/if}
+                                        </div>
+                                        <div class="clan-info">
+                                            <span class="clan-name">{clan.nameDB || clan.tag}</span>
+                                            <span class="clan-tag">{clan.tag}</span>
+                                        </div>
+                                        <div class="clan-meta">
+                                            <span class="game-tag" class:cr={clan.gameType === 'cr'}>{clan.gameType?.toUpperCase() || 'CoC'}</span>
+                                            <span class="clan-index-badge">#{clan.index}</span>
+                                        </div>
+                                    </div>
+                                </button>
+                            {/each}
+                        </div>
+                    </section>
+                {/if}
             </div>
         {/if}
     </div>
@@ -270,6 +347,57 @@
 
     @keyframes spin {
         to { transform: rotate(360deg); }
+    }
+
+    .sections-container {
+        display: flex;
+        flex-direction: column;
+        gap: 4rem;
+    }
+
+    .game-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .section-header-inline {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .light .section-header-inline {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .game-icon {
+        font-size: 1.5rem;
+        width: 42px;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+    }
+
+    .light .game-icon {
+        background: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .section-subtitle {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
+        color: white;
+    }
+
+    .light .section-subtitle {
+        color: #1e293b;
     }
 
     .clan-grid {
@@ -417,10 +545,32 @@
         color: #718096;
     }
 
-    .clan-index {
+    .clan-meta {
         position: absolute;
         top: 10px;
         right: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+        z-index: 2;
+    }
+
+    .game-tag {
+        font-size: 0.65rem;
+        font-weight: 800;
+        color: white;
+        background: #c90000;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    .game-tag.cr {
+        background: #024885;
+    }
+
+    .clan-index-badge {
         font-size: 0.7rem;
         font-weight: 900;
         color: white;
@@ -430,10 +580,9 @@
         backdrop-filter: blur(4px);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        z-index: 2;
     }
 
-    .light .clan-index {
+    .light .clan-index-badge {
         background: rgba(255, 255, 255, 0.5);
         color: #1a202c;
     }

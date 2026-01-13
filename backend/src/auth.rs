@@ -254,7 +254,7 @@ pub async fn discord_callback(
 
 pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl Responder {
     let user_db = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool, String, String)>(
-        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players, COALESCE(linked_cr_players, '[]') FROM users WHERE discord_id = $1",
+        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]') FROM users WHERE discord_id = $1",
     )
     .bind(&user.claims.sub)
     .fetch_one(&data.db_pool)
@@ -327,7 +327,7 @@ impl FromRequest for AuthenticatedUser {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
                     let user_db = sqlx::query_as::<_, (String, String, Option<String>, bool)>(
-                        "SELECT linked_players, COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
+                        "SELECT COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)
@@ -390,7 +390,7 @@ impl FromRequest for OptionalAuthenticatedUser {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
                     let user_db = sqlx::query_as::<_, (String, String, Option<String>, bool)>(
-                        "SELECT linked_players, COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
+                        "SELECT COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)

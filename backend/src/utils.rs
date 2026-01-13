@@ -82,23 +82,24 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
                 }
             }
 
-            if filter_fields {
-                for clan in clans {
-                    if let Some(obj) = clan.as_object_mut() {
-                        // Fix badgeUrl mismatch (singular vs plural)
-                        if !obj.contains_key("badgeUrls") {
-                            if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                                obj.insert(
-                                    "badgeUrls".to_string(),
-                                    serde_json::json!({
-                                        "small": url,
-                                        "medium": url,
-                                        "large": url
-                                    }),
-                                );
-                            }
+            for clan in clans {
+                if let Some(obj) = clan.as_object_mut() {
+                    // Fix badgeUrl mismatch (singular vs plural) - Always apply
+                    if !obj.contains_key("badgeUrls") {
+                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                            obj.insert(
+                                "badgeUrls".to_string(),
+                                serde_json::json!({
+                                    "small": url,
+                                    "medium": url,
+                                    "large": url
+                                }),
+                            );
+                            modified = true;
                         }
+                    }
 
+                    if filter_fields {
                         for field in &fields_to_remove {
                             obj.remove(*field);
                         }

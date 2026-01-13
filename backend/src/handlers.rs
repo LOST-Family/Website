@@ -429,7 +429,13 @@ async fn get_clan_members_impl(
     let exempt_tags = opt_user
         .user
         .as_ref()
-        .map(|u| u.linked_players.as_slice())
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
         .unwrap_or(&[]);
 
     let supercell_url_path = format!("/clans/{}", encoded_tag);
@@ -607,7 +613,13 @@ async fn get_player_impl(
     let exempt_tags = opt_user
         .user
         .as_ref()
-        .map(|u| u.linked_players.as_slice())
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
         .unwrap_or(&[]);
     let tag_str = player_json
         .get("tag")
@@ -665,7 +677,13 @@ async fn get_player_identity_impl(
     let exempt_tags = opt_user
         .user
         .as_ref()
-        .map(|u| u.linked_players.as_slice())
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
         .unwrap_or(&[]);
     let tag_str = if tag.starts_with('#') {
         tag.to_string()
@@ -758,7 +776,13 @@ async fn get_player_kickpoints_impl(
     let exempt_tags = opt_user
         .user
         .as_ref()
-        .map(|u| u.linked_players.as_slice())
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
         .unwrap_or(&[]);
 
     let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
@@ -826,7 +850,13 @@ async fn get_player_kickpoints_details_impl(
     let exempt_tags = opt_user
         .user
         .as_ref()
-        .map(|u| u.linked_players.as_slice())
+        .map(|u| {
+            if game == GameType::ClashRoyale {
+                u.linked_cr_players.as_slice()
+            } else {
+                u.linked_players.as_slice()
+            }
+        })
         .unwrap_or(&[]);
 
     let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");

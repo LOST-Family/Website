@@ -7,7 +7,7 @@
     export let logo: string;
 
     let mobileMenuOpen = false;
-    let userClans: { tag: string; name: string }[] = [];
+    let userClans: { tag: string; name: string; gameType: string }[] = [];
 
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
@@ -42,16 +42,26 @@
             });
             if (response.ok) {
                 const data = await response.json();
-                const clansMap = new Map<string, string>();
-                // Handle new format { coc: [...], cr: [...] }
-                const accounts = data.coc || (Array.isArray(data) ? data : []);
-                accounts.forEach((acc: any) => {
+                const clansMap = new Map<string, {name: string, gameType: string}>();
+                
+                // Process Clash of Clans accounts
+                const cocAccounts = data.coc || (Array.isArray(data) ? data : []);
+                cocAccounts.forEach((acc: any) => {
                     if (acc.clan) {
-                        clansMap.set(acc.clan.tag, acc.clan.name);
+                        clansMap.set(acc.clan.tag, { name: acc.clan.name, gameType: 'coc' });
                     }
                 });
+
+                // Process Clash Royale accounts
+                const crAccounts = data.cr || [];
+                crAccounts.forEach((acc: any) => {
+                    if (acc.clan) {
+                        clansMap.set(acc.clan.tag, { name: acc.clan.name, gameType: 'cr' });
+                    }
+                });
+
                 userClans = Array.from(clansMap.entries()).map(
-                    ([tag, name]) => ({ tag, name })
+                    ([tag, info]) => ({ tag, name: info.name, gameType: info.gameType })
                 );
             }
         } catch (error) {
@@ -243,14 +253,14 @@
                         {#if userClans.length > 0}
                             {#if userClans.length === 1}
                                 <a
-                                    href="/coc/clan/{userClans[0].tag.replace(
+                                    href="/{userClans[0].gameType}/clan/{userClans[0].tag.replace(
                                         '#',
                                         ''
                                     )}"
                                     class="dropdown-item"
                                     on:click|preventDefault={() =>
                                         navigate(
-                                            `coc/clan/${userClans[0].tag.replace(
+                                            `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
                                                 '#',
                                                 ''
                                             )}`
@@ -275,14 +285,14 @@
                             {:else}
                                 {#each userClans as clan}
                                     <a
-                                        href="/coc/clan/{clan.tag.replace(
+                                        href="/{clan.gameType}/clan/{clan.tag.replace(
                                             '#',
                                             ''
                                         )}"
                                         class="dropdown-item"
                                         on:click|preventDefault={() =>
                                             navigate(
-                                                `coc/clan/${clan.tag.replace(
+                                                `${clan.gameType}/clan/${clan.tag.replace(
                                                     '#',
                                                     ''
                                                 )}`
