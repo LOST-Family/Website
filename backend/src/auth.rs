@@ -48,13 +48,13 @@ struct UserMetadata {
 }
 
 pub fn get_role_priority(role: &str) -> i32 {
-    match role {
+    match role.to_uppercase().as_str() {
         "ADMIN" => 1000,
         "LEADER" => 100,
         "COLEADER" => 80,
         "ELDER" => 50,
         "MEMBER" => 10,
-        "NOTINCLAN" => 0,
+        "NOTINCLAN" | "NOTMEMBER" => 0,
         _ => 0,
     }
 }

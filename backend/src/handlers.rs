@@ -918,9 +918,85 @@ pub async fn get_user(
     }
 
     let url_path = format!("/api/users/{}", user_id);
-    // Ensure we have fresh user data for profiles
+    
+    // Update both caches
     let _ = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await;
-    forward_request(&data, GameType::ClashOfClans, &url_path).await
+    let _ = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await;
+
+    // Fetch both from cache
+    let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(format!("coc:upstream:{}", url_path))
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let cr_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(format!("cr:upstream:{}", url_path))
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let coc_data: Option<serde_json::Value> = match coc_res {
+        Ok(Some((body,))) => serde_json::from_slice(&body).ok(),
+        _ => None,
+    };
+
+    let cr_data: Option<serde_json::Value> = match cr_res {
+        Ok(Some((body,))) => serde_json::from_slice(&body).ok(),
+        _ => None,
+    };
+
+    match (coc_data, cr_data) {
+        (None, None) => HttpResponse::NotFound().json(ErrorResponse {
+            error: "User not found in any upstream bot".into(),
+        }),
+        (Some(coc), None) => HttpResponse::Ok().json(coc),
+        (None, Some(cr)) => HttpResponse::Ok().json(cr),
+        (Some(mut coc), Some(cr)) => {
+            // Merge CR into CoC data
+            if let (Some(coc_obj), Some(cr_obj)) = (coc.as_object_mut(), cr.as_object()) {
+                // Admin: true if either is true
+                let coc_admin = coc_obj.get("admin").and_then(|v| v.as_bool()).unwrap_or(false);
+                let cr_admin = cr_obj.get("admin").and_then(|v| v.as_bool()).unwrap_or(false);
+                coc_obj.insert("admin".to_string(), serde_json::json!(coc_admin || cr_admin));
+
+                // Highest Role: max of both
+                let coc_role = coc_obj.get("highestRole").and_then(|v| v.as_str()).unwrap_or("NOTMEMBER");
+                let cr_role = cr_obj.get("highestRole").and_then(|v| v.as_str()).unwrap_or("NOTMEMBER");
+                if crate::auth::get_role_priority(cr_role) > crate::auth::get_role_priority(coc_role) {
+                    coc_obj.insert("highestRole".to_string(), serde_json::json!(cr_role));
+                }
+
+                // Linked Players: merge and deduplicate
+                let mut coc_linked = coc_obj.get("linkedPlayers").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                if let Some(cr_linked) = cr_obj.get("linkedPlayers").and_then(|v| v.as_array()) {
+                    for tag in cr_linked {
+                        if !coc_linked.contains(tag) {
+                            coc_linked.push(tag.clone());
+                        }
+                    }
+                }
+                coc_obj.insert("linkedPlayers".to_string(), serde_json::json!(coc_linked));
+
+                // Linked CR Players: merge and deduplicate
+                let mut coc_cr_linked = coc_obj.get("linkedCrPlayers").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                if let Some(cr_cr_linked) = cr_obj.get("linkedCrPlayers").and_then(|v| v.as_array()) {
+                    for tag in cr_cr_linked {
+                        if !coc_cr_linked.contains(tag) {
+                            coc_cr_linked.push(tag.clone());
+                        }
+                    }
+                }
+                coc_obj.insert("linkedCrPlayers".to_string(), serde_json::json!(coc_cr_linked));
+
+                // Nickname: prefer CoC but if null take CR
+                if coc_obj.get("nickname").map_or(true, |v| v.is_null()) {
+                    if let Some(cr_nick) = cr_obj.get("nickname") {
+                        coc_obj.insert("nickname".to_string(), cr_nick.clone());
+                    }
+                }
+            }
+            HttpResponse::Ok().json(coc)
+        }
+    }
 }
 
 // Helper for Player Aggregation - now fetches both CoC and CR
@@ -1055,29 +1131,21 @@ pub async fn get_my_player_accounts(
     let mut cr_players = user.linked_cr_players.clone();
 
     // If lists are empty, try a live refresh from upstreams
-    if coc_players.is_empty() || cr_players.is_empty() {
-        let url_path = format!("/api/users/{}", user.claims.sub);
+    let url_path = format!("/api/users/{}", user.claims.sub);
 
-        // Try CoC Upstream
+    // Try CoC Upstream if CoC list is empty
+    if coc_players.is_empty() {
         if let Ok(body) = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
                 if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
-                    for tag in tags {
+                    for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
                         if !coc_players.contains(&tag) {
                             coc_players.push(tag);
                         }
                     }
                 }
                 if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
-                    for tag in tags {
+                    for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
                         if !cr_players.contains(&tag) {
                             cr_players.push(tag);
                         }
@@ -1085,27 +1153,22 @@ pub async fn get_my_player_accounts(
                 }
             }
         }
+    }
 
-        // Try CR Upstream
+    // Try CR Upstream if CR list is empty
+    if cr_players.is_empty() {
         if let Ok(body) = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                // In CR bot, both linkedPlayers and linkedCrPlayers are CR accounts
                 if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
-                    for tag in tags {
+                    for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
                         if !cr_players.contains(&tag) {
                             cr_players.push(tag);
                         }
                     }
                 }
                 if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
-                    for tag in tags {
+                    for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
                         if !cr_players.contains(&tag) {
                             cr_players.push(tag);
                         }
@@ -1135,7 +1198,7 @@ pub async fn get_user_player_accounts(
 
     // Try local DB first
     let user_db = sqlx::query_as::<_, (String, String)>(
-        "SELECT linked_players, linked_cr_players FROM users WHERE discord_id = $1",
+        "SELECT COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]') FROM users WHERE discord_id = $1",
     )
     .bind(&uid)
     .fetch_optional(&data.db_pool)
