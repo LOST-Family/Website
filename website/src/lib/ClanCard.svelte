@@ -4,17 +4,24 @@
     import type { GameType } from './auth';
 
     // Import banners
-    import banner3 from '../assets/Clans/Lost-X-3.png';
-    import banner4 from '../assets/Clans/Lost-X-4.png';
-    import banner5 from '../assets/Clans/Lost-X-5.png';
-    import banner6 from '../assets/Clans/Lost-X-6.png';
-    import banner7 from '../assets/Clans/Lost-X-7.png';
-    import banner8 from '../assets/Clans/Lost-X-8.png';
-    import bannerF2P from '../assets/Clans/Lost-X-f2p.png';
-    import bannerF2P2 from '../assets/Clans/Lost-X-f2p2.png';
-    import bannerGP from '../assets/Clans/Lost-X-gp.png';
-    import bannerAnthrazit from '../assets/Clans/Lost-X-anthrazit.png';
+    import banner3 from '../assets/Clans/Clash of Clans/Lost-X-3.png';
+    import banner4 from '../assets/Clans/Clash of Clans/Lost-X-4.png';
+    import banner5 from '../assets/Clans/Clash of Clans/Lost-X-5.png';
+    import banner6 from '../assets/Clans/Clash of Clans/Lost-X-6.png';
+    import banner7 from '../assets/Clans/Clash of Clans/Lost-X-7.png';
+    import banner8 from '../assets/Clans/Clash of Clans/Lost-X-8.png';
+    import bannerF2P from '../assets/Clans/Clash of Clans/Lost-X-f2p.png';
+    import bannerF2P2 from '../assets/Clans/Clash of Clans/Lost-X-f2p2.png';
+    import bannerGP from '../assets/Clans/Clash of Clans/Lost-X-gp.png';
+    import bannerAnthrazit from '../assets/Clans/Clash of Clans/Lost-X-anthrazit.png';
     import bannerDefault from '../assets/Assets/banner-lost.png';
+
+    // Clash Royale banners
+    import bannerCR1 from '../assets/Clans/Clash Royale/Lost_1.png';
+    import bannerCR2 from '../assets/Clans/Clash Royale/Lost_2.png';
+    import bannerCR3 from '../assets/Clans/Clash Royale/Lost_3.png';
+    import bannerCR4 from '../assets/Clans/Clash Royale/Lost_4.png';
+    import bannerCR5 from '../assets/Clans/Clash Royale/Lost_5.png';
 
     export let apiBaseUrl: string = '';
     export let theme: 'dark' | 'light' = 'dark';
@@ -230,13 +237,15 @@
                                         'ADMIN',
                                         'MEMBER',
                                     ].includes(upperRole);
-                                    
+
                                     const isCRStandard = [
                                         'LEader', // Sometimes mixed case in CR bot
                                         'COLEADER',
                                         'ELDER',
                                         'MEMBER',
-                                    ].map(r => r.toUpperCase()).includes(upperRole);
+                                    ]
+                                        .map((r) => r.toUpperCase())
+                                        .includes(upperRole);
 
                                     if (isCoCStandard || isCRStandard) {
                                         const clanIndex = index + 1;
@@ -358,8 +367,13 @@
     function getClanBanner(clanName: string): string {
         const name = clanName.toUpperCase();
 
-        // Clash Royale clans use their own banners (currently default, until uploaded)
+        // Clash Royale clans use their own banners
         if (gameType === 'cr') {
+            if (name === 'LOST') return bannerCR1;
+            if (name.includes('2')) return bannerCR2;
+            if (name.includes('3')) return bannerCR3;
+            if (name.includes('4')) return bannerCR4;
+            if (name.includes('5')) return bannerCR5;
             return bannerDefault;
         }
 

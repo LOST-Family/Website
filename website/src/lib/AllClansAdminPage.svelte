@@ -4,17 +4,24 @@
     import { user } from './auth';
 
     // Import banners
-    import banner3 from '../assets/Clans/Lost-X-3.png';
-    import banner4 from '../assets/Clans/Lost-X-4.png';
-    import banner5 from '../assets/Clans/Lost-X-5.png';
-    import banner6 from '../assets/Clans/Lost-X-6.png';
-    import banner7 from '../assets/Clans/Lost-X-7.png';
-    import banner8 from '../assets/Clans/Lost-X-8.png';
-    import bannerF2P from '../assets/Clans/Lost-X-f2p.png';
-    import bannerF2P2 from '../assets/Clans/Lost-X-f2p2.png';
-    import bannerGP from '../assets/Clans/Lost-X-gp.png';
-    import bannerAnthrazit from '../assets/Clans/Lost-X-anthrazit.png';
+    import banner3 from '../assets/Clans/Clash of Clans/Lost-X-3.png';
+    import banner4 from '../assets/Clans/Clash of Clans/Lost-X-4.png';
+    import banner5 from '../assets/Clans/Clash of Clans/Lost-X-5.png';
+    import banner6 from '../assets/Clans/Clash of Clans/Lost-X-6.png';
+    import banner7 from '../assets/Clans/Clash of Clans/Lost-X-7.png';
+    import banner8 from '../assets/Clans/Clash of Clans/Lost-X-8.png';
+    import bannerF2P from '../assets/Clans/Clash of Clans/Lost-X-f2p.png';
+    import bannerF2P2 from '../assets/Clans/Clash of Clans/Lost-X-f2p2.png';
+    import bannerGP from '../assets/Clans/Clash of Clans/Lost-X-gp.png';
+    import bannerAnthrazit from '../assets/Clans/Clash of Clans/Lost-X-anthrazit.png';
     import bannerDefault from '../assets/Assets/banner-lost.png';
+
+    // Clash Royale banners
+    import bannerCR1 from '../assets/Clans/Clash Royale/Lost_1.png';
+    import bannerCR2 from '../assets/Clans/Clash Royale/Lost_2.png';
+    import bannerCR3 from '../assets/Clans/Clash Royale/Lost_3.png';
+    import bannerCR4 from '../assets/Clans/Clash Royale/Lost_4.png';
+    import bannerCR5 from '../assets/Clans/Clash Royale/Lost_5.png';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
@@ -33,11 +40,21 @@
     let loading = true;
     let error: string | null = null;
 
-    $: cocClans = allClans.filter(c => c.gameType === 'coc');
-    $: crClans = allClans.filter(c => c.gameType === 'cr');
+    $: cocClans = allClans.filter((c) => c.gameType === 'coc');
+    $: crClans = allClans.filter((c) => c.gameType === 'cr');
 
-    function getClanBanner(clanName: string): string {
+    function getClanBanner(clanName: string, gameType?: 'coc' | 'cr'): string {
         const name = (clanName || '').toUpperCase();
+
+        if (gameType === 'cr') {
+            if (name === 'LOST') return bannerCR1;
+            if (name.includes('2')) return bannerCR2;
+            if (name.includes('3')) return bannerCR3;
+            if (name.includes('4')) return bannerCR4;
+            if (name.includes('5')) return bannerCR5;
+            return bannerDefault;
+        }
+
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
@@ -55,7 +72,7 @@
         const n = (name || '').toUpperCase();
         if (n.includes('GP')) return '#a5025a';
         if (n.includes('ANTHRAZIT')) return '#3d3a3f';
-        
+
         // Priority to index-based coloring to match ClanCard.svelte
         if (index === 1) return '#c90000'; // First clan is always Red
         if (index === 2) return '#05762b'; // Second is Green
@@ -76,15 +93,21 @@
         try {
             const [cocRes, crRes] = await Promise.all([
                 fetch(`${apiBaseUrl}/api/coc/clans`),
-                fetch(`${apiBaseUrl}/api/cr/clans`)
+                fetch(`${apiBaseUrl}/api/cr/clans`),
             ]);
 
             if (!cocRes.ok) {
-                if (cocRes.status === 403) throw new Error('Keine Berechtigung (Admin für CoC erforderlich)');
+                if (cocRes.status === 403)
+                    throw new Error(
+                        'Keine Berechtigung (Admin für CoC erforderlich)'
+                    );
                 throw new Error(`CoC HTTP ${cocRes.status}`);
             }
             if (!crRes.ok) {
-                if (crRes.status === 403) throw new Error('Keine Berechtigung (Admin für CR erforderlich)');
+                if (crRes.status === 403)
+                    throw new Error(
+                        'Keine Berechtigung (Admin für CR erforderlich)'
+                    );
                 throw new Error(`CR HTTP ${crRes.status}`);
             }
 
@@ -93,8 +116,8 @@
 
             // Sort by index in the right order
             allClans = [
-                ...cocData.map(c => ({ ...c, gameType: 'coc' as const })),
-                ...crData.map(c => ({ ...c, gameType: 'cr' as const }))
+                ...cocData.map((c) => ({ ...c, gameType: 'coc' as const })),
+                ...crData.map((c) => ({ ...c, gameType: 'cr' as const })),
             ].sort((a, b) => {
                 // First group by game type
                 if (a.gameType !== b.gameType) {
@@ -131,9 +154,14 @@
             <div class="header-content">
                 <div class="title-group">
                     <h1 class="page-title">Clan Auswahl</h1>
-                    <p class="page-subtitle">Alle Clans der LOST Family (Admin Ansicht)</p>
+                    <p class="page-subtitle">
+                        Alle Clans der LOST Family (Admin Ansicht)
+                    </p>
                 </div>
-                <button class="back-btn" on:click={() => dispatch('navigate', 'home')}>
+                <button
+                    class="back-btn"
+                    on:click={() => dispatch('navigate', 'home')}
+                >
                     Zurück zur Startseite
                 </button>
             </div>
@@ -146,11 +174,24 @@
             </div>
         {:else if error}
             <div class="state-container error">
-                <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                <svg
+                    class="error-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <circle cx="12" cy="12" r="10" /><line
+                        x1="12"
+                        y1="8"
+                        x2="12"
+                        y2="12"
+                    /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <p>{error}</p>
-                <button class="retry-btn" on:click={loadClans}>Erneut versuchen</button>
+                <button class="retry-btn" on:click={loadClans}
+                    >Erneut versuchen</button
+                >
             </div>
         {:else}
             <div class="sections-container">
@@ -162,26 +203,59 @@
                         </div>
                         <div class="clan-grid">
                             {#each cocClans as clan}
-                                <button 
-                                    class="clan-selector-card" 
+                                <button
+                                    class="clan-selector-card"
                                     on:click={() => navigateToClan(clan)}
-                                    style="--clan-color: {getClanColor(clan.nameDB, clan.index)}"
+                                    style="--clan-color: {getClanColor(
+                                        clan.nameDB,
+                                        clan.index
+                                    )}"
                                 >
                                     <div class="card-banner">
-                                        <img src={getClanBanner(clan.nameDB)} alt="Banner" />
+                                        <img
+                                            src={getClanBanner(
+                                                clan.nameDB,
+                                                clan.gameType
+                                            )}
+                                            alt="Banner"
+                                        />
                                         <div class="banner-overlay"></div>
                                     </div>
                                     <div class="card-content">
                                         <div class="clan-badge">
                                             {#if clan.badgeUrl}
-                                                <img src={clan.badgeUrl} alt={clan.nameDB || clan.tag} />
+                                                <img
+                                                    src={clan.badgeUrl}
+                                                    alt={clan.nameDB ||
+                                                        clan.tag}
+                                                />
                                             {:else}
-                                                <div class="badge-placeholder">{(clan.nameDB || 'C').charAt(0)}</div>
+                                                <div class="badge-placeholder">
+                                                    {(
+                                                        clan.nameDB || 'C'
+                                                    ).charAt(0)}
+                                                </div>
                                             {/if}
                                         </div>
                                         <div class="clan-info">
-                                            <span class="clan-name">{clan.nameDB || clan.tag}</span>
-                                            <span class="clan-tag">{clan.tag}</span>
+                                            <span class="clan-name"
+                                                >{clan.nameDB || clan.tag}</span
+                                            >
+                                            <span class="clan-tag"
+                                                >{clan.tag}</span
+                                            >
+                                        </div>
+                                        <div class="clan-meta">
+                                            <span
+                                                class="game-tag"
+                                                class:cr={clan.gameType ===
+                                                    'cr'}
+                                                >{clan.gameType?.toUpperCase() ||
+                                                    'CoC'}</span
+                                            >
+                                            <span class="clan-index-badge"
+                                                >#{clan.index}</span
+                                            >
                                         </div>
                                     </div>
                                 </button>
@@ -198,26 +272,59 @@
                         </div>
                         <div class="clan-grid">
                             {#each crClans as clan}
-                                <button 
-                                    class="clan-selector-card" 
+                                <button
+                                    class="clan-selector-card"
                                     on:click={() => navigateToClan(clan)}
-                                    style="--clan-color: {getClanColor(clan.nameDB, clan.index)}"
+                                    style="--clan-color: {getClanColor(
+                                        clan.nameDB,
+                                        clan.index
+                                    )}"
                                 >
                                     <div class="card-banner">
-                                        <img src={getClanBanner(clan.nameDB)} alt="Banner" />
+                                        <img
+                                            src={getClanBanner(
+                                                clan.nameDB,
+                                                clan.gameType
+                                            )}
+                                            alt="Banner"
+                                        />
                                         <div class="banner-overlay"></div>
                                     </div>
                                     <div class="card-content">
                                         <div class="clan-badge">
                                             {#if clan.badgeUrl}
-                                                <img src={clan.badgeUrl} alt={clan.nameDB || clan.tag} />
+                                                <img
+                                                    src={clan.badgeUrl}
+                                                    alt={clan.nameDB ||
+                                                        clan.tag}
+                                                />
                                             {:else}
-                                                <div class="badge-placeholder">{(clan.nameDB || 'C').charAt(0)}</div>
+                                                <div class="badge-placeholder">
+                                                    {(
+                                                        clan.nameDB || 'C'
+                                                    ).charAt(0)}
+                                                </div>
                                             {/if}
                                         </div>
                                         <div class="clan-info">
-                                            <span class="clan-name">{clan.nameDB || clan.tag}</span>
-                                            <span class="clan-tag">{clan.tag}</span>
+                                            <span class="clan-name"
+                                                >{clan.nameDB || clan.tag}</span
+                                            >
+                                            <span class="clan-tag"
+                                                >{clan.tag}</span
+                                            >
+                                        </div>
+                                        <div class="clan-meta">
+                                            <span
+                                                class="game-tag"
+                                                class:cr={clan.gameType ===
+                                                    'cr'}
+                                                >{clan.gameType?.toUpperCase() ||
+                                                    'CoC'}</span
+                                            >
+                                            <span class="clan-index-badge"
+                                                >#{clan.index}</span
+                                            >
                                         </div>
                                     </div>
                                 </button>
@@ -338,7 +445,9 @@
     }
 
     @keyframes spin {
-        to { transform: rotate(360deg); }
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     .sections-container {
@@ -454,11 +563,19 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: linear-gradient(180deg, transparent 0%, rgba(26, 26, 31, 1) 100%);
+        background: linear-gradient(
+            180deg,
+            transparent 0%,
+            rgba(26, 26, 31, 1) 100%
+        );
     }
 
     .light .banner-overlay {
-        background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 1) 100%);
+        background: linear-gradient(
+            180deg,
+            transparent 0%,
+            rgba(255, 255, 255, 1) 100%
+        );
     }
 
     .card-content {
