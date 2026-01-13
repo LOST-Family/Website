@@ -54,7 +54,7 @@ fn get_supercell_token(data: &AppState, game: GameType) -> &str {
 }
 
 // Function to filter out specific fields from clan data
-pub fn filter_clan_data(body: Bytes) -> Bytes {
+pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Bytes {
     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
         let mut modified = false;
 
@@ -66,26 +66,44 @@ pub fn filter_clan_data(body: Bytes) -> Bytes {
         ];
 
         if let Some(clans) = value.as_array_mut() {
-            for clan in clans {
-                if let Some(obj) = clan.as_object_mut() {
-                    // Fix badgeUrl mismatch (singular vs plural)
-                    if !obj.contains_key("badgeUrls") {
-                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                            obj.insert(
-                                "badgeUrls".to_string(),
-                                serde_json::json!({
-                                    "small": url,
-                                    "medium": url,
-                                    "large": url
-                                }),
-                            );
-                        }
-                    }
-
-                    for field in &fields_to_remove {
-                        obj.remove(*field);
-                    }
+            // Filter out "Warteliste" for Clash Royale (always, for everyone)
+            if game == GameType::ClashRoyale {
+                let old_len = clans.len();
+                clans.retain(|c| {
+                    let name = c.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                    let name_db = c.get("nameDB").and_then(|n| n.as_str()).unwrap_or("");
+                    let tag = c.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+                    name.to_lowercase() != "warteliste"
+                        && name_db.to_lowercase() != "warteliste"
+                        && tag.to_lowercase() != "warteliste"
+                });
+                if clans.len() != old_len {
                     modified = true;
+                }
+            }
+
+            if filter_fields {
+                for clan in clans {
+                    if let Some(obj) = clan.as_object_mut() {
+                        // Fix badgeUrl mismatch (singular vs plural)
+                        if !obj.contains_key("badgeUrls") {
+                            if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                                obj.insert(
+                                    "badgeUrls".to_string(),
+                                    serde_json::json!({
+                                        "small": url,
+                                        "medium": url,
+                                        "large": url
+                                    }),
+                                );
+                            }
+                        }
+
+                        for field in &fields_to_remove {
+                            obj.remove(*field);
+                        }
+                        modified = true;
+                    }
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
@@ -103,10 +121,12 @@ pub fn filter_clan_data(body: Bytes) -> Bytes {
                 }
             }
 
-            for field in &fields_to_remove {
-                obj.remove(*field);
+            if filter_fields {
+                for field in &fields_to_remove {
+                    obj.remove(*field);
+                }
+                modified = true;
             }
-            modified = true;
         }
 
         if modified {
@@ -236,27 +256,34 @@ pub async fn update_upstream_cache(
             let status = res.status().as_u16();
             let body = res.bytes().await.map_err(|e| e.to_string())?;
 
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
+            if status == 200 {
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
 
-            let cache_key = format!("{}:upstream:{}", prefix, url_path);
+                let cache_key = format!("{}:upstream:{}", prefix, url_path);
 
-            let _ = sqlx::query(
-                "INSERT INTO cache (key, body, status, updated_at) 
+                let _ = sqlx::query(
+                    "INSERT INTO cache (key, body, status, updated_at) 
                  VALUES ($1, $2, $3, $4)
                  ON CONFLICT (key) DO UPDATE SET 
                     body = EXCLUDED.body, 
                     status = EXCLUDED.status, 
                     updated_at = EXCLUDED.updated_at",
-            )
-            .bind(&cache_key)
-            .bind(body.to_vec())
-            .bind(status as i32)
-            .bind(timestamp)
-            .execute(&data.db_pool)
-            .await;
+                )
+                .bind(&cache_key)
+                .bind(body.to_vec())
+                .bind(status as i32)
+                .bind(timestamp)
+                .execute(&data.db_pool)
+                .await;
+            } else {
+                eprintln!(
+                    "Background Refresh: Upstream {} returned status {}",
+                    full_url, status
+                );
+            }
 
             Ok(body)
         }
@@ -276,7 +303,9 @@ pub async fn forward_request_with_filter(
     exempt_tags: &[String],
 ) -> HttpResponse {
     let prefix = get_cache_prefix(game);
-    let cache_key = format!("{}:upstream:{}", prefix, url_path);
+    // Map /members-lite request to /members cache key
+    let stripped_path = url_path.replace("/members-lite", "/members");
+    let cache_key = format!("{}:upstream:{}", prefix, stripped_path);
 
     // Serve from cache ONLY
     let result =
@@ -298,11 +327,16 @@ pub async fn forward_request_with_filter(
                 && (parts[4] == "members"
                     || parts[4] == "war-members"
                     || parts[4] == "raid-members"
-                    || parts[4] == "cwl-members"))
+                    || parts[4] == "cwl-members"
+                    || parts[4] == "members-lite"))
                 || (parts.len() == 4 && parts[1] == "api" && parts[2] == "players");
 
-            if is_clan_path && !crate::auth::has_required_role(user_role, "MEMBER") {
-                body = filter_clan_data(body);
+            if is_clan_path {
+                body = filter_clan_data(
+                    body,
+                    game,
+                    !crate::auth::has_required_role(user_role, "MEMBER"),
+                );
             } else if is_member_path {
                 body = filter_member_data(body, exempt_tags, user_role);
             }
@@ -346,27 +380,34 @@ pub async fn update_supercell_cache(
             let status = res.status().as_u16();
             let body = res.bytes().await.map_err(|e| e.to_string())?;
 
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
+            if status == 200 {
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
 
-            let cache_key = format!("{}:supercell:{}", prefix, url_path);
+                let cache_key = format!("{}:supercell:{}", prefix, url_path);
 
-            let _ = sqlx::query(
-                "INSERT INTO cache (key, body, status, updated_at) 
+                let _ = sqlx::query(
+                    "INSERT INTO cache (key, body, status, updated_at) 
                  VALUES ($1, $2, $3, $4)
                  ON CONFLICT (key) DO UPDATE SET 
                     body = EXCLUDED.body, 
                     status = EXCLUDED.status, 
                     updated_at = EXCLUDED.updated_at",
-            )
-            .bind(&cache_key)
-            .bind(body.to_vec())
-            .bind(status as i32)
-            .bind(timestamp)
-            .execute(&data.db_pool)
-            .await;
+                )
+                .bind(&cache_key)
+                .bind(body.to_vec())
+                .bind(status as i32)
+                .bind(timestamp)
+                .execute(&data.db_pool)
+                .await;
+            } else {
+                eprintln!(
+                    "Background Refresh: Supercell {} returned status {}",
+                    full_url, status
+                );
+            }
 
             Ok(body)
         }

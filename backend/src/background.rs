@@ -31,11 +31,11 @@ pub fn spawn_background_task(data: AppState) {
         }
     });
 
-    // 3. Task for CR Cache Refresh (Every 10 minutes, offset by 5 minutes)
+    // 3. Task for CR Cache Refresh (Every 10 minutes, offset by 15 seconds)
     let cr_cache_data = data.clone();
     tokio::spawn(async move {
-        // Offset by 5 minutes to spread load
-        tokio::time::sleep(Duration::from_secs(5 * 60)).await;
+        // Offset by a bit to spread load
+        tokio::time::sleep(Duration::from_secs(15)).await;
         let mut ticker = interval(Duration::from_secs(10 * 60));
         loop {
             ticker.tick().await;
@@ -204,13 +204,12 @@ async fn refresh_clans(data: &AppState, game: GameType) {
         let _ = update_upstream_cache(data, game, "/api/guild").await;
     }
 
-    // 2. Fetch & Cache All Clans
     let clans_url = "/api/clans";
     match update_upstream_cache(data, game, clans_url).await {
         Ok(body_bytes) => {
             if let Ok(clans) = serde_json::from_slice::<Vec<Clan>>(&body_bytes) {
                 info!(
-                    "Background Refresh [{}]: Found {} clans. Updating detailed data...",
+                    "Background Refresh [{}]: Fetched clans list successfully. Found {} clans. Updating detailed data...",
                     game_name,
                     clans.len()
                 );
