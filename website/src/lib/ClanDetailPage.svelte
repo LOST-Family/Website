@@ -159,6 +159,13 @@
                 if (userRes.ok) {
                     const userData = await userRes.json();
                     playerOtherAccounts = (userData.playerAccounts || []).filter((acc: any) => acc.tag !== player.tag);
+                    
+                    // Update selectedPlayer with Discord info from the user fetch
+                    selectedPlayer = {
+                        ...selectedPlayer,
+                        nickname: userData.nickname || userData.global_name || userData.username,
+                        avatar: userData.avatar || selectedPlayer.avatar
+                    };
                 }
             }
         } catch (e) {
@@ -350,7 +357,7 @@
                                 role="button"
                                 tabindex="0"
                             >
-                                <div class="m-card-content">
+                                <div class="m-card-header">
                                     <div class="card-glow"></div>
                                     <div class="m-rank-indicator">{members.indexOf(member) + 1}</div>
                                     <div class="m-avatar-container">
@@ -365,7 +372,7 @@
                                         <div class="m-sub-info">
                                             <span class="m-role-label">{getRoleDisplay(member.role)}</span>
                                             <span class="dot">•</span>
-                                            <span class="m-tag-small">{member.tag}</span>
+                                            <span class="m-tag-small" title={member.tag}>{member.tag}</span>
                                         </div>
                                     </div>
                                     <div class="m-points-info">
@@ -376,12 +383,6 @@
                                                     <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
                                                 </svg>
                                                 <span>{member.warStars ?? '???'}</span>
-                                            </div>
-                                            <div class="m-trophies-badge m-trophies-small" title="Trophäen">
-                                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"/>
-                                                </svg>
-                                                <span>{member.trophies || 0}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -400,7 +401,9 @@
                                     {/if}
                                     <div class="footer-stats-row">
                                         <div class="m-trophies-mini" title="Trophäen">
-                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"/>
+                                            </svg>
                                             {member.trophies}
                                         </div>
                                         <div class="donation-stats-mini">
@@ -464,18 +467,22 @@
                             </div>
                         </div>
 
-                        {#if selectedPlayer.userId}
+                        {#if selectedPlayer.userId || selectedPlayer.isLinked}
                             <section class="discord-profile">
                                 <div class="d-header">
                                     <div class="d-avatar-box">
                                         {#if selectedPlayer.avatar}
                                             <img src={selectedPlayer.avatar} alt="Discord Avatar" />
                                         {:else}
-                                            <div class="d-placeholder">{(selectedPlayer.nickname || selectedPlayer.name).charAt(0)}</div>
+                                            <div class="d-placeholder">
+                                                {(selectedPlayer.nickname || selectedPlayer.name || 'U').charAt(0).toUpperCase()}
+                                            </div>
                                         {/if}
                                     </div>
                                     <div class="d-info">
-                                        <div class="d-name">{selectedPlayer.nickname || 'Unbekannt'}</div>
+                                        <div class="d-name">
+                                            {selectedPlayer.nickname || selectedPlayer.global_name || selectedPlayer.username || 'Unbekannt'}
+                                        </div>
                                         <div class="d-status">Verknüpft</div>
                                     </div>
                                     {#if $user?.is_admin}
@@ -1024,22 +1031,35 @@
 
     .m-card-header {
         display: flex;
-        justify-content: space-between;
+        gap: 0.75rem;
         align-items: center;
+        position: relative;
+    }
+
+    .m-rank-indicator {
+        position: absolute;
+        top: -0.5rem;
+        left: -0.5rem;
+        font-size: 0.9rem;
+        font-weight: 900;
+        color: var(--text-dim);
+        opacity: 0.4;
+        font-family: 'JetBrains Mono', monospace;
     }
 
     .m-avatar-container {
         position: relative;
-        width: 48px;
-        height: 48px;
+        width: 44px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
     }
 
     .league-icon {
-        width: 48px;
-        height: 48px;
+        width: 100%;
+        height: 100%;
         filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.4));
         transition: transform 0.2s, filter 0.2s;
         z-index: 2;
@@ -1050,11 +1070,20 @@
         filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
     }
 
+    .m-main-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
     .m-points-info {
         display: flex;
         flex-direction: column;
         align-items: flex-end;
-        gap: 0.5rem;
+        gap: 0.35rem;
+        flex-shrink: 0;
     }
 
     .m-stat-group {
@@ -1086,12 +1115,6 @@
         font-size: 0.9rem;
         border: 1px solid rgba(255, 255, 255, 0.05);
         color: white;
-    }
-
-    .m-trophies-small {
-        font-size: 0.8rem;
-        padding: 3px 8px;
-        opacity: 0.8;
     }
 
     .m-trophies-badge svg {
@@ -1190,8 +1213,8 @@
 
     .kickpoint-indicator {
         position: absolute;
-        top: 1rem;
-        left: 1rem;
+        bottom: 1.25rem;
+        left: 1.25rem;
         background: #f43f5e;
         color: white;
         width: 22px;
@@ -1226,18 +1249,47 @@
     }
 
     .m-name {
-        margin: 0 0 4px 0;
-        font-size: 1.3rem;
+        margin: 0;
+        font-size: 1.15rem;
         font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
         letter-spacing: -0.01em;
     }
 
     .m-role-label {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: var(--accent-color);
+        white-space: nowrap;
+    }
+
+    .m-sub-info {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        opacity: 0.8;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .m-tag-small {
+        font-size: 0.7rem;
+        opacity: 0.5;
+        font-family: 'JetBrains Mono', monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .dot {
+        flex-shrink: 0;
     }
 
     .m-stats-row {
@@ -1441,11 +1493,33 @@
         gap: 1.25rem;
     }
 
-    .d-avatar-box img {
+    .d-avatar-box {
+        position: relative;
         width: 64px;
         height: 64px;
+        flex-shrink: 0;
+    }
+
+    .d-avatar-box img {
+        width: 100%;
+        height: 100%;
         border-radius: 50%;
         border: 3px solid rgba(255, 255, 255, 0.2);
+        object-fit: cover;
+    }
+
+    .d-placeholder {
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.5rem;
+        color: white;
+        border: 2px dashed rgba(255, 255, 255, 0.3);
     }
 
     .d-name { font-size: 1.4rem; font-weight: 800; }

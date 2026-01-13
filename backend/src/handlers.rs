@@ -359,6 +359,8 @@ pub async fn get_player_identity(
                 
                 // Public-ish for members
                 if let Some(nick) = obj.get("nickname") { identity.insert("nickname".to_string(), nick.clone()); }
+                if let Some(gn) = obj.get("global_name") { identity.insert("global_name".to_string(), gn.clone()); }
+                if let Some(un) = obj.get("username") { identity.insert("username".to_string(), un.clone()); }
                 if let Some(av) = obj.get("avatar") { identity.insert("avatar".to_string(), av.clone()); }
 
                 // Sensitive - COLEADER+ or self
