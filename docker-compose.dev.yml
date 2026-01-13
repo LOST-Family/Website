@@ -1,9 +1,24 @@
 services:
+    db:
+        image: postgres:16-alpine
+        container_name: website-db-dev
+        restart: always
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+            POSTGRES_DB: ${POSTGRES_DB:-website}
+        ports:
+            - '5444:5432'
+        volumes:
+            - postgres_data_dev:/var/lib/postgresql/data
+
     backend:
         build:
             context: ./backend
             dockerfile: Dockerfile.dev
         container_name: website-backend-dev
+        depends_on:
+            - db
         volumes:
             # Mount source code so edits are visible
             - ./backend:/app
@@ -12,9 +27,20 @@ services:
             # Cache cargo registry (avoids re-downloading crates)
             - cargo_registry:/usr/local/cargo/registry
         environment:
-            - RUST_LOG=debug
+            - RUST_LOG=info,sqlx=warn,actix_web=warn
             - SERVER_PORT=8888
-            # Ensure database URL is inherited from main compose file
+            - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-website}
+            - UPSTREAM_COC_API_URL=${UPSTREAM_COC_API_URL}
+            - COC_BOT_API_TOKEN=${COC_BOT_API_TOKEN}
+            - UPSTREAM_CR_API_URL=${UPSTREAM_CR_API_URL}
+            - CR_BOT_API_TOKEN=${CR_BOT_API_TOKEN}
+            - CLASH_OF_CLANS_API_TOKEN=${CLASH_OF_CLANS_API_TOKEN}
+            - CLASH_ROYALE_API_TOKEN=${CLASH_ROYALE_API_TOKEN}
+            - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+            - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI}
+            - JWT_SECRET=${JWT_SECRET}
+            - FRONTEND_URL=${FRONTEND_URL}
         ports:
             - '8888:8888'
 
@@ -23,6 +49,8 @@ services:
             context: ./website
             dockerfile: Dockerfile.dev
         container_name: website-frontend-dev
+        depends_on:
+            - backend
         volumes:
             # Mount source code
             - ./website:/app
@@ -35,3 +63,4 @@ services:
 volumes:
     backend_target:
     cargo_registry:
+    postgres_data_dev:

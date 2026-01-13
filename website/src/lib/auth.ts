@@ -8,7 +8,8 @@ export interface User {
     avatar: string | null;
     highest_role: string | null;
     is_admin: boolean;
-    linked_players: string[];
+    linked_players: string[]; // CoC linked players
+    linked_cr_players: string[]; // CR linked players
 }
 
 export const user = writable<User | null>(null);
@@ -17,7 +18,7 @@ export const loading = writable<boolean>(true);
 const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL !== undefined
         ? import.meta.env.VITE_API_BASE_URL
-        : 'http://localhost:8080';
+        : 'http://localhost:8888';
 
 export async function fetchUser() {
     loading.set(true);
@@ -53,4 +54,11 @@ export async function logout() {
     } catch (error) {
         console.error('Logout failed:', error);
     }
+}
+
+// API helper functions
+export type GameType = 'coc' | 'cr';
+
+export function getApiPrefix(game: GameType): string {
+    return `/api/${game}`;
 }
