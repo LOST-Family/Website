@@ -3,16 +3,19 @@
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
     import { user, loading } from './auth';
+    import type { GameType } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string = '';
     export let viewUserId: string | null = null;
 
-    let playerAccounts: any[] = [];
+    let cocPlayerAccounts: any[] = [];
+    let crPlayerAccounts: any[] = [];
     let accountsLoading = false;
     let accountsError: string | null = null;
     let userError: string | null = null;
     let selectedPlayer: any = null;
+    let selectedGameType: GameType = 'coc';
     let hasInitialFetched = false;
     let viewedUser: any = null;
 
@@ -20,9 +23,12 @@
         if (!viewUserId) return;
         userError = null;
         try {
-            const response = await fetch(`${apiBaseUrl}/api/users/${viewUserId}`, {
-                credentials: 'include',
-            });
+            const response = await fetch(
+                `${apiBaseUrl}/api/users/${viewUserId}`,
+                {
+                    credentials: 'include',
+                }
+            );
             if (response.ok) {
                 viewedUser = await response.json();
             } else {
@@ -38,17 +44,26 @@
         if (accountsLoading) return;
         accountsLoading = true;
         hasInitialFetched = true;
-        accountsError = null; // Clear previous errors
+        accountsError = null;
         try {
-            const url = viewUserId 
+            const url = viewUserId
                 ? `${apiBaseUrl}/api/users/${viewUserId}/accounts`
                 : `${apiBaseUrl}/api/me/accounts`;
-            
+
             const response = await fetch(url, {
                 credentials: 'include',
             });
             if (response.ok) {
-                playerAccounts = await response.json();
+                const data = await response.json();
+                // Backend now returns { coc: [...], cr: [...] }
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    cocPlayerAccounts = data.coc || [];
+                    crPlayerAccounts = data.cr || [];
+                } else {
+                    // Fallback for old format (array = CoC accounts)
+                    cocPlayerAccounts = Array.isArray(data) ? data : [];
+                    crPlayerAccounts = [];
+                }
             } else {
                 accountsError = 'Fehler beim Laden der Accounts';
             }
@@ -60,31 +75,57 @@
         }
     }
 
-    async function openPlayerModal(player: any) {
+    async function openPlayerModal(player: any, gameType: GameType) {
         selectedPlayer = player;
+        selectedGameType = gameType;
         document.body.style.overflow = 'hidden';
 
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            
-            // Fetch identity and kickpoints in parallel
-            const [kpRes, idRes] = await Promise.all([
-                fetch(`${apiBaseUrl}/api/players/${encodedTag}/kickpoints/details`, { credentials: 'include' }),
-                fetch(`${apiBaseUrl}/api/players/${encodedTag}/identity`, { credentials: 'include' })
-            ]);
+            const apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
 
-            let kickpoints = [];
-            if (kpRes.ok) kickpoints = await kpRes.json();
-            
-            let identity = {};
-            if (idRes.ok) identity = await idRes.json();
+            if (gameType === 'coc') {
+                // Fetch identity and kickpoints in parallel for CoC
+                const [kpRes, idRes] = await Promise.all([
+                    fetch(
+                        `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/kickpoints/details`,
+                        { credentials: 'include' }
+                    ),
+                    fetch(
+                        `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
+                        { credentials: 'include' }
+                    ),
+                ]);
 
-            if (selectedPlayer && selectedPlayer.tag === player.tag) {
-                selectedPlayer = {
-                    ...selectedPlayer,
-                    ...identity,
-                    activeKickpoints: kickpoints,
-                };
+                let kickpoints = [];
+                if (kpRes.ok) kickpoints = await kpRes.json();
+
+                let identity = {};
+                if (idRes.ok) identity = await idRes.json();
+
+                if (selectedPlayer && selectedPlayer.tag === player.tag) {
+                    selectedPlayer = {
+                        ...selectedPlayer,
+                        ...identity,
+                        activeKickpoints: kickpoints,
+                    };
+                }
+            } else {
+                // For CR, just fetch identity
+                const idRes = await fetch(
+                    `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
+                    { credentials: 'include' }
+                );
+
+                let identity = {};
+                if (idRes.ok) identity = await idRes.json();
+
+                if (selectedPlayer && selectedPlayer.tag === player.tag) {
+                    selectedPlayer = {
+                        ...selectedPlayer,
+                        ...identity,
+                    };
+                }
             }
         } catch (error) {
             console.error('Failed to fetch player details:', error);
@@ -140,20 +181,35 @@
             </div>
         {:else if !displayUser}
             <div class="error-state">
-                <h2>{isViewingOthers ? 'Benutzer nicht gefunden' : 'Nicht angemeldet'}</h2>
+                <h2>
+                    {isViewingOthers
+                        ? 'Benutzer nicht gefunden'
+                        : 'Nicht angemeldet'}
+                </h2>
                 <p>
-                    {isViewingOthers 
-                        ? (userError || 'Der angeforderte Benutzer konnte nicht gefunden werden.')
+                    {isViewingOthers
+                        ? userError ||
+                          'Der angeforderte Benutzer konnte nicht gefunden werden.'
                         : 'Bitte melde dich mit Discord an, um dein Profil zu sehen.'}
                 </p>
             </div>
         {:else}
             {#if isViewingOthers}
                 <div class="admin-view-banner" in:slide>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                        /><circle cx="12" cy="12" r="3" />
                     </svg>
-                    <span>Admin-Ansicht: Du betrachtest das Profil eines anderen Mitglieds</span>
+                    <span
+                        >Admin-Ansicht: Du betrachtest das Profil eines anderen
+                        Mitglieds</span
+                    >
                 </div>
             {/if}
 
@@ -201,11 +257,21 @@
             </div>
 
             <div class="profile-content">
-                <section class="accounts-section">
+                <!-- CoC Accounts Section -->
+                <section class="accounts-section coc-section">
                     <div class="section-header">
-                        <h2>Verknüpfte Accounts</h2>
-                        <span class="account-count"
-                            >{playerAccounts.length} Accounts</span
+                        <div class="section-title-group">
+                            <div class="game-icon coc-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"
+                                    />
+                                </svg>
+                            </div>
+                            <h2>Clash of Clans Accounts</h2>
+                        </div>
+                        <span class="account-count coc-count"
+                            >{cocPlayerAccounts.length} Accounts</span
                         >
                     </div>
 
@@ -238,9 +304,9 @@
                                 class="retry-btn">Erneut versuchen</button
                             >
                         </div>
-                    {:else if playerAccounts.length === 0}
+                    {:else if cocPlayerAccounts.length === 0}
                         <div class="empty-state">
-                            <div class="empty-icon">🎮</div>
+                            <div class="empty-icon">⚔️</div>
                             <p>Keine Clash of Clans Accounts verknüpft.</p>
                             <p class="sub-text">
                                 Verknüpfe deine Accounts auf unserem Discord
@@ -249,31 +315,36 @@
                         </div>
                     {:else}
                         <div class="accounts-grid">
-                            {#each playerAccounts as player}
-                                {@const activePoints = player.activeKickpointsSum || 0}
+                            {#each cocPlayerAccounts as player}
+                                {@const activePoints =
+                                    player.activeKickpointsSum || 0}
                                 <div
-                                    class="account-card"
+                                    class="account-card coc-card"
                                     class:light={theme === 'light'}
-                                    on:click={() => openPlayerModal(player)}
+                                    on:click={() =>
+                                        openPlayerModal(player, 'coc')}
                                     on:keydown={(e) =>
                                         e.key === 'Enter' &&
-                                        openPlayerModal(player)}
+                                        openPlayerModal(player, 'coc')}
                                     role="button"
                                     tabindex="0"
                                 >
-                                    <div class="card-glow"></div>
+                                    <div class="card-glow coc-glow"></div>
                                     <div class="player-header">
                                         <div class="player-rank">
                                             <img
-                                                src={player.leagueTier.iconUrls
-                                                    .large}
-                                                alt={player.leagueTier.name}
+                                                src={player.leagueTier?.iconUrls
+                                                    ?.large ||
+                                                    player.league?.iconUrls
+                                                        ?.large}
+                                                alt={player.leagueTier?.name ||
+                                                    player.league?.name}
                                                 class="league-icon"
                                             />
                                         </div>
                                         <div class="player-main">
                                             <h3 class="player-name">
-                                                {player.nameDB}
+                                                {player.nameDB || player.name}
                                             </h3>
                                             <p class="player-tag">
                                                 {player.tag}
@@ -291,9 +362,9 @@
                                             <span class="stat-label"
                                                 >Rathaus-Level</span
                                             >
-                                            <span class="stat-value">
-                                                {player.townHallLevel}
-                                            </span>
+                                            <span class="stat-value"
+                                                >{player.townHallLevel}</span
+                                            >
                                         </div>
                                         <div class="stat-item">
                                             <span class="stat-label"
@@ -373,6 +444,132 @@
                                             {/each}
                                         </div>
                                     {/if}
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </section>
+
+                <!-- CR Accounts Section -->
+                <section class="accounts-section cr-section">
+                    <div class="section-header">
+                        <div class="section-title-group">
+                            <div class="game-icon cr-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
+                                    />
+                                </svg>
+                            </div>
+                            <h2>Clash Royale Accounts</h2>
+                        </div>
+                        <span class="account-count cr-count"
+                            >{crPlayerAccounts.length} Accounts</span
+                        >
+                    </div>
+
+                    {#if accountsLoading}
+                        <div class="accounts-loading">
+                            <div class="loading-grid">
+                                {#each Array(2) as _}
+                                    <div class="skeleton-card"></div>
+                                {/each}
+                            </div>
+                        </div>
+                    {:else if crPlayerAccounts.length === 0}
+                        <div class="empty-state">
+                            <div class="empty-icon">👑</div>
+                            <p>Keine Clash Royale Accounts verknüpft.</p>
+                            <p class="sub-text">
+                                Verknüpfe deine Accounts auf unserem Discord
+                                Server.
+                            </p>
+                        </div>
+                    {:else}
+                        <div class="accounts-grid">
+                            {#each crPlayerAccounts as player}
+                                <div
+                                    class="account-card cr-card"
+                                    class:light={theme === 'light'}
+                                    on:click={() =>
+                                        openPlayerModal(player, 'cr')}
+                                    on:keydown={(e) =>
+                                        e.key === 'Enter' &&
+                                        openPlayerModal(player, 'cr')}
+                                    role="button"
+                                    tabindex="0"
+                                >
+                                    <div class="card-glow cr-glow"></div>
+                                    <div class="player-header">
+                                        <div class="player-rank">
+                                            {#if player.arena}
+                                                <div class="arena-badge">
+                                                    Arena {player.arena.id}
+                                                </div>
+                                            {:else}
+                                                <div class="level-badge">
+                                                    LVL {player.expLevel || '?'}
+                                                </div>
+                                            {/if}
+                                        </div>
+                                        <div class="player-main">
+                                            <h3 class="player-name">
+                                                {player.nameDB || player.name}
+                                            </h3>
+                                            <p class="player-tag">
+                                                {player.tag}
+                                            </p>
+                                        </div>
+                                        {#if player.role && player.role !== 'notMember'}
+                                            <div
+                                                class="role-badge-small cr-role"
+                                            >
+                                                {player.role}
+                                            </div>
+                                        {/if}
+                                    </div>
+
+                                    <div class="player-stats">
+                                        <div class="stat-item">
+                                            <span class="stat-label">Level</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.expLevel || '-'}</span
+                                            >
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label"
+                                                >Trophäen</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.trophies || '-'}</span
+                                            >
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label"
+                                                >Bestrang</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.bestTrophies ||
+                                                    '-'}</span
+                                            >
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Clan</span>
+                                            <span class="stat-value">
+                                                {#if player.clan?.badgeUrls?.large}
+                                                    <img
+                                                        src={player.clan
+                                                            .badgeUrls.large}
+                                                        alt=""
+                                                        style="width: 25px; height: 25px; vertical-align: middle; margin-right: 4px; display: inline-block;"
+                                                    />
+                                                {/if}
+                                                {player.clan?.name ||
+                                                    'Kein Clan'}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             {/each}
                         </div>
@@ -1354,6 +1551,99 @@
     .label-badge img {
         width: 20px;
         height: 20px;
+    }
+
+    /* Game-specific styles */
+    .section-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .game-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .game-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .coc-icon {
+        background: rgba(59, 165, 92, 0.15);
+        color: #3ba55c;
+    }
+
+    .cr-icon {
+        background: rgba(88, 101, 242, 0.15);
+        color: #5865f2;
+    }
+
+    .coc-count {
+        background: rgba(59, 165, 92, 0.1);
+        color: #3ba55c;
+    }
+
+    .cr-count {
+        background: rgba(88, 101, 242, 0.1);
+        color: #5865f2;
+    }
+
+    .coc-card:hover {
+        border-color: rgba(59, 165, 92, 0.3);
+    }
+
+    .cr-card:hover {
+        border-color: rgba(88, 101, 242, 0.3);
+    }
+
+    .coc-glow {
+        background: radial-gradient(
+            600px circle at var(--x, 50%) var(--y, 0%),
+            rgba(59, 165, 92, 0.1),
+            transparent 40%
+        );
+    }
+
+    .cr-glow {
+        background: radial-gradient(
+            600px circle at var(--x, 50%) var(--y, 0%),
+            rgba(88, 101, 242, 0.1),
+            transparent 40%
+        );
+    }
+
+    .cr-section {
+        margin-top: 2.5rem;
+        padding-top: 2.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .light .cr-section {
+        border-top-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .arena-badge,
+    .level-badge {
+        padding: 0.5rem 0.75rem;
+        background: linear-gradient(135deg, #5865f2, #7289da);
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #fff;
+        min-width: 48px;
+        text-align: center;
+    }
+
+    .cr-role {
+        background: rgba(88, 101, 242, 0.15);
+        color: #5865f2;
+        border-color: rgba(88, 101, 242, 0.3);
     }
 
     @media (max-width: 640px) {

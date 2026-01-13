@@ -39,8 +39,14 @@
         role: string;
         townHallLevel: number;
         expLevel: number;
-        league?: { iconUrls: { large?: string; medium: string; small: string }; name: string };
-        leagueTier?: { iconUrls: { large: string; small: string }; name: string };
+        league?: {
+            iconUrls: { large?: string; medium: string; small: string };
+            name: string;
+        };
+        leagueTier?: {
+            iconUrls: { large: string; small: string };
+            name: string;
+        };
         trophies: number;
         versusTrophies: number;
         donations: number;
@@ -71,19 +77,24 @@
     let playerOtherAccounts: any[] = [];
 
     const roleOrder: Record<string, number> = {
-        'leader': 1,
-        'coLeader': 2,
-        'admin': 3,
-        'member': 4
+        leader: 1,
+        coLeader: 2,
+        admin: 3,
+        member: 4,
     };
 
     function getRoleDisplay(role: string): string {
         switch (role) {
-            case 'leader': return 'Anführer';
-            case 'coLeader': return 'Vize-Anführer';
-            case 'admin': return 'Ältester';
-            case 'member': return 'Mitglied';
-            default: return role;
+            case 'leader':
+                return 'Anführer';
+            case 'coLeader':
+                return 'Vize-Anführer';
+            case 'admin':
+                return 'Ältester';
+            case 'member':
+                return 'Mitglied';
+            default:
+                return role;
         }
     }
 
@@ -91,20 +102,30 @@
         loading = true;
         try {
             const encodedTag = encodeURIComponent(clanTag);
-            const clanRes = await fetch(`${apiBaseUrl}/api/clans/${encodedTag}`, { credentials: 'include' });
+            const clanRes = await fetch(
+                `${apiBaseUrl}/api/coc/clans/${encodedTag}`,
+                { credentials: 'include' }
+            );
             if (!clanRes.ok) throw new Error('Clan nicht gefunden');
             clan = await clanRes.json();
 
             // Fetch clan config (MEMBER+)
             try {
-                const configRes = await fetch(`${apiBaseUrl}/api/clans/${encodedTag}/config`, { credentials: 'include' });
+                const configRes = await fetch(
+                    `${apiBaseUrl}/api/coc/clans/${encodedTag}/config`,
+                    { credentials: 'include' }
+                );
                 if (configRes.ok) clanConfig = await configRes.json();
             } catch (e) {
                 console.log('User is guest, config hidden');
             }
 
-            const membersRes = await fetch(`${apiBaseUrl}/api/clans/${encodedTag}/members`, { credentials: 'include' });
-            if (!membersRes.ok) throw new Error('Mitglieder konnten nicht geladen werden');
+            const membersRes = await fetch(
+                `${apiBaseUrl}/api/coc/clans/${encodedTag}/members`,
+                { credentials: 'include' }
+            );
+            if (!membersRes.ok)
+                throw new Error('Mitglieder konnten nicht geladen werden');
             const membersData = await membersRes.json();
             members = Array.isArray(membersData) ? membersData : [];
 
@@ -115,7 +136,6 @@
                 if (rA !== rB) return rA - rB;
                 return (b.trophies || 0) - (a.trophies || 0);
             });
-
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
@@ -127,46 +147,59 @@
         selectedPlayer = player;
         playerDetailsLoading = true;
         playerOtherAccounts = [];
-        
+
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            
+
             // Parallel fetch of identity, kickpoints and full player data
             // This leverages the split API for better responsiveness
             const [res, kpRes, idRes] = await Promise.all([
-                fetch(`${apiBaseUrl}/api/players/${encodedTag}`, { credentials: 'include' }),
-                fetch(`${apiBaseUrl}/api/players/${encodedTag}/kickpoints/details`, { credentials: 'include' }),
-                fetch(`${apiBaseUrl}/api/players/${encodedTag}/identity`, { credentials: 'include' })
+                fetch(`${apiBaseUrl}/api/coc/players/${encodedTag}`, {
+                    credentials: 'include',
+                }),
+                fetch(
+                    `${apiBaseUrl}/api/coc/players/${encodedTag}/kickpoints/details`,
+                    { credentials: 'include' }
+                ),
+                fetch(`${apiBaseUrl}/api/coc/players/${encodedTag}/identity`, {
+                    credentials: 'include',
+                }),
             ]);
 
             const detailedPlayer = res.ok ? await res.json() : {};
             const kickpoints = kpRes.ok ? await kpRes.json() : [];
             const identity = idRes.ok ? await idRes.json() : {};
 
-            selectedPlayer = { 
-                ...player, 
-                ...detailedPlayer, 
-                ...identity, 
+            selectedPlayer = {
+                ...player,
+                ...detailedPlayer,
+                ...identity,
                 activeKickpoints: kickpoints,
                 // Ensure we don't lose the side-loaded warStars/heroes if they weren't in the detailed fetch
                 warStars: detailedPlayer.warStars ?? player.warStars,
-                heroes: detailedPlayer.heroes ?? player.heroes
+                heroes: detailedPlayer.heroes ?? player.heroes,
             };
-            
+
             // If the player has a userId, fetch their other accounts
             if (selectedPlayer.userId) {
-                const userRes = await fetch(`${apiBaseUrl}/api/users/${selectedPlayer.userId}`, { credentials: 'include' });
+                const userRes = await fetch(
+                    `${apiBaseUrl}/api/users/${selectedPlayer.userId}`,
+                    { credentials: 'include' }
+                );
                 if (userRes.ok) {
-                    const userData = await userRes.json();
-                    playerOtherAccounts = (userData.playerAccounts || []).filter((acc: any) => acc.tag !== player.tag);
-                    
+                    playerOtherAccounts = (
+                        userData.playerAccounts || []
+                    ).filter((acc: any) => acc.tag !== player.tag);
+
                     // Update selectedPlayer with Discord info from the user fetch
                     selectedPlayer = {
                         ...selectedPlayer,
-                        nickname: userData.nickname || userData.global_name || userData.username,
-                        avatar: userData.avatar || selectedPlayer.avatar
+                        nickname:
+                            userData.nickname ||
+                            userData.global_name ||
+                            userData.username,
+                        avatar: userData.avatar || selectedPlayer.avatar,
                     };
-                }
             }
         } catch (e) {
             console.error('Failed to fetch player details:', e);
@@ -183,17 +216,27 @@
         fetchClanData();
     }
 
-    $: sortedByDonations = [...members].sort((a, b) => (b.donations || 0) - (a.donations || 0)).slice(0, 3);
-    $: sortedByTrophies = [...members].sort((a, b) => (b.trophies || 0) - (a.trophies || 0)).slice(0, 3);
+    $: sortedByDonations = [...members]
+        .sort((a, b) => (b.donations || 0) - (a.donations || 0))
+        .slice(0, 3);
+    $: sortedByTrophies = [...members]
+        .sort((a, b) => (b.trophies || 0) - (a.trophies || 0))
+        .slice(0, 3);
 
-    $: filteredMembers = members.filter(m => {
-        const nameMatch = m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        const tagMatch = m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
+    $: filteredMembers = members.filter((m) => {
+        const nameMatch =
+            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
+        const tagMatch =
+            m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
         return nameMatch || tagMatch;
     });
 </script>
 
-<div class="clan-detail-page" class:light={theme === 'light'} in:fade={{ duration: 300 }}>
+<div
+    class="clan-detail-page"
+    class:light={theme === 'light'}
+    in:fade={{ duration: 300 }}
+>
     {#if loading}
         <div class="loading-overlay">
             <div class="spinner"></div>
@@ -202,49 +245,92 @@
     {:else if error}
         <div class="error-container">
             <div class="error-content">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <circle cx="12" cy="12" r="10" /><line
+                        x1="12"
+                        y1="8"
+                        x2="12"
+                        y2="12"
+                    /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <h2>Hoppla!</h2>
                 <p>{error}</p>
-                <button class="retry-btn" on:click={fetchClanData}>Erneut versuchen</button>
+                <button class="retry-btn" on:click={fetchClanData}
+                    >Erneut versuchen</button
+                >
             </div>
         </div>
     {:else if clan}
         <div class="page-content">
             <!-- Hero Header Section -->
             <header class="clan-hero">
-                <button class="back-btn" on:click={() => dispatch('navigate', 'coc/clans')}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                <button
+                    class="back-btn"
+                    on:click={() => dispatch('navigate', 'coc/clans')}
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                    >
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
                     </svg>
                     Alle Clans
                 </button>
-                <div class="hero-bg" style="background-image: url({clan.badgeUrls?.large || ''})"></div>
+                <div
+                    class="hero-bg"
+                    style="background-image: url({clan.badgeUrls?.large || ''})"
+                ></div>
                 <div class="hero-overlay"></div>
                 <div class="hero-content">
                     <div class="badge-container">
-                        <img src={clan.badgeUrls?.large || ''} alt={clan.name} class="clan-badge" />
-                        <div class="level-badge" transition:scale>LVL {clan.clanLevel}</div>
+                        <img
+                            src={clan.badgeUrls?.large || ''}
+                            alt={clan.name}
+                            class="clan-badge"
+                        />
+                        <div class="level-badge" transition:scale>
+                            LVL {clan.clanLevel}
+                        </div>
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">
                             <h1>{clan.name}</h1>
                             <span class="tag-pill">{clan.tag}</span>
                         </div>
-                        <p class="clan-desc">{clan.description || 'Keine Beschreibung verfügbar.'}</p>
+                        <p class="clan-desc">
+                            {clan.description ||
+                                'Keine Beschreibung verfügbar.'}
+                        </p>
                         <div class="quick-stats">
                             <div class="q-stat">
                                 <span class="q-label">Punkte</span>
-                                <span class="q-value">{clan.clanPoints?.toLocaleString() ?? '0'}</span>
+                                <span class="q-value"
+                                    >{clan.clanPoints?.toLocaleString() ??
+                                        '0'}</span
+                                >
                             </div>
                             <div class="q-stat">
                                 <span class="q-label">Mitglieder</span>
-                                <span class="q-value">{clan.members ?? '0'}/50</span>
+                                <span class="q-value"
+                                    >{clan.members ?? '0'}/50</span
+                                >
                             </div>
                             <div class="q-stat">
                                 <span class="q-label">Typ</span>
-                                <span class="q-value">{clan.type === 'inviteOnly' ? 'Auf Einladung' : (clan.type === 'open' ? 'Offen' : 'Geschlossen')}</span>
+                                <span class="q-value"
+                                    >{clan.type === 'inviteOnly'
+                                        ? 'Auf Einladung'
+                                        : clan.type === 'open'
+                                          ? 'Offen'
+                                          : 'Geschlossen'}</span
+                                >
                             </div>
                         </div>
                     </div>
@@ -260,17 +346,33 @@
                             <div class="top-lists">
                                 <div class="top-list-section">
                                     <div class="top-list-header">
-                                        <svg viewBox="0 0 24 24" fill="currentColor" class="t-icon trophies">
-                                            <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"/>
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                            class="t-icon trophies"
+                                        >
+                                            <path
+                                                d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
+                                            />
                                         </svg>
                                         <span>Trophäen</span>
                                     </div>
                                     <div class="mini-rank-list">
                                         {#each sortedByTrophies as player, i}
-                                            <div class="rank-item" on:click={() => selectPlayer(player)}>
-                                                <span class="rank-num">{i+1}</span>
-                                                <span class="rank-name">{player.name}</span>
-                                                <span class="rank-val">{player.trophies}</span>
+                                            <div
+                                                class="rank-item"
+                                                on:click={() =>
+                                                    selectPlayer(player)}
+                                            >
+                                                <span class="rank-num"
+                                                    >{i + 1}</span
+                                                >
+                                                <span class="rank-name"
+                                                    >{player.name}</span
+                                                >
+                                                <span class="rank-val"
+                                                    >{player.trophies}</span
+                                                >
                                             </div>
                                         {/each}
                                     </div>
@@ -280,17 +382,33 @@
 
                                 <div class="top-list-section">
                                     <div class="top-list-header">
-                                        <svg viewBox="0 0 24 24" fill="currentColor" class="t-icon donation">
-                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                            class="t-icon donation"
+                                        >
+                                            <path
+                                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                                            />
                                         </svg>
                                         <span>Top Spender</span>
                                     </div>
                                     <div class="mini-rank-list">
                                         {#each sortedByDonations as player, i}
-                                            <div class="rank-item" on:click={() => selectPlayer(player)}>
-                                                <span class="rank-num">{i+1}</span>
-                                                <span class="rank-name">{player.name}</span>
-                                                <span class="rank-val">▲{player.donations}</span>
+                                            <div
+                                                class="rank-item"
+                                                on:click={() =>
+                                                    selectPlayer(player)}
+                                            >
+                                                <span class="rank-num"
+                                                    >{i + 1}</span
+                                                >
+                                                <span class="rank-name"
+                                                    >{player.name}</span
+                                                >
+                                                <span class="rank-val"
+                                                    >▲{player.donations}</span
+                                                >
                                             </div>
                                         {/each}
                                     </div>
@@ -303,27 +421,46 @@
                             <div class="info-grid">
                                 <div class="info-item">
                                     <span class="label">Standort</span>
-                                    <span class="value">{clan.location?.name || 'Unbekannt'}</span>
+                                    <span class="value"
+                                        >{clan.location?.name ||
+                                            'Unbekannt'}</span
+                                    >
                                 </div>
                                 <div class="info-item">
                                     <span class="label">Sprache</span>
-                                    <span class="value">{clan.chatLanguage?.name || 'Deutsch'}</span>
+                                    <span class="value"
+                                        >{clan.chatLanguage?.name ||
+                                            'Deutsch'}</span
+                                    >
                                 </div>
                                 <div class="info-item">
-                                    <span class="label">Benötigte Trophäen</span>
-                                    <span class="value">{clan.requiredTrophies ?? '0'}</span>
+                                    <span class="label">Benötigte Trophäen</span
+                                    >
+                                    <span class="value"
+                                        >{clan.requiredTrophies ?? '0'}</span
+                                    >
                                 </div>
                                 <div class="info-item">
                                     <span class="label">Kriegsfrequenz</span>
-                                    <span class="value">{clan.warFrequency === 'always' ? 'Immer' : (clan.warFrequency === 'never' ? 'Nie' : 'Regelmäßig')}</span>
+                                    <span class="value"
+                                        >{clan.warFrequency === 'always'
+                                            ? 'Immer'
+                                            : clan.warFrequency === 'never'
+                                              ? 'Nie'
+                                              : 'Regelmäßig'}</span
+                                    >
                                 </div>
                                 <div class="info-item">
                                     <span class="label">Kriegssiege</span>
-                                    <span class="value">{clan.warWins ?? '0'}</span>
+                                    <span class="value"
+                                        >{clan.warWins ?? '0'}</span
+                                    >
                                 </div>
                                 <div class="info-item">
                                     <span class="label">Winstreak</span>
-                                    <span class="value">{clan.warWinstreak ?? '0'}</span>
+                                    <span class="value"
+                                        >{clan.warWinstreak ?? '0'}</span
+                                    >
                                 </div>
                             </div>
                         </section>
@@ -335,34 +472,71 @@
                     <div class="section-header-row">
                         <div class="title-group">
                             <h2>Clan Mitglieder</h2>
-                            <p class="subtitle">{filteredMembers.length} von {clan.members ?? '0'} Mitgliedern angezeigt</p>
+                            <p class="subtitle">
+                                {filteredMembers.length} von {clan.members ??
+                                    '0'} Mitgliedern angezeigt
+                            </p>
                         </div>
                         <div class="search-box">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <circle cx="11" cy="11" r="8" /><line
+                                    x1="21"
+                                    y1="21"
+                                    x2="16.65"
+                                    y2="16.65"
+                                />
                             </svg>
-                            <input type="text" placeholder="Mitglieder suchen..." bind:value={searchQuery} />
+                            <input
+                                type="text"
+                                placeholder="Mitglieder suchen..."
+                                bind:value={searchQuery}
+                            />
                         </div>
                     </div>
 
                     <div class="members-grid">
                         {#each filteredMembers as member (member.tag)}
-                            {@const total = (member.donations || 0) + (member.donationsReceived || 0)}
-                            {@const percent = total > 0 ? ((member.donations || 0) / total) * 100 : 50}
-                            <div 
-                                class="member-card" 
+                            {@const total =
+                                (member.donations || 0) +
+                                (member.donationsReceived || 0)}
+                            {@const percent =
+                                total > 0
+                                    ? ((member.donations || 0) / total) * 100
+                                    : 50}
+                            <div
+                                class="member-card"
                                 class:is-linked={member.userId}
                                 on:click={() => selectPlayer(member)}
-                                on:keydown={(e) => e.key === 'Enter' && selectPlayer(member)}
+                                on:keydown={(e) =>
+                                    e.key === 'Enter' && selectPlayer(member)}
                                 role="button"
                                 tabindex="0"
                             >
                                 <div class="m-card-header">
                                     <div class="card-glow"></div>
-                                    <div class="m-rank-indicator">{members.indexOf(member) + 1}</div>
+                                    <div class="m-rank-indicator">
+                                        {members.indexOf(member) + 1}
+                                    </div>
                                     <div class="m-avatar-container">
                                         {#if member.leagueTier || member.league}
-                                            <img src={member.leagueTier?.iconUrls.large || member.league?.iconUrls.large || member.league?.iconUrls.medium || member.league?.iconUrls.small} alt={member.leagueTier?.name || member.league?.name} class="league-icon" />
+                                            <img
+                                                src={member.leagueTier?.iconUrls
+                                                    .large ||
+                                                    member.league?.iconUrls
+                                                        .large ||
+                                                    member.league?.iconUrls
+                                                        .medium ||
+                                                    member.league?.iconUrls
+                                                        .small}
+                                                alt={member.leagueTier?.name ||
+                                                    member.league?.name}
+                                                class="league-icon"
+                                            />
                                         {:else}
                                             <div class="no-league"></div>
                                         {/if}
@@ -370,65 +544,143 @@
                                     <div class="m-main-info">
                                         <h4 class="m-name">{member.name}</h4>
                                         <div class="m-sub-info">
-                                            <span class="m-role-label">{getRoleDisplay(member.role)}</span>
-                                            <span class="dot">•</span>
-                                            <span class="m-tag-small" title={member.tag}>{member.tag}</span>
-                                        </div>
+                                            <span class="m-tag-small" title={member.tag}>
+                                                {member.tag}
+                                            </span>
                                     </div>
                                     <div class="m-points-info">
-                                        <div class="m-th-badge">RH {member.townHallLevel}</div>
+                                        <div class="m-th-badge">
+                                            RH {member.townHallLevel}
+                                        </div>
                                         <div class="m-stat-group">
-                                            <div class="m-trophies-badge m-stars-badge" title="Clan-Krieg Sterne">
-                                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                                            <div
+                                                class="m-trophies-badge m-stars-badge"
+                                                title="Clan-Krieg Sterne"
+                                            >
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="currentColor"
+                                                >
+                                                    <path
+                                                        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                                                    />
                                                 </svg>
-                                                <span>{member.warStars ?? '???'}</span>
+                                                <span
+                                                    >{member.warStars ??
+                                                        '???'}</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="m-trophies-badge m-trophies-small"
+                                                title="Trophäen"
+                                            >
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="currentColor"
+                                                >
+                                                    <path
+                                                        d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
+                                                    />
+                                                </svg>
+                                                <span
+                                                    >{member.trophies ||
+                                                        0}</span
+                                                >
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="m-card-footer">
                                     {#if member.heroes && member.heroes.length > 0}
                                         <div class="m-heroes-row">
                                             {#each member.heroes as hero}
-                                                <div class="m-hero-tiny" title={hero.name}>
-                                                    <span class="h-name-tiny">{hero.name === 'Barbarian King' ? 'BK' : (hero.name === 'Archer Queen' ? 'AQ' : (hero.name === 'Grand Warden' ? 'GW' : (hero.name === 'Royal Champion' ? 'RC' : hero.name.substring(0,2))))}</span>
-                                                    <span class="h-lv-tiny">{hero.level}</span>
+                                                <div
+                                                    class="m-hero-tiny"
+                                                    title={hero.name}
+                                                >
+                                                    <span class="h-name-tiny"
+                                                        >{hero.name ===
+                                                        'Barbarian King'
+                                                            ? 'BK'
+                                                            : hero.name ===
+                                                                'Archer Queen'
+                                                              ? 'AQ'
+                                                              : hero.name ===
+                                                                  'Grand Warden'
+                                                                ? 'GW'
+                                                                : hero.name ===
+                                                                    'Royal Champion'
+                                                                  ? 'RC'
+                                                                  : hero.name.substring(
+                                                                        0,
+                                                                        2
+                                                                    )}</span
+                                                    >
+                                                    <span class="h-lv-tiny"
+                                                        >{hero.level}</span
+                                                    >
                                                 </div>
                                             {/each}
                                         </div>
                                     {/if}
                                     <div class="footer-stats-row">
-                                        <div class="m-trophies-mini" title="Trophäen">
-                                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"/>
+                                        <div
+                                            class="m-trophies-mini"
+                                            title="Trophäen"
+                                        >
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="currentColor"
+                                            >
+                                                <path
+                                                    d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
+                                                />
                                             </svg>
                                             {member.trophies}
                                         </div>
                                         <div class="donation-stats-mini">
                                             <span>▲ {member.donations}</span>
-                                            <span>▼ {member.donationsReceived}</span>
+                                            <span
+                                                >▼ {member.donationsReceived}</span
+                                            >
                                         </div>
                                     </div>
                                 </div>
 
                                 {#if member.userId || member.isLinked}
-                                    <div class="linked-indicator" title="Verknüpft: {member.nickname || member.tag}">
-                                        <svg viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+                                    <div
+                                        class="linked-indicator"
+                                        title="Verknüpft: {member.nickname ||
+                                            member.tag}"
+                                    >
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                        >
+                                            <path
+                                                d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"
+                                            />
                                         </svg>
                                     </div>
                                 {/if}
 
                                 {#if member.activeKickpointsCount && member.activeKickpointsCount > 0}
-                                    <div class="kickpoint-indicator {member.activeKickpointsSum && member.activeKickpointsSum >= 10 ? 'high-risk' : ''}" title="{member.activeKickpointsCount} aktive Kickpoints">
+                                    <div
+                                        class="kickpoint-indicator {member.activeKickpointsSum &&
+                                        member.activeKickpointsSum >= 10
+                                            ? 'high-risk'
+                                            : ''}"
+                                        title="{member.activeKickpointsCount} aktive Kickpoints"
+                                    >
                                         !
                                     </div>
                                 {/if}
                             </div>
                         {:else}
-                            <div class="no-results">Keine Mitglieder für diese Suche gefunden.</div>
+                            <div class="no-results">
+                                Keine Mitglieder für diese Suche gefunden.
+                            </div>
                         {/each}
                     </div>
                 </main>
@@ -438,11 +690,32 @@
 
     <!-- Player Details Overlay -->
     {#if selectedPlayer}
-        <div class="overlay" on:click|self={closePlayerDetails} transition:fade={{ duration: 200 }}>
-            <div class="drawer" transition:slide={{ axis: 'x', duration: 400, easing: quintOut }}>
+        <div
+            class="overlay"
+            on:click|self={closePlayerDetails}
+            transition:fade={{ duration: 200 }}
+        >
+            <div
+                class="drawer"
+                transition:slide={{
+                    axis: 'x',
+                    duration: 400,
+                    easing: quintOut,
+                }}
+            >
                 <button class="close-btn" on:click={closePlayerDetails}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <line x1="18" y1="6" x2="6" y2="18" /><line
+                            x1="6"
+                            y1="6"
+                            x2="18"
+                            y2="18"
+                        />
                     </svg>
                 </button>
 
@@ -455,14 +728,31 @@
                         <div class="player-hero">
                             <div class="p-hero-top">
                                 {#if selectedPlayer.leagueTier || selectedPlayer.league}
-                                    <img src={selectedPlayer.leagueTier?.iconUrls.large || selectedPlayer.league?.iconUrls.large || selectedPlayer.league?.iconUrls.medium} alt={selectedPlayer.leagueTier?.name || selectedPlayer.league?.name} class="p-league-img" />
+                                    <img
+                                        src={selectedPlayer.leagueTier?.iconUrls
+                                            .large ||
+                                            selectedPlayer.league?.iconUrls
+                                                .large ||
+                                            selectedPlayer.league?.iconUrls
+                                                .medium}
+                                        alt={selectedPlayer.leagueTier?.name ||
+                                            selectedPlayer.league?.name}
+                                        class="p-league-img"
+                                    />
                                 {/if}
                                 <div class="p-title">
                                     <h2>{selectedPlayer.name}</h2>
-                                    <span class="p-tag">{selectedPlayer.tag}</span>
+                                    <span class="p-tag"
+                                        >{selectedPlayer.tag}</span
+                                    >
                                 </div>
                             </div>
-                            <div class="p-role-badge" style="background: {theme === 'light' ? 'rgba(88, 101, 242, 0.1)' : 'rgba(88, 101, 242, 0.2)'}">
+                            <div
+                                class="p-role-badge"
+                                style="background: {theme === 'light'
+                                    ? 'rgba(88, 101, 242, 0.1)'
+                                    : 'rgba(88, 101, 242, 0.2)'}"
+                            >
                                 {getRoleDisplay(selectedPlayer.role)}
                             </div>
                         </div>
@@ -472,26 +762,49 @@
                                 <div class="d-header">
                                     <div class="d-avatar-box">
                                         {#if selectedPlayer.avatar}
-                                            <img src={selectedPlayer.avatar} alt="Discord Avatar" />
+                                            <img
+                                                src={selectedPlayer.avatar}
+                                                alt="Discord Avatar"
+                                            />
                                         {:else}
                                             <div class="d-placeholder">
-                                                {(selectedPlayer.nickname || selectedPlayer.name || 'U').charAt(0).toUpperCase()}
+                                                {(
+                                                    selectedPlayer.nickname ||
+                                                    selectedPlayer.name ||
+                                                    'U'
+                                                )
+                                                    .charAt(0)
+                                                    .toUpperCase()}
                                             </div>
                                         {/if}
                                     </div>
                                     <div class="d-info">
                                         <div class="d-name">
-                                            {selectedPlayer.nickname || selectedPlayer.global_name || selectedPlayer.username || 'Unbekannt'}
+                                            {selectedPlayer.nickname ||
+                                                selectedPlayer.global_name ||
+                                                selectedPlayer.username ||
+                                                'Unbekannt'}
                                         </div>
                                         <div class="d-status">Verknüpft</div>
                                     </div>
                                     {#if $user?.is_admin}
-                                        <button 
+                                        <button
                                             class="view-profile-btn"
-                                            on:click={() => dispatch('navigate', `profile/${selectedPlayer.userId}`)}
+                                            on:click={() =>
+                                                dispatch(
+                                                    'navigate',
+                                                    `profile/${selectedPlayer.userId}`
+                                                )}
                                         >
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                            >
+                                                <path
+                                                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                                                />
                                             </svg>
                                             Profil ansehen
                                         </button>
@@ -505,24 +818,42 @@
                             <div class="stat-list">
                                 <div class="s-item">
                                     <span class="s-label">Rathaus</span>
-                                    <span class="s-value">Level {selectedPlayer.townHallLevel}</span>
+                                    <span class="s-value"
+                                        >Level {selectedPlayer.townHallLevel}</span
+                                    >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Erfahrung</span>
-                                    <span class="s-value">Lvl {selectedPlayer.expLevel}</span>
+                                    <span class="s-value"
+                                        >Lvl {selectedPlayer.expLevel}</span
+                                    >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Trophäen</span>
-                                    <span class="s-value">{selectedPlayer.trophies}</span>
+                                    <span class="s-value"
+                                        >{selectedPlayer.trophies}</span
+                                    >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Spenden</span>
-                                    <span class="s-value">▲ {selectedPlayer.donations} / ▼ {selectedPlayer.donationsReceived}</span>
+                                    <span class="s-value"
+                                        >▲ {selectedPlayer.donations} / ▼ {selectedPlayer.donationsReceived}</span
+                                    >
                                 </div>
                                 {#if selectedPlayer.totalKickpoints !== undefined}
                                     <div class="s-item highlighted">
                                         <span class="s-label">Kickpunkte</span>
-                                        <span class="s-value">{selectedPlayer.activeKickpointsSum ?? (selectedPlayer.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)} (Gesamt: {selectedPlayer.totalKickpoints})</span>
+                                        <span class="s-value"
+                                            >{selectedPlayer.activeKickpointsSum ??
+                                                (
+                                                    selectedPlayer.activeKickpoints ||
+                                                    []
+                                                ).reduce(
+                                                    (a, b) =>
+                                                        a + (b.amount || 0),
+                                                    0
+                                                )} (Gesamt: {selectedPlayer.totalKickpoints})</span
+                                        >
                                     </div>
                                 {/if}
                             </div>
@@ -535,14 +866,26 @@
                                     {#each selectedPlayer.activeKickpoints as kp}
                                         <div class="kp-detail-item">
                                             <div class="kp-detail-header">
-                                                <span class="kp-amount">+{kp.amount}</span>
-                                                <span class="kp-date">{new Date(kp.date).toLocaleDateString('de-DE')}</span>
+                                                <span class="kp-amount"
+                                                    >+{kp.amount}</span
+                                                >
+                                                <span class="kp-date"
+                                                    >{new Date(
+                                                        kp.date
+                                                    ).toLocaleDateString(
+                                                        'de-DE'
+                                                    )}</span
+                                                >
                                             </div>
                                             {#if kp.reason}
-                                                <div class="kp-reason">{kp.reason}</div>
+                                                <div class="kp-reason">
+                                                    {kp.reason}
+                                                </div>
                                             {/if}
                                             {#if kp.description}
-                                                <div class="kp-desc">{kp.description}</div>
+                                                <div class="kp-desc">
+                                                    {kp.description}
+                                                </div>
                                             {/if}
                                         </div>
                                     {/each}
@@ -552,14 +895,29 @@
 
                         {#if playerOtherAccounts.length > 0}
                             <section class="detail-section">
-                                <h3>Weitere Accounts ({playerOtherAccounts.length})</h3>
+                                <h3>
+                                    Weitere Accounts ({playerOtherAccounts.length})
+                                </h3>
                                 <div class="other-accounts">
                                     {#each playerOtherAccounts as acc}
-                                        <div class="acc-mini-card" on:click={() => selectPlayer(acc)}>
-                                            <img src={acc.clan?.badgeUrls?.small || ''} alt="" class="acc-badge" />
+                                        <div
+                                            class="acc-mini-card"
+                                            on:click={() => selectPlayer(acc)}
+                                        >
+                                            <img
+                                                src={acc.clan?.badgeUrls
+                                                    ?.small || ''}
+                                                alt=""
+                                                class="acc-badge"
+                                            />
                                             <div class="acc-info">
-                                                <div class="acc-name">{acc.nameDB}</div>
-                                                <div class="acc-clan">{acc.clan?.name || 'Kein Clan'}</div>
+                                                <div class="acc-name">
+                                                    {acc.nameDB}
+                                                </div>
+                                                <div class="acc-clan">
+                                                    {acc.clan?.name ||
+                                                        'Kein Clan'}
+                                                </div>
                                             </div>
                                             <div class="acc-tag">{acc.tag}</div>
                                         </div>
@@ -582,7 +940,7 @@
         --bg-card-dark: rgba(20, 20, 30, 0.7);
         --border-dark: rgba(255, 255, 255, 0.08);
         --text-dim: rgba(255, 255, 255, 0.6);
-        
+
         --bg-light: #f8fafc;
         --bg-card-light: #ffffff;
         --border-light: rgba(0, 0, 0, 0.08);
@@ -594,7 +952,11 @@
         background-color: var(--bg-dark);
         color: #fff;
         padding-bottom: 4rem;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-family:
+            'Inter',
+            system-ui,
+            -apple-system,
+            sans-serif;
     }
 
     .clan-detail-page.light {
@@ -614,7 +976,10 @@
 
     .hero-bg {
         position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background-size: cover;
         background-position: center;
         filter: blur(60px) opacity(0.25);
@@ -623,7 +988,9 @@
 
     .hero-overlay {
         position: absolute;
-        bottom: 0; left: 0; right: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
         height: 100%;
         background: linear-gradient(0deg, var(--bg-dark) 0%, transparent 100%);
     }
@@ -651,7 +1018,7 @@
     .clan-badge {
         width: 180px;
         height: 180px;
-        filter: drop-shadow(0 15px 35px rgba(0,0,0,0.6));
+        filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.6));
     }
 
     .level-badge {
@@ -772,7 +1139,9 @@
         transform: translateX(-5px);
     }
 
-    .back-btn svg { width: 20px; }
+    .back-btn svg {
+        width: 20px;
+    }
 
     /* Main Grid Layout */
     .layout-grid {
@@ -804,13 +1173,13 @@
         border: 1px solid var(--border-dark);
         border-radius: 24px;
         padding: 2rem;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     }
 
     .light .info-card {
         background: var(--bg-card-light);
         border-color: var(--border-light);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
     }
 
     .info-card h3 {
@@ -837,9 +1206,16 @@
         color: var(--accent-color);
     }
 
-    .t-icon { width: 20px; height: 20px; }
-    .trophies { color: #ffcc00; }
-    .donation { color: #00ff88; }
+    .t-icon {
+        width: 20px;
+        height: 20px;
+    }
+    .trophies {
+        color: #ffcc00;
+    }
+    .donation {
+        color: #00ff88;
+    }
 
     .mini-rank-list {
         display: flex;
@@ -893,11 +1269,21 @@
 
     .top-list-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent, var(--border-dark), transparent);
+        background: linear-gradient(
+            90deg,
+            transparent,
+            var(--border-dark),
+            transparent
+        );
     }
 
     .light .top-list-divider {
-        background: linear-gradient(90deg, transparent, var(--border-light), transparent);
+        background: linear-gradient(
+            90deg,
+            transparent,
+            var(--border-light),
+            transparent
+        );
     }
 
     .info-grid {
@@ -918,7 +1304,9 @@
         color: var(--text-dim);
     }
 
-    .light .info-item .label { color: var(--text-dim-light); }
+    .light .info-item .label {
+        color: var(--text-dim-light);
+    }
 
     .info-item .value {
         font-weight: 700;
@@ -957,7 +1345,9 @@
         font-weight: 500;
     }
 
-    .light .subtitle { color: var(--text-dim-light); }
+    .light .subtitle {
+        color: var(--text-dim-light);
+    }
 
     .search-box {
         position: relative;
@@ -1020,13 +1410,13 @@
     .light .member-card {
         background: var(--bg-card-light);
         border-color: var(--border-light);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.03);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.03);
     }
 
     .member-card:hover {
         transform: translateY(-8px);
         border-color: var(--accent-color);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     }
 
     .m-card-header {
@@ -1061,7 +1451,9 @@
         width: 100%;
         height: 100%;
         filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.4));
-        transition: transform 0.2s, filter 0.2s;
+        transition:
+            transform 0.2s,
+            filter 0.2s;
         z-index: 2;
     }
 
@@ -1175,8 +1567,12 @@
         gap: 8px;
     }
 
-    .donation-stats-mini span:first-child { color: #00ff88; }
-    .donation-stats-mini span:last-child { color: #ff4444; }
+    .donation-stats-mini span:first-child {
+        color: #00ff88;
+    }
+    .donation-stats-mini span:last-child {
+        color: #ff4444;
+    }
 
     .m-heroes-row {
         display: flex;
@@ -1188,7 +1584,9 @@
         overflow-x: auto;
     }
 
-    .light .m-heroes-row { background: rgba(0, 0, 0, 0.03); }
+    .light .m-heroes-row {
+        background: rgba(0, 0, 0, 0.03);
+    }
 
     .m-hero-tiny {
         display: flex;
@@ -1230,7 +1628,9 @@
         z-index: 5;
     }
 
-    .light .kickpoint-indicator { border-color: var(--bg-light); }
+    .light .kickpoint-indicator {
+        border-color: var(--bg-light);
+    }
 
     .kickpoint-indicator.high-risk {
         background: #000;
@@ -1239,9 +1639,18 @@
     }
 
     @keyframes pulse-red {
-        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
-        70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
-        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4);
+        }
+        70% {
+            transform: scale(1.1);
+            box-shadow: 0 0 0 10px rgba(244, 63, 94, 0);
+        }
+        100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+        }
     }
 
     .m-card-footer {
@@ -1333,12 +1742,17 @@
         opacity: 0.6;
     }
 
-    .linked-indicator svg { width: 18px; }
+    .linked-indicator svg {
+        width: 18px;
+    }
 
     /* Drawer / Overlay Styles */
     .overlay {
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: rgba(0, 0, 0, 0.8);
         backdrop-filter: blur(8px);
         z-index: 1000;
@@ -1355,7 +1769,7 @@
         position: relative;
         padding: 4rem 2.5rem;
         overflow-y: auto;
-        box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
     }
 
     .light .drawer {
@@ -1403,7 +1817,10 @@
         margin-bottom: 1.5rem;
     }
 
-    .p-league-img { width: 80px; height: 80px; }
+    .p-league-img {
+        width: 80px;
+        height: 80px;
+    }
 
     .p-title h2 {
         font-size: 2.5rem;
@@ -1458,7 +1875,10 @@
         border: 1px solid var(--border-dark);
     }
 
-    .light .s-item { background: #fff; border-color: var(--border-light); }
+    .light .s-item {
+        background: #fff;
+        border-color: var(--border-light);
+    }
 
     .s-item.highlighted {
         background: rgba(88, 101, 242, 0.1);
@@ -1522,8 +1942,15 @@
         border: 2px dashed rgba(255, 255, 255, 0.3);
     }
 
-    .d-name { font-size: 1.4rem; font-weight: 800; }
-    .d-status { font-size: 0.9rem; opacity: 0.8; font-weight: 600; }
+    .d-name {
+        font-size: 1.4rem;
+        font-weight: 800;
+    }
+    .d-status {
+        font-size: 0.9rem;
+        opacity: 0.8;
+        font-weight: 600;
+    }
 
     .view-profile-btn {
         margin-left: auto;
@@ -1576,11 +2003,26 @@
         transform: translateX(8px);
     }
 
-    .acc-badge { width: 44px; height: 44px; }
-    .acc-info { flex: 1; }
-    .acc-name { font-weight: 800; font-size: 1.1rem; }
-    .acc-clan { font-size: 0.85rem; opacity: 0.6; }
-    .acc-tag { font-family: monospace; font-size: 0.8rem; opacity: 0.4; }
+    .acc-badge {
+        width: 44px;
+        height: 44px;
+    }
+    .acc-info {
+        flex: 1;
+    }
+    .acc-name {
+        font-weight: 800;
+        font-size: 1.1rem;
+    }
+    .acc-clan {
+        font-size: 0.85rem;
+        opacity: 0.6;
+    }
+    .acc-tag {
+        font-family: monospace;
+        font-size: 0.8rem;
+        opacity: 0.4;
+    }
 
     /* Kickpoint Styling */
     .kp-list {
@@ -1604,10 +2046,26 @@
         margin-bottom: 0.5rem;
     }
 
-    .kp-amount { font-weight: 900; color: #f43f5e; font-size: 1.3rem; }
-    .kp-date { font-size: 0.85rem; font-weight: 600; opacity: 0.5; }
-    .kp-reason { font-weight: 800; font-size: 1.1rem; margin-bottom: 0.25rem; }
-    .kp-desc { font-size: 0.95rem; line-height: 1.5; opacity: 0.8; }
+    .kp-amount {
+        font-weight: 900;
+        color: #f43f5e;
+        font-size: 1.3rem;
+    }
+    .kp-date {
+        font-size: 0.85rem;
+        font-weight: 600;
+        opacity: 0.5;
+    }
+    .kp-reason {
+        font-weight: 800;
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+    }
+    .kp-desc {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        opacity: 0.8;
+    }
 
     /* Loading / Spinner */
     .loading-overlay {
@@ -1628,7 +2086,11 @@
         animation: spin 1s linear infinite;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
 
     /* Responsive */
     @media (max-width: 1200px) {
@@ -1657,15 +2119,22 @@
             text-align: center;
             gap: 1.5rem;
         }
-        .clan-info-main h1 { font-size: 2.5rem; }
-        .quick-stats { justify-content: center; flex-wrap: wrap; gap: 1.5rem; }
-        
+        .clan-info-main h1 {
+            font-size: 2.5rem;
+        }
+        .quick-stats {
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
         .section-header-row {
             flex-direction: column;
             align-items: flex-start;
             gap: 1.5rem;
         }
-        .search-box { width: 100%; }
+        .search-box {
+            width: 100%;
+        }
     }
 </style>
-

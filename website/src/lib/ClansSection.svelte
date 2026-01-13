@@ -62,6 +62,7 @@
             {apiBaseUrl}
             {theme}
             {clansData}
+            {gameType}
             bind:clanCount
             bind:playerCount
         />
