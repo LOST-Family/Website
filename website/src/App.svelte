@@ -130,7 +130,11 @@
         {:else if currentPath === '/admin'}
             <AdminPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/admin/clans'}
-            <AllClansAdminPage {theme} {apiBaseUrl} on:navigate={handleNavigate} />
+            <AllClansAdminPage
+                {theme}
+                {apiBaseUrl}
+                on:navigate={handleNavigate}
+            />
         {:else if currentPath.startsWith('/coc/clan/')}
             {#if $loading}
                 <div class="auth-message-container">
