@@ -940,7 +940,6 @@ async fn fetch_aggregated_player_accounts(
                                         serde_json::json!(sum),
                                     );
                                 }
-                                player_obj.remove("activeKickpoints");
                             }
                         }
                     }
@@ -995,7 +994,6 @@ async fn fetch_aggregated_player_accounts(
                                         serde_json::json!(sum),
                                     );
                                 }
-                                player_obj.remove("activeKickpoints");
                             }
                         }
                     }
@@ -1016,8 +1014,50 @@ pub async fn get_my_player_accounts(
     data: web::Data<AppState>,
     user: AuthenticatedUser,
 ) -> impl Responder {
-    let coc_players = user.linked_players.clone();
-    let cr_players = user.linked_cr_players.clone();
+    let mut coc_players = user.linked_players.clone();
+    let mut cr_players = user.linked_cr_players.clone();
+
+    // If lists are empty, try a live refresh from upstreams
+    if coc_players.is_empty() || cr_players.is_empty() {
+        let url_path = format!("/api/users/{}", user.claims.sub);
+        
+        // Try CoC Upstream
+        if let Ok(body) = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await {
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
+                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    for tag in tags {
+                        if !coc_players.contains(&tag) { coc_players.push(tag); }
+                    }
+                }
+                if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
+                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    for tag in tags {
+                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                    }
+                }
+            }
+        }
+
+        // Try CR Upstream
+        if let Ok(body) = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await {
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
+                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    for tag in tags {
+                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                    }
+                }
+                if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
+                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    for tag in tags {
+                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                    }
+                }
+            }
+        }
+    }
+
     let players_data = fetch_aggregated_player_accounts(&data, coc_players, cr_players).await;
     HttpResponse::Ok().json(players_data)
 }
@@ -1044,46 +1084,62 @@ pub async fn get_user_player_accounts(
     .fetch_optional(&data.db_pool)
     .await;
 
-    let (coc_linked, cr_linked): (Vec<String>, Vec<String>) = match user_db {
+    let (mut coc_linked, mut cr_linked): (Vec<String>, Vec<String>) = match user_db {
         Ok(Some((lp_json, cr_json))) => (
             serde_json::from_str(&lp_json).unwrap_or_default(),
             serde_json::from_str(&cr_json).unwrap_or_default(),
         ),
-        _ => {
-            // Try Upstream
-            let url_path = format!("/api/users/{}", uid);
-            let upstream_res =
-                update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await;
-            match upstream_res {
-                Ok(body) => {
-                    let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
-                    let coc = json
-                        .get("linkedPlayers")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|p| p.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let cr = json
-                        .get("linkedCrPlayers")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|p| p.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    (coc, cr)
+        _ => (Vec::new(), Vec::new()),
+    };
+
+    // Always try refreshing from upstreams to ensure data is current
+    let url_path = format!("/api/users/{}", uid);
+
+    // 1. Try CoC Upstream
+    if let Ok(body) = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await {
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+            if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
+                for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
+                    if !coc_linked.contains(&tag) {
+                        coc_linked.push(tag);
+                    }
                 }
-                _ => {
-                    return HttpResponse::NotFound()
-                        .json(serde_json::json!({ "error": "User not found" }));
+            }
+            if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
+                for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
+                    if !cr_linked.contains(&tag) {
+                        cr_linked.push(tag);
+                    }
                 }
             }
         }
-    };
+    }
+
+    // 2. Try CR Upstream
+    if let Ok(body) = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await {
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+            // Combine both linkedPlayers and linkedCrPlayers from CR bot as CR accounts
+            if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
+                for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
+                    if !cr_linked.contains(&tag) {
+                        cr_linked.push(tag);
+                    }
+                }
+            }
+            if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
+                for tag in arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())) {
+                    if !cr_linked.contains(&tag) {
+                        cr_linked.push(tag);
+                    }
+                }
+            }
+        }
+    }
+
+    if coc_linked.is_empty() && cr_linked.is_empty() {
+        return HttpResponse::NotFound()
+            .json(serde_json::json!({ "error": "User not found in local DB or any upstream" }));
+    }
 
     let players_data = fetch_aggregated_player_accounts(&data, coc_linked, cr_linked).await;
     HttpResponse::Ok().json(players_data)

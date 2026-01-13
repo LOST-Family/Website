@@ -488,6 +488,7 @@
                     {:else}
                         <div class="accounts-grid">
                             {#each crPlayerAccounts as player}
+                                {@const activePoints = player.activeKickpointsSum || 0}
                                 <div
                                     class="account-card cr-card"
                                     class:light={theme === 'light'}
@@ -504,7 +505,7 @@
                                         <div class="player-rank">
                                             {#if player.arena}
                                                 <div class="arena-badge">
-                                                    Arena {player.arena.id}
+                                                    {player.arena.name || `Arena ${player.arena.id}`}
                                                 </div>
                                             {:else}
                                                 <div class="level-badge">
@@ -531,19 +532,25 @@
 
                                     <div class="player-stats">
                                         <div class="stat-item">
-                                            <span class="stat-label">Level</span
-                                            >
-                                            <span class="stat-value"
-                                                >{player.expLevel || '-'}</span
-                                            >
+                                            <span class="stat-label">Level</span>
+                                            <span class="stat-value">{player.expLevel || '-'}</span>
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label"
-                                                >Trophäen</span
+                                            <span class="stat-label">Kickpunkte</span>
+                                            <span
+                                                class="stat-value"
+                                                class:danger={activePoints >= (player.clanDB?.maxKickpoints || 9)}
                                             >
-                                            <span class="stat-value"
-                                                >{player.trophies || '-'}</span
-                                            >
+                                                {activePoints} / {player.clanDB?.maxKickpoints || '-'}
+                                            </span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Gesamtanzahl Kickpunkte</span>
+                                            <span class="stat-value">{player.totalKickpoints || 0}</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Trophäen</span>
+                                            <span class="stat-value">{player.trophies || '-'}</span>
                                         </div>
                                         <div class="stat-item">
                                             <span class="stat-label"
@@ -570,6 +577,29 @@
                                             </span>
                                         </div>
                                     </div>
+
+                                    {#if player.activeKickpoints && player.activeKickpoints.length > 0}
+                                        <div class="kickpoints-details">
+                                            <span class="details-title"
+                                                >Aktive Kickpunkte:</span
+                                            >
+                                            {#each player.activeKickpoints as kp}
+                                                <div class="kp-reason">
+                                                    <span class="kp-amount"
+                                                        >+{kp.amount}</span
+                                                    >
+                                                    <span class="kp-desc"
+                                                        >{kp.description}</span
+                                                    >
+                                                    <span class="kp-date"
+                                                        >{new Date(
+                                                            kp.date
+                                                        ).toLocaleDateString()}</span
+                                                    >
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    {/if}
                                 </div>
                             {/each}
                         </div>
@@ -622,13 +652,19 @@
             <div class="modal-scroll-area">
                 <div class="modal-header">
                     <div class="player-info-large">
-                        <img
-                            src={selectedPlayer.leagueTier?.iconUrls?.large}
-                            alt={selectedPlayer.leagueTier?.name}
-                            class="league-icon-large"
-                        />
+                        {#if selectedGameType === 'coc'}
+                            <img
+                                src={selectedPlayer.leagueTier?.iconUrls?.large}
+                                alt={selectedPlayer.leagueTier?.name}
+                                class="league-icon-large"
+                            />
+                        {:else if selectedPlayer.arena}
+                             <div class="arena-icon-container">
+                                <div class="arena-id-label">A{selectedPlayer.arena.id.toString().slice(-2)}</div>
+                             </div>
+                        {/if}
                         <div class="player-titles">
-                            <h2>{selectedPlayer.nameDB}</h2>
+                            <h2>{selectedPlayer.nameDB || selectedPlayer.name}</h2>
                             <p class="tag">{selectedPlayer.tag}</p>
                             {#if selectedPlayer.clan}
                                 <div class="clan-info-small">
@@ -643,12 +679,18 @@
                         </div>
                     </div>
                     <div class="th-display">
-                        <div class="th-level">
-                            TH {selectedPlayer.townHallLevel}
-                        </div>
-                        {#if selectedPlayer.builderHallLevel}
-                            <div class="bh-level">
-                                BH {selectedPlayer.builderHallLevel}
+                        {#if selectedGameType === 'coc'}
+                            <div class="th-level">
+                                TH {selectedPlayer.townHallLevel}
+                            </div>
+                            {#if selectedPlayer.builderHallLevel}
+                                <div class="bh-level">
+                                    BH {selectedPlayer.builderHallLevel}
+                                </div>
+                            {/if}
+                        {:else}
+                            <div class="th-level cr-level">
+                                {selectedPlayer.arena?.name || `Arena ${selectedPlayer.arena?.id || '?'}`}
                             </div>
                         {/if}
                     </div>
@@ -660,10 +702,17 @@
                             <span class="label">EXP Level</span>
                             <span class="value">{selectedPlayer.expLevel}</span>
                         </div>
-                        <div class="stat-card">
-                            <span class="label">Kriegssterne</span>
-                            <span class="value">{selectedPlayer.warStars}</span>
-                        </div>
+                        {#if selectedGameType === 'coc'}
+                            <div class="stat-card">
+                                <span class="label">Kriegssterne</span>
+                                <span class="value">{selectedPlayer.warStars}</span>
+                            </div>
+                        {:else}
+                            <div class="stat-card">
+                                <span class="label">Trophäen</span>
+                                <span class="value">{selectedPlayer.trophies || 0}</span>
+                            </div>
+                        {/if}
                         <div class="stat-card">
                             <span class="label">Spenden</span>
                             <span class="value"
@@ -677,6 +726,36 @@
                             >
                         </div>
                     </div>
+
+                    {#if selectedGameType === 'cr' && selectedPlayer.currentDeck}
+                        <div class="detail-section">
+                            <h3>Aktuelles Deck</h3>
+                            <div class="deck-grid">
+                                {#each selectedPlayer.currentDeck as card}
+                                    <div class="card-item" title={card.name}>
+                                        <img src={card.iconUrls?.medium} alt={card.name} />
+                                        <span class="card-level">LVL {card.level + (card.rarity === 'legendary' ? 8 : card.rarity === 'epic' ? 5 : card.rarity === 'rare' ? 2 : 0)}</span>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+
+                    {#if selectedGameType === 'cr' && selectedPlayer.badges && selectedPlayer.badges.length > 0}
+                        <div class="detail-section">
+                            <h3>Abzeichen</h3>
+                            <div class="badges-grid-cr">
+                                {#each selectedPlayer.badges as badge}
+                                    <div class="badge-item-cr" title={badge.name}>
+                                        <img src={badge.iconUrls?.large} alt={badge.name} />
+                                        {#if badge.level}
+                                            <span class="badge-level-cr">Lvl {badge.level}</span>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
 
                     {#if selectedPlayer.heroes && selectedPlayer.heroes.length > 0}
                         <div class="detail-section">
@@ -1410,6 +1489,101 @@
         font-size: 0.9rem;
     }
 
+    .cr-level {
+        background: linear-gradient(135deg, #5865f2, #7289da);
+    }
+
+    .arena-icon-container {
+        width: 80px;
+        height: 80px;
+        background: rgba(88, 101, 242, 0.1);
+        border: 2px solid rgba(88, 101, 242, 0.3);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .arena-id-label {
+        font-size: 1.2rem;
+        font-weight: 900;
+        color: #5865f2;
+        text-shadow: 0 0 15px rgba(88, 101, 242, 0.4);
+    }
+
+    .deck-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .card-item {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        transition: transform 0.2s;
+    }
+
+    .card-item:hover {
+        transform: translateY(-5px);
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .card-item img {
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+    }
+
+    .card-level {
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: #fff;
+        background: #5865f2;
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+    }
+
+    .badges-grid-cr {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .badge-item-cr {
+        position: relative;
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .badge-item-cr img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .badge-level-cr {
+        position: absolute;
+        bottom: -5px;
+        right: -5px;
+        background: #febd31;
+        color: #000;
+        font-size: 0.65rem;
+        font-weight: 900;
+        padding: 0.1rem 0.3rem;
+        border-radius: 4px;
+        border: 2px solid #202225;
+    }
+
     .bh-level {
         background: #8b5cf6;
     }
@@ -1638,6 +1812,33 @@
         color: #fff;
         min-width: 48px;
         text-align: center;
+    }
+
+    .arena-display-badge {
+        background: linear-gradient(135deg, #5865f2, #7289da);
+        color: white;
+        padding: 0.75rem 1.25rem;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.9rem;
+        box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .arena-id-badge {
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #5865f2, #7289da);
+        border-radius: 16px;
+        color: white;
+        font-weight: 900;
+        font-size: 1.5rem;
+        box-shadow: 0 8px 16px rgba(88, 101, 242, 0.2);
     }
 
     .cr-role {

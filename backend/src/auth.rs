@@ -35,9 +35,10 @@ struct DiscordUser {
 
 #[derive(Deserialize)]
 struct UserMetadata {
+    #[serde(default)]
     admin: bool,
     nickname: Option<String>,
-    #[serde(rename = "linkedPlayers")]
+    #[serde(rename = "linkedPlayers", default)]
     linked_players: Vec<String>,
     #[serde(rename = "linkedCrPlayers", default)]
     linked_cr_players: Vec<String>,
@@ -118,8 +119,15 @@ pub async fn discord_callback(
         }
     };
 
-    // Fetch extra metadata from internal API
-    let metadata: Option<UserMetadata> = match client
+    // Fetch extra metadata from internal APIs
+    let mut final_is_admin = false;
+    let mut final_highest_role = "NOTINCLAN".to_string();
+    let mut final_nickname = None;
+    let mut coc_linked = Vec::new();
+    let mut cr_linked = Vec::new();
+
+    // 1. Fetch from CoC Upstream
+    match client
         .get(format!(
             "{}/api/users/{}",
             data.upstream_coc_url, user_info.id
@@ -128,50 +136,82 @@ pub async fn discord_callback(
         .send()
         .await
     {
-        Ok(res) => {
-            if res.status() == 404 {
-                // User not found in upstream API = NOTINCLAN
-                Some(UserMetadata {
-                    admin: false,
-                    nickname: None,
-                    linked_players: vec![],
-                    linked_cr_players: vec![],
-                    highest_role: Some("NOTINCLAN".to_string()),
-                })
-            } else if !res.status().is_success() {
-                eprintln!(
-                    "Metadata fetch failed for {}: {}",
-                    user_info.id,
-                    res.status()
-                );
-                None
-            } else {
-                res.json().await.ok()
+        Ok(res) if res.status().is_success() => {
+            if let Ok(m) = res.json::<UserMetadata>().await {
+                final_is_admin = m.admin;
+                final_highest_role = m.highest_role.unwrap_or_else(|| "NOTINCLAN".to_string());
+                final_nickname = m.nickname;
+                coc_linked = m.linked_players;
+                cr_linked = m.linked_cr_players;
             }
         }
-        Err(e) => {
-            eprintln!("Metadata request error: {:?}", e);
-            None
+        Ok(res) if res.status() == 404 => {
+            // Not in CoC clan, handled by default values
         }
-    };
-
-    let is_admin = metadata.as_ref().map(|m| m.admin).unwrap_or(false);
-    let mut highest_role = metadata.as_ref().and_then(|m| m.highest_role.clone());
-
-    // Elevation: if user is admin, guarantee they have ADMIN role in token
-    if is_admin {
-        highest_role = Some("ADMIN".to_string());
+        Ok(res) => {
+            eprintln!("CoC metadata fetch failed: {}", res.status());
+        }
+        Err(e) => {
+            eprintln!("CoC metadata request error: {:?}", e);
+        }
     }
 
-    let nickname = metadata.as_ref().and_then(|m| m.nickname.clone());
-    let linked_players_json = metadata
-        .as_ref()
-        .map(|m| serde_json::to_string(&m.linked_players).unwrap_or_else(|_| "[]".to_string()))
-        .unwrap_or_else(|| "[]".to_string());
-    let linked_cr_players_json = metadata
-        .as_ref()
-        .map(|m| serde_json::to_string(&m.linked_cr_players).unwrap_or_else(|_| "[]".to_string()))
-        .unwrap_or_else(|| "[]".to_string());
+    // 2. Fetch from CR Upstream
+    match client
+        .get(format!(
+            "{}/api/users/{}",
+            data.upstream_cr_url, user_info.id
+        ))
+        .header("Authorization", format!("Bearer {}", data.cr_api_token))
+        .send()
+        .await
+    {
+        Ok(res) if res.status().is_success() => {
+            if let Ok(m) = res.json::<UserMetadata>().await {
+                if m.admin {
+                    final_is_admin = true;
+                }
+                
+                let cr_role = m.highest_role.unwrap_or_else(|| "NOTINCLAN".to_string());
+                if get_role_priority(&cr_role) > get_role_priority(&final_highest_role) {
+                    final_highest_role = cr_role;
+                }
+
+                if final_nickname.is_none() {
+                    final_nickname = m.nickname;
+                }
+
+                // In the CR bot, "linkedPlayers" and "linkedCrPlayers" are both CR accounts
+                for tag in m.linked_players {
+                    if !cr_linked.contains(&tag) {
+                        cr_linked.push(tag);
+                    }
+                }
+                for tag in m.linked_cr_players {
+                    if !cr_linked.contains(&tag) {
+                        cr_linked.push(tag);
+                    }
+                }
+            }
+        }
+        Ok(res) if res.status() == 404 => {
+            // Not in CR clan
+        }
+        Ok(res) => {
+            eprintln!("CR metadata fetch failed: {}", res.status());
+        }
+        Err(e) => {
+            eprintln!("CR metadata request error: {:?}", e);
+        }
+    }
+
+    // Elevation: if user is admin, guarantee they have ADMIN role in token
+    if final_is_admin {
+        final_highest_role = "ADMIN".to_string();
+    }
+
+    let linked_players_json = serde_json::to_string(&coc_linked).unwrap_or_else(|_| "[]".to_string());
+    let linked_cr_players_json = serde_json::to_string(&cr_linked).unwrap_or_else(|_| "[]".to_string());
 
     // Construct avatar URL
     let avatar_url = match &user_info.avatar {
@@ -203,10 +243,10 @@ pub async fn discord_callback(
     .bind(&user_info.id)
     .bind(&user_info.username)
     .bind(&user_info.global_name)
-    .bind(&nickname)
+    .bind(&final_nickname)
     .bind(&avatar_url)
-    .bind(&highest_role)
-    .bind(is_admin)
+    .bind(&final_highest_role)
+    .bind(final_is_admin)
     .bind(&linked_players_json)
     .bind(&linked_cr_players_json)
     .bind(Utc::now().timestamp())
@@ -225,7 +265,7 @@ pub async fn discord_callback(
 
     let claims = Claims {
         sub: user_info.id.clone(),
-        role: highest_role,
+        role: Some(final_highest_role.clone()),
         exp: expiration as usize,
     };
 
