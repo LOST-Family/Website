@@ -152,6 +152,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/me/accounts", web::get().to(get_my_player_accounts))
             .route("/api/clans", web::get().to(get_clans))
             .route("/api/clans/{tag}", web::get().to(get_clan_info))
+            .route("/api/clans/{tag}/config", web::get().to(get_clan_config))
             .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
             .route(
                 "/api/clans/{tag}/kickpoint-reasons",
@@ -170,6 +171,18 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(get_cwl_members),
             )
             .route("/api/players/{tag}", web::get().to(get_player))
+            .route(
+                "/api/players/{tag}/identity",
+                web::get().to(get_player_identity),
+            )
+            .route(
+                "/api/players/{tag}/kickpoints",
+                web::get().to(get_player_kickpoints),
+            )
+            .route(
+                "/api/players/{tag}/kickpoints/details",
+                web::get().to(get_player_kickpoints_details),
+            )
             .route("/api/guild", web::get().to(get_guild_info))
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))

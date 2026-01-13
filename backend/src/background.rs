@@ -192,8 +192,42 @@ async fn refresh_clans(data: &AppState) {
                             eprintln!("\n    Error refreshing {}: {}", endpoint, e);
                         }
                     }
+
+                    // NEW: Refresh members of this clan to ensure profile pages are fast
+                    let members_cache_key = format!("/api/clans/{}/members", encoded_tag);
+                    let members_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+                        .bind(&members_cache_key)
+                        .fetch_optional(&data.db_pool)
+                        .await;
+
+                    if let Ok(Some((body,))) = members_res {
+                        if let Ok(members) = serde_json::from_slice::<serde_json::Value>(&body) {
+                            if let Some(member_list) = members.as_array() {
+                                let mut player_set = tokio::task::JoinSet::new();
+                                for member in member_list.iter().take(50) { // Safety limit
+                                    if let Some(player_tag) = member.get("tag").and_then(|t| t.as_str()) {
+                                        let enc_player_tag = crate::utils::encode_tag(player_tag);
+                                        let data_coc = data.clone();
+                                        let path_coc = format!("/players/{}", enc_player_tag);
+                                        player_set.spawn(async move {
+                                            let _ = update_clash_cache(&data_coc, &path_coc).await;
+                                        });
+
+                                        let data_up = data.clone();
+                                        let path_up = format!("/api/players/{}", enc_player_tag);
+                                        player_set.spawn(async move {
+                                            let _ = update_cache(&data_up, &path_up).await;
+                                        });
+                                    }
+                                }
+                                // We don't necessarily need to wait for all players before next clan
+                                // but we should wait a bit to avoid overwhelming
+                                while let Some(_) = player_set.join_next().await {}
+                            }
+                        }
+                    }
                 }
-                println!("\nBackground Refresh: All clan data updated.");
+                println!("\nBackground Refresh: All clan and member data updated.");
             } else {
                 eprintln!("\nBackground Refresh Error: Failed to deserialize clans list response.");
             }

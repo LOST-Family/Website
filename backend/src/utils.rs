@@ -108,15 +108,23 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             obj.remove("clanDB");
 
             if is_member {
-                // For members: Keep the count/amounts, but mask details (description, reason)
-                if let Some(akp) = obj.get_mut("activeKickpoints").and_then(|v| v.as_array_mut()) {
-                    for kp in akp {
-                        if let Some(kp_obj) = kp.as_object_mut() {
-                            kp_obj.remove("description");
-                            kp_obj.remove("reason");
-                            // We keep amount and date so they can still see when/how many points were given
-                        }
+                // For members: Return count and sum instead of full details
+                if let Some(akp) = obj.get("activeKickpoints").and_then(|v| v.as_array()) {
+                    let sum: i64 = akp.iter().filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64())).sum();
+                    obj.insert("activeKickpointsCount".to_string(), serde_json::json!(akp.len()));
+                    obj.insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
+                }
+                obj.remove("activeKickpoints");
+                
+                // Hide raw IDs for members (privacy), but keep nickname/avatar/points
+                let is_coleader = has_required_role(user_role, "COLEADER");
+                if !is_coleader {
+                    // We keep a flag so the frontend knows they're linked
+                    if obj.contains_key("userId") {
+                        obj.insert("isLinked".to_string(), serde_json::json!(true));
                     }
+                    obj.remove("userId");
+                    obj.remove("discordId");
                 }
             } else {
                 // Not a member: Remove counts and identity links

@@ -44,17 +44,23 @@
         versusTrophies: number;
         donations: number;
         donationsReceived: number;
+        warStars?: number;
+        heroes?: any[];
         // Alliance/Upstream data (if unfiltered)
         userId?: string;
+        isLinked?: boolean;
         discordId?: string;
         nickname?: string;
         avatar?: string;
         totalKickpoints?: number;
+        activeKickpointsCount?: number;
+        activeKickpointsSum?: number;
         activeKickpoints?: any[];
         linked_players?: string[]; // If we fetch full user profile
     }
 
     let clan: Clan | null = null;
+    let clanConfig: any = null;
     let members: Player[] = [];
     let loading = true;
     let error: string | null = null;
@@ -88,6 +94,14 @@
             if (!clanRes.ok) throw new Error('Clan nicht gefunden');
             clan = await clanRes.json();
 
+            // Fetch clan config (MEMBER+)
+            try {
+                const configRes = await fetch(`${apiBaseUrl}/api/clans/${encodedTag}/config`, { credentials: 'include' });
+                if (configRes.ok) clanConfig = await configRes.json();
+            } catch (e) {
+                console.log('User is guest, config hidden');
+            }
+
             const membersRes = await fetch(`${apiBaseUrl}/api/clans/${encodedTag}/members`, { credentials: 'include' });
             if (!membersRes.ok) throw new Error('Mitglieder konnten nicht geladen werden');
             const membersData = await membersRes.json();
@@ -115,20 +129,35 @@
         
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            // Fetch detailed player info (unfiltered if admin/co)
-            const res = await fetch(`${apiBaseUrl}/api/players/${encodedTag}`, { credentials: 'include' });
-            if (res.ok) {
-                const detailedPlayer = await res.json();
-                selectedPlayer = { ...player, ...detailedPlayer };
-                
-                // If the player has a userId, fetch their other accounts
-                if (selectedPlayer.userId) {
-                    const userRes = await fetch(`${apiBaseUrl}/api/users/${selectedPlayer.userId}`, { credentials: 'include' });
-                    if (userRes.ok) {
-                        const userData = await userRes.json();
-                        // Filter out the currently selected player from "other accounts"
-                        playerOtherAccounts = (userData.playerAccounts || []).filter((acc: any) => acc.tag !== player.tag);
-                    }
+            
+            // Parallel fetch of identity, kickpoints and full player data
+            // This leverages the split API for better responsiveness
+            const [res, kpRes, idRes] = await Promise.all([
+                fetch(`${apiBaseUrl}/api/players/${encodedTag}`, { credentials: 'include' }),
+                fetch(`${apiBaseUrl}/api/players/${encodedTag}/kickpoints/details`, { credentials: 'include' }),
+                fetch(`${apiBaseUrl}/api/players/${encodedTag}/identity`, { credentials: 'include' })
+            ]);
+
+            const detailedPlayer = res.ok ? await res.json() : {};
+            const kickpoints = kpRes.ok ? await kpRes.json() : [];
+            const identity = idRes.ok ? await idRes.json() : {};
+
+            selectedPlayer = { 
+                ...player, 
+                ...detailedPlayer, 
+                ...identity, 
+                activeKickpoints: kickpoints,
+                // Ensure we don't lose the side-loaded warStars/heroes if they weren't in the detailed fetch
+                warStars: detailedPlayer.warStars ?? player.warStars,
+                heroes: detailedPlayer.heroes ?? player.heroes
+            };
+            
+            // If the player has a userId, fetch their other accounts
+            if (selectedPlayer.userId) {
+                const userRes = await fetch(`${apiBaseUrl}/api/users/${selectedPlayer.userId}`, { credentials: 'include' });
+                if (userRes.ok) {
+                    const userData = await userRes.json();
+                    playerOtherAccounts = (userData.playerAccounts || []).filter((acc: any) => acc.tag !== player.tag);
                 }
             }
         } catch (e) {
@@ -321,10 +350,11 @@
                                 tabindex="0"
                             >
                                 <div class="m-card-content">
+                                    <div class="card-glow"></div>
                                     <div class="m-rank-indicator">{members.indexOf(member) + 1}</div>
                                     <div class="m-avatar-container">
                                         {#if member.league}
-                                            <img src={member.league.iconUrls.small} alt={member.league.name} class="league-icon" />
+                                            <img src={member.league.iconUrls.large || member.league.iconUrls.medium || member.league.iconUrls.small} alt={member.league.name} class="league-icon" />
                                         {:else}
                                             <div class="no-league"></div>
                                         {/if}
@@ -338,33 +368,58 @@
                                         </div>
                                     </div>
                                     <div class="m-points-info">
-                                        <div class="m-trophies-badge">
-                                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                                            </svg>
-                                            <span>{member.trophies}</span>
+                                        <div class="m-th-badge">RH {member.townHallLevel}</div>
+                                        <div class="m-stat-group">
+                                            <div class="m-trophies-badge m-stars-badge" title="Clan-Krieg Sterne">
+                                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                                                </svg>
+                                                <span>{member.warStars ?? '???'}</span>
+                                            </div>
+                                            <div class="m-trophies-badge m-trophies-small" title="Trophäen">
+                                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"/>
+                                                </svg>
+                                                <span>{member.trophies || 0}</span>
+                                            </div>
                                         </div>
-                                        <div class="m-th-sm">RH {member.townHallLevel}</div>
                                     </div>
                                 </div>
                                 
                                 <div class="m-card-footer">
-                                    <div class="donation-bar-container">
-                                        <div class="donation-stats">
+                                    {#if member.heroes && member.heroes.length > 0}
+                                        <div class="m-heroes-row">
+                                            {#each member.heroes as hero}
+                                                <div class="m-hero-tiny" title={hero.name}>
+                                                    <span class="h-name-tiny">{hero.name === 'Barbarian King' ? 'BK' : (hero.name === 'Archer Queen' ? 'AQ' : (hero.name === 'Grand Warden' ? 'GW' : (hero.name === 'Royal Champion' ? 'RC' : hero.name.substring(0,2))))}</span>
+                                                    <span class="h-lv-tiny">{hero.level}</span>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    {/if}
+                                    <div class="footer-stats-row">
+                                        <div class="m-trophies-mini" title="Trophäen">
+                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                                            {member.trophies}
+                                        </div>
+                                        <div class="donation-stats-mini">
                                             <span>▲ {member.donations}</span>
                                             <span>▼ {member.donationsReceived}</span>
-                                        </div>
-                                        <div class="donation-bar">
-                                            <div class="bar-fill" style="width: {percent}%"></div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {#if member.userId}
-                                    <div class="linked-indicator" title="Verknüpft mit Discord">
+                                {#if member.userId || member.isLinked}
+                                    <div class="linked-indicator" title="Verknüpft: {member.nickname || member.tag}">
                                         <svg viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
                                         </svg>
+                                    </div>
+                                {/if}
+
+                                {#if member.activeKickpointsCount && member.activeKickpointsCount > 0}
+                                    <div class="kickpoint-indicator {member.activeKickpointsSum && member.activeKickpointsSum >= 10 ? 'high-risk' : ''}" title="{member.activeKickpointsCount} aktive Kickpoints">
+                                        !
                                     </div>
                                 {/if}
                             </div>
@@ -396,7 +451,7 @@
                         <div class="player-hero">
                             <div class="p-hero-top">
                                 {#if selectedPlayer.league}
-                                    <img src={selectedPlayer.league.iconUrls.medium} alt={selectedPlayer.league.name} class="p-league-img" />
+                                    <img src={selectedPlayer.league.iconUrls.large || selectedPlayer.league.iconUrls.medium} alt={selectedPlayer.league.name} class="p-league-img" />
                                 {/if}
                                 <div class="p-title">
                                     <h2>{selectedPlayer.name}</h2>
@@ -448,7 +503,7 @@
                                 {#if selectedPlayer.totalKickpoints !== undefined}
                                     <div class="s-item highlighted">
                                         <span class="s-label">Kickpunkte</span>
-                                        <span class="s-value">{(selectedPlayer.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)} (Gesamt: {selectedPlayer.totalKickpoints})</span>
+                                        <span class="s-value">{selectedPlayer.activeKickpointsSum ?? (selectedPlayer.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)} (Gesamt: {selectedPlayer.totalKickpoints})</span>
                                     </div>
                                 {/if}
                             </div>
@@ -961,31 +1016,201 @@
         align-items: center;
     }
 
+    .m-avatar-container {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .league-icon {
-        width: 44px;
-        height: 44px;
-        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+        width: 48px;
+        height: 48px;
+        filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.4));
+        transition: transform 0.2s, filter 0.2s;
+        z-index: 2;
+    }
+
+    .member-card:hover .league-icon {
+        transform: scale(1.1) rotate(5deg);
+        filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.5));
+    }
+
+    .m-points-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+    }
+
+    .m-stat-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        align-items: flex-end;
+    }
+
+    .m-th-badge {
+        background: #3b82f6;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-weight: 800;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
     }
 
     .m-trophies-badge {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.4rem;
         background: rgba(0, 0, 0, 0.3);
-        padding: 6px 12px;
-        border-radius: 12px;
+        padding: 4px 10px;
+        border-radius: 10px;
         font-weight: 800;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         border: 1px solid rgba(255, 255, 255, 0.05);
+        color: white;
+    }
+
+    .m-trophies-small {
+        font-size: 0.8rem;
+        padding: 3px 8px;
+        opacity: 0.8;
     }
 
     .m-trophies-badge svg {
-        width: 16px;
+        width: 14px;
+        height: 14px;
         color: #ffcc00;
     }
 
-    .m-card-body {
-        flex: 1;
+    .m-stars-badge svg {
+        color: #ff9900;
+    }
+
+    .card-glow {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+            circle at top right,
+            rgba(59, 130, 246, 0.1),
+            transparent 70%
+        );
+        opacity: 0;
+        transition: opacity 0.5s;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .member-card:hover .card-glow {
+        opacity: 1;
+    }
+
+    .footer-stats-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        padding: 0.75rem 0.25rem 0;
+    }
+
+    .m-trophies-mini {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text-dim);
+    }
+
+    .m-trophies-mini svg {
+        width: 12px;
+        color: #ffcc00;
+        opacity: 0.8;
+    }
+
+    .donation-stats-mini {
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: flex;
+        gap: 8px;
+    }
+
+    .donation-stats-mini span:first-child { color: #00ff88; }
+    .donation-stats-mini span:last-child { color: #ff4444; }
+
+    .m-heroes-row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+        padding: 4px 6px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+
+    .light .m-heroes-row { background: rgba(0, 0, 0, 0.03); }
+
+    .m-hero-tiny {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 24px;
+    }
+
+    .h-name-tiny {
+        font-size: 0.6rem;
+        font-weight: 800;
+        color: var(--text-dim);
+        line-height: 1;
+    }
+
+    .h-lv-tiny {
+        font-size: 0.75rem;
+        font-weight: 900;
+        color: var(--accent-color);
+        line-height: 1.2;
+    }
+
+    .kickpoint-indicator {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        background: #f43f5e;
+        color: white;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 900;
+        box-shadow: 0 4px 10px rgba(244, 63, 94, 0.4);
+        border: 2px solid var(--bg-dark);
+        z-index: 5;
+    }
+
+    .light .kickpoint-indicator { border-color: var(--bg-light); }
+
+    .kickpoint-indicator.high-risk {
+        background: #000;
+        color: #f43f5e;
+        animation: pulse-red 2s infinite;
+    }
+
+    @keyframes pulse-red {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+    }
+
+    .m-card-footer {
+        margin-top: auto;
     }
 
     .m-name {

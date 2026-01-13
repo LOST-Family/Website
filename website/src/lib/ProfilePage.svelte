@@ -31,9 +31,35 @@
         }
     }
 
-    function openPlayerModal(player: any) {
+    async function openPlayerModal(player: any) {
         selectedPlayer = player;
         document.body.style.overflow = 'hidden';
+
+        try {
+            const encodedTag = encodeURIComponent(player.tag);
+            
+            // Fetch identity and kickpoints in parallel
+            const [kpRes, idRes] = await Promise.all([
+                fetch(`${apiBaseUrl}/api/players/${encodedTag}/kickpoints/details`, { credentials: 'include' }),
+                fetch(`${apiBaseUrl}/api/players/${encodedTag}/identity`, { credentials: 'include' })
+            ]);
+
+            let kickpoints = [];
+            if (kpRes.ok) kickpoints = await kpRes.json();
+            
+            let identity = {};
+            if (idRes.ok) identity = await idRes.json();
+
+            if (selectedPlayer && selectedPlayer.tag === player.tag) {
+                selectedPlayer = {
+                    ...selectedPlayer,
+                    ...identity,
+                    activeKickpoints: kickpoints,
+                };
+            }
+        } catch (error) {
+            console.error('Failed to fetch player details:', error);
+        }
     }
 
     function closePlayerModal() {
@@ -167,13 +193,7 @@
                     {:else}
                         <div class="accounts-grid">
                             {#each playerAccounts as player}
-                                {@const activePoints = (
-                                    player.activeKickpoints || []
-                                ).reduce(
-                                    (acc: number, kp: any) =>
-                                        acc + (kp.amount || 0),
-                                    0
-                                )}
+                                {@const activePoints = player.activeKickpointsSum || 0}
                                 <div
                                     class="account-card"
                                     class:light={theme === 'light'}

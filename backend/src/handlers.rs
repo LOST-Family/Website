@@ -23,7 +23,6 @@ pub async fn get_clan_info(
 ) -> impl Responder {
     let encoded_tag = encode_tag(&tag);
     let clash_url_path = format!("/clans/{}", encoded_tag);
-    let upstream_url_path = format!("/api/clans/{}", encoded_tag);
 
     // Get from cache (Background task handles refreshes)
     let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
@@ -31,37 +30,67 @@ pub async fn get_clan_info(
         .fetch_optional(&data.db_pool)
         .await;
 
+    let mut clan_json = match coc_res {
+        Ok(Some((body,))) => {
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
+        }
+        _ => return HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan not found" })),
+    };
+
+    // Fix badgeUrl mismatch (singular vs plural) - ensured in utils but also here if needed
+    if let Some(obj) = clan_json.as_object_mut() {
+        if !obj.contains_key("badgeUrls") {
+            if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                obj.insert("badgeUrls".to_string(), serde_json::json!({
+                    "small": url,
+                    "medium": url,
+                    "large": url
+                }));
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(clan_json)
+}
+
+// 2b. Get Clan Config (Upstream settings, Protected: MEMBER or higher)
+pub async fn get_clan_config(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    if !has_required_role(user_role, "MEMBER") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires MEMBER role".into(),
+        });
+    }
+
+    let encoded_tag = encode_tag(&tag);
+    let upstream_url_path = format!("/api/clans/{}", encoded_tag);
+
     let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
         .bind(&upstream_url_path)
         .fetch_optional(&data.db_pool)
         .await;
 
-    let mut clan_json = match coc_res {
+    match upstream_res {
         Ok(Some((body,))) => {
-            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
-        }
-        _ => serde_json::Value::Null,
-    };
-
-    if let Ok(Some((body,))) = upstream_res {
-        if let Ok(upstream_json) = serde_json::from_slice::<serde_json::Value>(&body) {
-            if let Some(obj) = clan_json.as_object_mut() {
-                if let Some(up_obj) = upstream_json.as_object() {
-                    for (k, v) in up_obj {
-                        obj.insert(k.clone(), v.clone());
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+            if let Some(obj) = json.as_object() {
+                let mut config = serde_json::Map::new();
+                let fields = ["maxKickpoints", "minSeasonWins", "kickpointsExpireAfterDays", "kickpointReasons"];
+                for f in fields {
+                    if let Some(v) = obj.get(f) {
+                        config.insert(f.to_string(), v.clone());
                     }
                 }
-            } else if clan_json.is_null() {
-                clan_json = upstream_json;
+                return HttpResponse::Ok().json(config);
             }
+            HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan config not found" }))
         }
+        _ => HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan config not found in cache" })),
     }
-
-    if clan_json.is_null() {
-        return HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan not found" }));
-    }
-
-    HttpResponse::Ok().json(clan_json)
 }
 
 // 3. Get Clan Members
@@ -109,31 +138,51 @@ pub async fn get_clan_members(
     let filtered_upstream_body = crate::utils::filter_member_data(upstream_body, exempt_tags, user_role);
     let upstream_members: Vec<serde_json::Value> = serde_json::from_slice(&filtered_upstream_body).unwrap_or_default();
 
-    // Merge members
-    let mut final_members = Vec::new();
-    for mut u_member in upstream_members {
-        if let Some(tag) = u_member.get("tag").and_then(|t| t.as_str()) {
-            // Find corresponding CoC member for assets/names
-            if let Some(c_member) = coc_members.iter().find(|m| m.get("tag").and_then(|t| t.as_str()) == Some(tag)) {
-                if let Some(u_obj) = u_member.as_object_mut() {
-                    if let Some(c_obj) = c_member.as_object() {
-                        for (k, v) in c_obj {
-                            if !u_obj.contains_key(k) || u_obj.get(k).map_or(true, |val| val.is_null() || val.as_str() == Some("")) {
-                                u_obj.insert(k.clone(), v.clone());
-                            }
+    // Merge upstream data and check for cached player details (for warStars, etc.)
+    for c_member in &mut coc_members {
+        if let Some(tag_ref) = c_member.get("tag").and_then(|t| t.as_str()) {
+            let tag = tag_ref.to_string(); // Clone to release borrow on c_member
+            
+            // 1. Merge Upstream (Identity/Kickpoints)
+            if let Some(u_member) = upstream_members.iter().find(|m| m.get("tag").and_then(|t| t.as_str()) == Some(&tag)) {
+                if let (Some(c_obj), Some(u_obj)) = (c_member.as_object_mut(), u_member.as_object()) {
+                    for (k, v) in u_obj {
+                        if !c_obj.contains_key(k) {
+                            c_obj.insert(k.clone(), v.clone());
+                        } else if k != "tag" {
+                            c_obj.insert(format!("upstream_{}", k), v.clone());
+                        }
+                    }
+                }
+            }
+
+            // 2. Try to get warStars from player cache (hot-loaded by background task)
+            let player_cache_key = format!("clash:/players/{}", encode_tag(&tag));
+            let player_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+                .bind(&player_cache_key)
+                .fetch_optional(&data.db_pool)
+                .await;
+
+            if let Ok(Some((p_body,))) = player_res {
+                if let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body) {
+                    if let (Some(c_obj), Some(p_obj)) = (c_member.as_object_mut(), p_json.as_object()) {
+                        if let Some(stars) = p_obj.get("warStars") {
+                            c_obj.insert("warStars".to_string(), stars.clone());
+                        }
+                        // Also grab heroes and high-res league info
+                        if let Some(heroes) = p_obj.get("heroes") {
+                            c_obj.insert("heroes".to_string(), heroes.clone());
+                        }
+                        if let Some(league) = p_obj.get("league") {
+                            c_obj.insert("league".to_string(), league.clone());
                         }
                     }
                 }
             }
         }
-        final_members.push(u_member);
     }
 
-    if final_members.is_empty() && !coc_members.is_empty() {
-        return HttpResponse::Ok().json(coc_members);
-    }
-
-    HttpResponse::Ok().json(final_members)
+    HttpResponse::Ok().json(coc_members)
 }
 
 // 4. Get Clan Kickpoint Reasons (Protected: COLEADER or higher)
@@ -222,7 +271,7 @@ pub async fn get_cwl_members(
     .await
 }
 
-// 8. Get Player
+// 8. Get Player (CoC Data only + Kickpoint Summaries)
 pub async fn get_player(
     data: web::Data<AppState>,
     tag: web::Path<String>,
@@ -232,18 +281,9 @@ pub async fn get_player(
     let clash_url_path = format!("/players/{}", encoded_tag);
     let upstream_url_path = format!("/api/players/{}", encoded_tag);
 
-    // Try to update cache first
-    let _ = update_clash_cache(&data, &clash_url_path).await;
-    let _ = update_cache(&data, &upstream_url_path).await;
-
     // Get bodies from cache
     let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
         .bind(format!("clash:{}", clash_url_path))
-        .fetch_optional(&data.db_pool)
-        .await;
-
-    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(&upstream_url_path)
         .fetch_optional(&data.db_pool)
         .await;
 
@@ -254,64 +294,178 @@ pub async fn get_player(
         _ => return HttpResponse::NotFound().finish(),
     };
 
-    if let Ok(Some((u_body,))) = upstream_res {
-        let u_json =
-            serde_json::from_slice::<serde_json::Value>(&u_body).unwrap_or(serde_json::Value::Null);
-        if let Some(obj) = player_json.as_object_mut() {
-            if let Some(u_obj) = u_json.as_object() {
-                for (k, v) in u_obj {
-                    if !obj.contains_key(k) {
-                        obj.insert(k.clone(), v.clone());
-                    } else {
-                        obj.insert(format!("upstream_{}", k), v.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    // Now filter if needed
+    // We still fetch upstream summary if user is authorized to see it
     let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| u.linked_players.as_slice())
-        .unwrap_or(&[]);
+    let exempt_tags = opt_user.user.as_ref().map(|u| u.linked_players.as_slice()).unwrap_or(&[]);
+    let tag_str = player_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+    let is_exempt = exempt_tags.iter().any(|et| et == tag_str);
 
-    if !has_required_role(user_role, "COLEADER") {
-        let tag_is_exempt = if let Some(tag_str) = player_json.get("tag").and_then(|t| t.as_str()) {
-            exempt_tags.iter().any(|et| et == tag_str)
-        } else {
-            false
-        };
+    if has_required_role(user_role, "MEMBER") || is_exempt {
+        let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+            .bind(&upstream_url_path)
+            .fetch_optional(&data.db_pool)
+            .await;
 
-        if !tag_is_exempt {
-            // filter fields
-            if let Some(obj) = player_json.as_object_mut() {
-                obj.remove("clanDB");
-                
-                if has_required_role(user_role, "MEMBER") {
-                    // For members: Keep the count/amounts, but mask details (description, reason)
-                    if let Some(akp) = obj.get_mut("activeKickpoints").and_then(|v| v.as_array_mut()) {
-                        for kp in akp {
-                            if let Some(kp_obj) = kp.as_object_mut() {
-                                kp_obj.remove("description");
-                                kp_obj.remove("reason");
-                            }
-                        }
+        if let Ok(Some((u_body,))) = upstream_res {
+            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
+                if let Some(obj) = player_json.as_object_mut() {
+                    // Only merge kickpoint summaries, NOT identity
+                    if let Some(akp) = u_json.get("activeKickpoints").and_then(|v| v.as_array()) {
+                        let sum: i64 = akp.iter().filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64())).sum();
+                        obj.insert("activeKickpointsCount".to_string(), serde_json::json!(akp.len()));
+                        obj.insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
                     }
-                } else {
-                    // Not a member: Hide everything sensitive
-                    obj.remove("totalKickpoints");
-                    obj.remove("activeKickpoints");
-                    obj.remove("userId");
-                    obj.remove("discordId");
+                    if let Some(total) = u_json.get("totalKickpoints") {
+                        obj.insert("totalKickpoints".to_string(), total.clone());
+                    }
                 }
             }
         }
     }
 
     HttpResponse::Ok().json(player_json)
+}
+
+// 8d. Get Player Identity (Discord Info, Protected: MEMBER or higher)
+pub async fn get_player_identity(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let encoded_tag = encode_tag(&tag);
+    let upstream_url_path = format!("/api/players/{}", encoded_tag);
+
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user.user.as_ref().map(|u| u.linked_players.as_slice()).unwrap_or(&[]);
+    let tag_str = if tag.starts_with('#') { tag.to_string() } else { format!("#{}", tag) };
+    let is_exempt = exempt_tags.iter().any(|et| et == &tag_str);
+
+    if !has_required_role(user_role, "MEMBER") && !is_exempt {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires MEMBER role".into(),
+        });
+    }
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    match upstream_res {
+        Ok(Some((body,))) => {
+            let u_json: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+            if let Some(obj) = u_json.as_object() {
+                let mut identity = serde_json::Map::new();
+                
+                // Public-ish for members
+                if let Some(nick) = obj.get("nickname") { identity.insert("nickname".to_string(), nick.clone()); }
+                if let Some(av) = obj.get("avatar") { identity.insert("avatar".to_string(), av.clone()); }
+
+                // Sensitive - COLEADER+ or self
+                if has_required_role(user_role, "COLEADER") || is_exempt {
+                    if let Some(uid) = obj.get("userId") { identity.insert("userId".to_string(), uid.clone()); }
+                    if let Some(did) = obj.get("discordId") { identity.insert("discordId".to_string(), did.clone()); }
+                    if let Some(accs) = obj.get("playerAccounts") { identity.insert("playerAccounts".to_string(), accs.clone()); }
+                }
+
+                return HttpResponse::Ok().json(identity);
+            }
+            HttpResponse::NotFound().json(serde_json::json!({ "error": "Identity not found" }))
+        }
+        _ => HttpResponse::NotFound().json(serde_json::json!({ "error": "Identity not found in cache" })),
+    }
+}
+
+// 8b. Get Player Kickpoints Summary
+pub async fn get_player_kickpoints(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let encoded_tag = encode_tag(&tag);
+    let upstream_url_path = format!("/api/players/{}", encoded_tag);
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let u_json = match upstream_res {
+        Ok(Some((body,))) => {
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
+        }
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user.user.as_ref().map(|u| u.linked_players.as_slice()).unwrap_or(&[]);
+
+    let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+    let tag_is_exempt = exempt_tags.iter().any(|et| et == tag_str);
+
+    if !has_required_role(user_role, "MEMBER") && !tag_is_exempt {
+         return HttpResponse::Forbidden().json(ErrorResponse { error: "Access denied: Requires MEMBER role".into() });
+    }
+
+    let active_count = u_json.get("activeKickpoints").and_then(|v| v.as_array()).map(|v| v.len()).unwrap_or(0);
+    let active_sum: i64 = u_json.get("activeKickpoints").and_then(|v| v.as_array())
+        .map(|v| v.iter().filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64())).sum())
+        .unwrap_or(0);
+    let total = u_json.get("totalKickpoints").and_then(|v| v.as_i64()).unwrap_or(0);
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "total": total,
+        "activeCount": active_count,
+        "activeSum": active_sum,
+    }))
+}
+
+// 8c. Get Player Kickpoints Details
+pub async fn get_player_kickpoints_details(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    let encoded_tag = encode_tag(&tag);
+    let upstream_url_path = format!("/api/players/{}", encoded_tag);
+
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+        .bind(&upstream_url_path)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let mut u_json = match upstream_res {
+        Ok(Some((body,))) => {
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
+        }
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = opt_user.user.as_ref().map(|u| u.linked_players.as_slice()).unwrap_or(&[]);
+
+    let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+    let tag_is_exempt = exempt_tags.iter().any(|et| et == tag_str);
+
+    if !has_required_role(user_role, "MEMBER") && !tag_is_exempt {
+         return HttpResponse::Forbidden().json(ErrorResponse { error: "Access denied: Requires MEMBER role".into() });
+    }
+
+    let is_coleader = has_required_role(user_role, "COLEADER");
+
+    if let Some(akp) = u_json.get_mut("activeKickpoints").and_then(|v| v.as_array_mut()) {
+        if !is_coleader && !tag_is_exempt {
+            for kp in akp.iter_mut() {
+                if let Some(kp_obj) = kp.as_object_mut() {
+                    kp_obj.remove("description");
+                    kp_obj.remove("reason");
+                }
+            }
+        }
+        return HttpResponse::Ok().json(akp);
+    }
+
+    HttpResponse::Ok().json(serde_json::Value::Array(vec![]))
 }
 
 // 9. Get User
@@ -342,13 +496,47 @@ pub async fn get_user(
     forward_request(&data, &format!("/api/users/{}", user_id)).await
 }
 
-// 10. Get Guild Info
+// 10. Get Guild Info (Summarized for non-admins)
 pub async fn get_guild_info(
     data: web::Data<AppState>,
     opt_user: OptionalAuthenticatedUser,
 ) -> impl Responder {
     let user_role = opt_user.user.as_ref().and_then(|u| u.claims.role.as_deref());
-    forward_request_with_filter(&data, "/api/guild", user_role, &[]).await
+
+    // 1. serve from cache ONLY
+    let result =
+        sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = $1")
+            .bind("/api/guild")
+            .fetch_optional(&data.db_pool)
+            .await;
+
+    match result {
+        Ok(Some((body, status))) => {
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+
+            if !has_required_role(user_role, "ADMIN") {
+                // Public summary
+                if let Some(obj) = json.as_object() {
+                    let mut summary = serde_json::Map::new();
+                    if let Some(count) = obj.get("membercount") {
+                        summary.insert("membercount".to_string(), count.clone());
+                    }
+                    if let Some(name) = obj.get("name") {
+                        summary.insert("name".to_string(), name.clone());
+                    }
+                    if let Some(icon) = obj.get("icon") {
+                        summary.insert("icon".to_string(), icon.clone());
+                    }
+                    return HttpResponse::Ok().json(summary);
+                }
+            }
+
+            let status = actix_web::http::StatusCode::from_u16(status as u16)
+                .unwrap_or(actix_web::http::StatusCode::OK);
+            HttpResponse::build(status).json(json)
+        }
+        _ => HttpResponse::ServiceUnavailable().finish(),
+    }
 }
 
 // 11. Get My Player Accounts (Protected: User only)
@@ -378,10 +566,18 @@ pub async fn get_my_player_accounts(
                                     // Don't overwrite existing CoC data if there's a collision
                                     if !coc_obj.contains_key(k) {
                                         coc_obj.insert(k.clone(), v.clone());
-                                    } else {
+                                    } else if k != "tag" {
                                         coc_obj.insert(format!("upstream_{}", k), v.clone());
                                     }
                                 }
+
+                                // Clean implementation: only return counts in main list
+                                if let Some(akp) = coc_obj.get("activeKickpoints").and_then(|v| v.as_array()) {
+                                    let sum: i64 = akp.iter().filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64())).sum();
+                                    coc_obj.insert("activeKickpointsCount".to_string(), serde_json::json!(akp.len()));
+                                    coc_obj.insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
+                                }
+                                coc_obj.remove("activeKickpoints");
                             }
                         }
                     }
