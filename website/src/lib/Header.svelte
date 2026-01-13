@@ -1,6 +1,6 @@
 <script lang="ts">
     import ThemeToggle from './ThemeToggle.svelte';
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { user, loading, login, logout } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -33,6 +33,20 @@
     function toggleMobileMenu() {
         mobileMenuOpen = !mobileMenuOpen;
     }
+
+    $: if (typeof document !== 'undefined' && document.body) {
+        if (mobileMenuOpen) {
+            document.body.classList.add('no-scroll');
+        } else {
+            document.body.classList.remove('no-scroll');
+        }
+    }
+
+    onDestroy(() => {
+        if (typeof document !== 'undefined') {
+            document.body.classList.remove('no-scroll');
+        }
+    });
 
     async function fetchUserClans() {
         if (!$user) return;
@@ -148,7 +162,7 @@
             {#if $loading}
                 <div class="auth-loading animate-pulse"></div>
             {:else if $user}
-                <div class="user-profile dropdown">
+                <div class="user-profile dropdown pc-user">
                     <button class="user-btn">
                         <div class="avatar-wrapper">
                             {#if $user.avatar}
@@ -385,7 +399,7 @@
                     </div>
                 </div>
             {:else}
-                <button class="login-btn" on:click={login}>
+                <button class="login-btn pc-login" on:click={login}>
                     <svg
                         class="discord-icon"
                         viewBox="0 0 24 24"
@@ -419,7 +433,118 @@
             </button>
         </div>
     </div>
+
 </header>
+
+<!-- Mobile Navigation Drawer -->
+<div 
+    class="mobile-backdrop" 
+    class:visible={mobileMenuOpen} 
+    on:click={toggleMobileMenu}
+></div>
+
+<aside 
+    class="mobile-drawer" 
+    class:open={mobileMenuOpen}
+    class:light={theme === 'light'}
+>
+        <div class="drawer-header">
+            <button class="logo" on:click={() => navigate('home')}>
+                <img src={logo} alt="LOST Family" class="logo-icon" />
+                <span class="logo-text-drawer">LOST Family</span>
+            </button>
+            <button class="drawer-close" on:click={toggleMobileMenu}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="drawer-content">
+            {#if $user}
+                <div class="drawer-user-section">
+                    <div class="drawer-user-info">
+                        <div class="avatar-wrapper large">
+                            {#if $user.avatar}
+                                <img src={$user.avatar} alt={$user.username} class="user-avatar-large" />
+                            {:else}
+                                <div class="user-avatar-placeholder large">
+                                    {($user.nickname || $user.username).charAt(0).toUpperCase()}
+                                </div>
+                            {/if}
+                            <div class="status-indicator"></div>
+                        </div>
+                        <div class="drawer-user-details">
+                            <span class="drawer-username">{$user.nickname || $user.global_name || $user.username}</span>
+                            <span class="drawer-role">{$user.highest_role || 'Member'}</span>
+                        </div>
+                    </div>
+                </div>
+            {:else}
+                <div class="drawer-login-section">
+                    <button class="login-btn full-width" on:click={login}>
+                        <svg class="discord-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                        </svg>
+                        Social Login
+                    </button>
+                </div>
+            {/if}
+
+            <div class="drawer-section">
+                <span class="section-title">Navigation</span>
+                <div class="drawer-nav-item">
+                    <button class="drawer-nav-link" on:click={() => navigate('home')}>Home</button>
+                </div>
+                
+                <div class="drawer-nav-group">
+                    <div class="group-header">Clash of Clans</div>
+                    <a href="/coc/clans" class="drawer-sub-link" on:click|preventDefault={() => navigate('coc/clans')}>Clans</a>
+                    <a href="/coc/cwl" class="drawer-sub-link" on:click|preventDefault={() => navigate('coc/cwl')}>Clankriegsliga</a>
+                </div>
+
+                <div class="drawer-nav-group">
+                    <div class="group-header">Clash Royale</div>
+                    <a href="/cr/clans" class="drawer-sub-link" on:click|preventDefault={() => navigate('cr/clans')}>Clans</a>
+                </div>
+            </div>
+
+            {#if $user}
+                <div class="drawer-section">
+                    <span class="section-title">Account</span>
+                    <button class="drawer-nav-link" on:click={() => navigate('account')}>Verknüpfte Accounts</button>
+                    {#each userClans as clan}
+                        <a href="/{clan.gameType}/clan/{clan.tag.replace('#', '')}" class="drawer-nav-link" on:click|preventDefault={() => navigate(`${clan.gameType}/clan/${clan.tag.replace('#', '')}`)}>
+                            {clan.name}
+                        </a>
+                    {/each}
+                    
+                    {#if $user.is_admin}
+                        <div class="drawer-nav-group admin">
+                            <div class="group-header">Admin</div>
+                            <button class="drawer-sub-link" on:click={() => navigate('admin/clans')}>Alle Clans</button>
+                            <button class="drawer-sub-link" on:click={() => navigate('admin')}>Dashboard</button>
+                        </div>
+                    {/if}
+                </div>
+            {/if}
+        </div>
+
+        <div class="drawer-footer">
+            <button 
+                class="logout-btn-drawer" 
+                on:click={() => {
+                    logout();
+                    mobileMenuOpen = false;
+                }}
+            >
+                <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+                Logout
+            </button>
+        </div>
+    </aside>
 
 <style>
     .header {
@@ -552,6 +677,8 @@
         left: 50%;
         transform: translateX(-50%) translateY(8px);
         min-width: 180px;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
         padding: 8px;
         background: rgba(30, 32, 35, 0.98);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -611,6 +738,7 @@
         display: flex;
         align-items: center;
         gap: 1rem;
+        flex-shrink: 0;
     }
 
     .auth-loading {
@@ -741,6 +869,7 @@
 
     .user-dropdown {
         width: 260px;
+        max-width: calc(100vw - 32px);
         padding: 12px;
     }
 
@@ -749,6 +878,7 @@
         align-items: center;
         gap: 12px;
         padding: 8px 12px 16px;
+        min-width: 0;
     }
 
     .user-dropdown-avatar img {
@@ -937,42 +1067,297 @@
         height: 100%;
     }
 
+    :global(body.no-scroll) {
+        overflow: hidden !important;
+    }
+
+    .mobile-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .mobile-backdrop.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .mobile-drawer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 300px;
+        max-width: 85vw;
+        background: #0a0a0f !important;
+        z-index: 2000;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 20px 0 50px rgba(0, 0, 0, 0.8);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .mobile-drawer.light {
+        background: #ffffff !important;
+        border-right: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .mobile-drawer.open {
+        transform: translateX(0);
+    }
+
+    .drawer-header {
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mobile-drawer.light .drawer-header {
+        border-bottom-color: rgba(0, 0, 0, 0.06);
+    }
+
+    .logo-text-drawer {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .mobile-drawer.light .logo-text-drawer {
+        color: #1a1a2e;
+    }
+
+    .drawer-close {
+        width: 36px;
+        height: 36px;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        border-radius: 8px;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    .mobile-drawer.light .drawer-close {
+        background: rgba(0, 0, 0, 0.05);
+        color: #1a1a2e;
+    }
+
+    .drawer-content {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: 1rem 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .drawer-user-section, .drawer-login-section {
+        padding: 0 1.25rem;
+    }
+
+    .drawer-user-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+    }
+
+    .mobile-drawer.light .drawer-user-info {
+        background: rgba(0, 0, 0, 0.02);
+        border-color: rgba(0, 0, 0, 0.06);
+    }
+
+    .user-avatar-large {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        object-fit: cover;
+    }
+
+    .avatar-wrapper.large .status-indicator {
+        width: 14px;
+        height: 14px;
+        border-width: 3px;
+    }
+
+    .drawer-user-details {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .drawer-username {
+        font-weight: 700;
+        color: #fff;
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .mobile-drawer.light .drawer-username {
+        color: #1a1a2e;
+    }
+
+    .drawer-role {
+        font-size: 0.75rem;
+        color: #5865f2;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .drawer-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .section-title {
+        padding: 0 1.5rem;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.3);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
+    }
+
+    .mobile-drawer.light .section-title {
+        color: rgba(0, 0, 0, 0.4);
+    }
+
+    .drawer-nav-link {
+        display: block;
+        padding: 0.75rem 1.5rem;
+        color: rgba(255, 255, 255, 0.7);
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        text-align: left;
+        background: transparent;
+        border: none;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .mobile-drawer.light .drawer-nav-link {
+        color: rgba(0, 0, 0, 0.7);
+    }
+
+    .drawer-nav-link:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .mobile-drawer.light .drawer-nav-link:hover {
+        color: #1a1a2e;
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .drawer-nav-group {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .group-header {
+        padding: 0.5rem 1.5rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+        opacity: 0.9;
+    }
+
+    .mobile-drawer.light .group-header {
+        color: #1a1a2e;
+    }
+
+    .drawer-sub-link {
+        padding: 0.6rem 2.5rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        text-align: left;
+        background: transparent;
+        border: none;
+        width: 100%;
+        cursor: pointer;
+    }
+
+    .mobile-drawer.light .drawer-sub-link {
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    .drawer-sub-link:hover {
+        color: #5865f2;
+        padding-left: 2.75rem;
+    }
+
+    .drawer-nav-group.admin .group-header {
+        color: #10b981;
+    }
+
+    .drawer-footer {
+        padding: 1.25rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mobile-drawer.light .drawer-footer {
+        border-top-color: rgba(0, 0, 0, 0.06);
+    }
+
+    .logout-btn-drawer {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid rgba(248, 113, 113, 0.2);
+        border-radius: 10px;
+        color: #f87171;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .logout-btn-drawer:hover {
+        background: rgba(248, 113, 113, 0.2);
+        transform: translateY(-1px);
+    }
+
+    .full-width {
+        width: 100%;
+        justify-content: center;
+    }
+
     /* Mobile Styles */
     @media (max-width: 900px) {
         .nav {
-            position: fixed;
-            top: 64px;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            flex-direction: column;
-            align-items: stretch;
-            padding: 1rem;
-            background: rgba(10, 10, 15, 0.98);
-            backdrop-filter: blur(20px);
-            transform: translateX(-100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            overflow-y: auto;
+            display: none;
         }
 
-        .nav.open {
-            transform: translateX(0);
-        }
-
-        .nav.light {
-            background: rgba(255, 255, 255, 0.98);
-        }
-
-        .dropdown-menu {
-            position: static;
-            opacity: 1;
-            visibility: visible;
-            transform: none;
-            box-shadow: none;
-            border: none;
-            background: transparent;
-            padding-left: 1rem;
-            min-width: auto;
+        .pc-user, .pc-login {
+            display: none;
         }
 
         .mobile-menu-btn {
@@ -989,6 +1374,25 @@
 
         .logo-text {
             display: none;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .username {
+            display: none;
+        }
+
+        .user-btn {
+            padding: 6px;
+            gap: 0;
+        }
+
+        .user-btn .dropdown-arrow {
+            display: none;
+        }
+
+        .header-actions {
+            gap: 0.5rem;
         }
     }
 </style>
