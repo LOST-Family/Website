@@ -7,7 +7,12 @@
     export let logo: string;
 
     let mobileMenuOpen = false;
-    let userClans: { tag: string; name: string; gameType: string }[] = [];
+    let userClans: {
+        tag: string;
+        name: string;
+        gameType: string;
+        badgeUrl?: string;
+    }[] = [];
 
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
@@ -71,6 +76,14 @@
                     crClans.map((c: any) => c.tag)
                 );
 
+                const badgeMap = new Map<string, string>();
+                cocClans.forEach((c: any) => {
+                    if (c.badgeUrl) badgeMap.set(c.tag, c.badgeUrl);
+                });
+                crClans.forEach((c: any) => {
+                    if (c.badgeUrl) badgeMap.set(c.tag, c.badgeUrl);
+                });
+
                 const clansMap = new Map<
                     string,
                     { name: string; gameType: string }
@@ -104,6 +117,7 @@
                         tag,
                         name: info.name,
                         gameType: info.gameType,
+                        badgeUrl: badgeMap.get(tag),
                     })
                 );
             }
@@ -309,20 +323,32 @@
                                             )}`
                                         )}
                                 >
-                                    <svg
-                                        class="item-icon"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                    >
-                                        <path
-                                            d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                    {#if userClans[0].badgeUrl}
+                                        <img
+                                            src={userClans[0].badgeUrl}
+                                            alt={userClans[0].name}
+                                            class="item-icon clan-badge-mini"
                                         />
-                                        <circle cx="9" cy="7" r="4" />
-                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                                    </svg>
+                                    {:else}
+                                        <svg
+                                            class="item-icon"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        >
+                                            <path
+                                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                            />
+                                            <circle cx="9" cy="7" r="4" />
+                                            <path
+                                                d="M23 21v-2a4 4 0 0 0-3-3.87"
+                                            />
+                                            <path
+                                                d="M16 3.13a4 4 0 0 1 0 7.75"
+                                            />
+                                        </svg>
+                                    {/if}
                                     Dein Clan
                                 </a>
                             {:else}
@@ -530,8 +556,28 @@
                     <button class="drawer-nav-link" on:click={() => navigate('account')}>Verknüpfte Accounts</button>
                     {#if userClans.length > 0}
                         {#if userClans.length === 1}
-                            <a href="/{userClans[0].gameType}/clan/{userClans[0].tag.replace('#', '')}" class="drawer-nav-link" on:click|preventDefault={() => navigate(`${userClans[0].gameType}/clan/${userClans[0].tag.replace('#', '')}`)}>
-                                Dein Clan
+                            <a
+                                href="/{userClans[0].gameType}/clan/{userClans[0]
+                                    .tag.replace('#', '')}"
+                                class="drawer-nav-link"
+                                on:click|preventDefault={() =>
+                                    navigate(
+                                        `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
+                                            '#',
+                                            ''
+                                        )}`
+                                    )}
+                            >
+                                <div class="drawer-link-content">
+                                    {#if userClans[0].badgeUrl}
+                                        <img
+                                            src={userClans[0].badgeUrl}
+                                            alt={userClans[0].name}
+                                            class="drawer-item-icon clan-badge-mini"
+                                        />
+                                    {/if}
+                                    Dein Clan
+                                </div>
                             </a>
                         {:else}
                             <button class="drawer-nav-link" on:click={() => navigate('my-clans')}>Deine Clans</button>
@@ -969,6 +1015,10 @@
         transition: opacity 0.2s ease;
     }
 
+    .clan-badge-mini {
+        opacity: 1 !important;
+    }
+
     .dropdown-item:hover .item-icon {
         opacity: 1;
     }
@@ -1284,6 +1334,18 @@
     .drawer-nav-link:hover {
         color: #fff;
         background: rgba(255, 255, 255, 0.05);
+    }
+
+    .drawer-link-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .drawer-item-icon {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
     }
 
     .mobile-drawer.light .drawer-nav-link:hover {

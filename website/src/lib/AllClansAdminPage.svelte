@@ -183,10 +183,6 @@
                                             <span class="clan-name">{clan.nameDB || clan.tag}</span>
                                             <span class="clan-tag">{clan.tag}</span>
                                         </div>
-                                        <div class="clan-meta">
-                                            <span class="game-tag" class:cr={clan.gameType === 'cr'}>{clan.gameType?.toUpperCase() || 'CoC'}</span>
-                                            <span class="clan-index-badge">#{clan.index}</span>
-                                        </div>
                                     </div>
                                 </button>
                             {/each}
@@ -222,10 +218,6 @@
                                         <div class="clan-info">
                                             <span class="clan-name">{clan.nameDB || clan.tag}</span>
                                             <span class="clan-tag">{clan.tag}</span>
-                                        </div>
-                                        <div class="clan-meta">
-                                            <span class="game-tag" class:cr={clan.gameType === 'cr'}>{clan.gameType?.toUpperCase() || 'CoC'}</span>
-                                            <span class="clan-index-badge">#{clan.index}</span>
                                         </div>
                                     </div>
                                 </button>
@@ -543,47 +535,5 @@
 
     .light .clan-tag {
         color: #718096;
-    }
-
-    .clan-meta {
-        position: absolute;
-        top: 10px;
-        right: 15px;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0.5rem;
-        z-index: 2;
-    }
-
-    .game-tag {
-        font-size: 0.65rem;
-        font-weight: 800;
-        color: white;
-        background: #c90000;
-        padding: 2px 6px;
-        border-radius: 4px;
-        text-transform: uppercase;
-    }
-
-    .game-tag.cr {
-        background: #024885;
-    }
-
-    .clan-index-badge {
-        font-size: 0.7rem;
-        font-weight: 900;
-        color: white;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 4px 8px;
-        border-radius: 8px;
-        backdrop-filter: blur(4px);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .light .clan-index-badge {
-        background: rgba(255, 255, 255, 0.5);
-        color: #1a202c;
     }
 </style>
