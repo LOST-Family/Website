@@ -39,7 +39,8 @@
         role: string;
         townHallLevel: number;
         expLevel: number;
-        league?: { iconUrls: { medium: string; small: string }; name: string };
+        league?: { iconUrls: { large?: string; medium: string; small: string }; name: string };
+        leagueTier?: { iconUrls: { large: string; small: string }; name: string };
         trophies: number;
         versusTrophies: number;
         donations: number;
@@ -353,8 +354,8 @@
                                     <div class="card-glow"></div>
                                     <div class="m-rank-indicator">{members.indexOf(member) + 1}</div>
                                     <div class="m-avatar-container">
-                                        {#if member.league}
-                                            <img src={member.league.iconUrls.large || member.league.iconUrls.medium || member.league.iconUrls.small} alt={member.league.name} class="league-icon" />
+                                        {#if member.leagueTier || member.league}
+                                            <img src={member.leagueTier?.iconUrls.large || member.league?.iconUrls.large || member.league?.iconUrls.medium || member.league?.iconUrls.small} alt={member.leagueTier?.name || member.league?.name} class="league-icon" />
                                         {:else}
                                             <div class="no-league"></div>
                                         {/if}
@@ -450,8 +451,8 @@
                     <div class="drawer-content">
                         <div class="player-hero">
                             <div class="p-hero-top">
-                                {#if selectedPlayer.league}
-                                    <img src={selectedPlayer.league.iconUrls.large || selectedPlayer.league.iconUrls.medium} alt={selectedPlayer.league.name} class="p-league-img" />
+                                {#if selectedPlayer.leagueTier || selectedPlayer.league}
+                                    <img src={selectedPlayer.leagueTier?.iconUrls.large || selectedPlayer.league?.iconUrls.large || selectedPlayer.league?.iconUrls.medium} alt={selectedPlayer.leagueTier?.name || selectedPlayer.league?.name} class="p-league-img" />
                                 {/if}
                                 <div class="p-title">
                                     <h2>{selectedPlayer.name}</h2>
@@ -477,6 +478,17 @@
                                         <div class="d-name">{selectedPlayer.nickname || 'Unbekannt'}</div>
                                         <div class="d-status">Verknüpft</div>
                                     </div>
+                                    {#if $user?.is_admin}
+                                        <button 
+                                            class="view-profile-btn"
+                                            on:click={() => dispatch('navigate', `profile/${selectedPlayer.userId}`)}
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                            </svg>
+                                            Profil ansehen
+                                        </button>
+                                    {/if}
                                 </div>
                             </section>
                         {/if}
@@ -1438,6 +1450,33 @@
 
     .d-name { font-size: 1.4rem; font-weight: 800; }
     .d-status { font-size: 0.9rem; opacity: 0.8; font-weight: 600; }
+
+    .view-profile-btn {
+        margin-left: auto;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        padding: 0.6rem 1rem;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .view-profile-btn:hover {
+        background: white;
+        color: #5865f2;
+        transform: translateY(-2px);
+    }
+
+    .view-profile-btn svg {
+        width: 16px;
+        height: 16px;
+    }
 
     /* Other Accounts */
     .other-accounts {

@@ -1,21 +1,50 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { fade, scale } from 'svelte/transition';
+    import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
     import { user, loading } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string = '';
+    export let viewUserId: string | null = null;
 
     let playerAccounts: any[] = [];
     let accountsLoading = false;
     let accountsError: string | null = null;
+    let userError: string | null = null;
     let selectedPlayer: any = null;
+    let hasInitialFetched = false;
+    let viewedUser: any = null;
+
+    async function fetchViewedUser() {
+        if (!viewUserId) return;
+        userError = null;
+        try {
+            const response = await fetch(`${apiBaseUrl}/api/users/${viewUserId}`, {
+                credentials: 'include',
+            });
+            if (response.ok) {
+                viewedUser = await response.json();
+            } else {
+                userError = 'Benutzer konnte nicht geladen werden';
+            }
+        } catch (error) {
+            console.error('Failed to fetch viewed user:', error);
+            userError = 'Netzwerkfehler beim Laden des Profils';
+        }
+    }
 
     async function fetchPlayerAccounts() {
+        if (accountsLoading) return;
         accountsLoading = true;
+        hasInitialFetched = true;
+        accountsError = null; // Clear previous errors
         try {
-            const response = await fetch(`${apiBaseUrl}/api/me/accounts`, {
+            const url = viewUserId 
+                ? `${apiBaseUrl}/api/users/${viewUserId}/accounts`
+                : `${apiBaseUrl}/api/me/accounts`;
+            
+            const response = await fetch(url, {
                 credentials: 'include',
             });
             if (response.ok) {
@@ -67,8 +96,12 @@
         document.body.style.overflow = '';
     }
 
+    $: displayUser = viewedUser || ($user && !viewUserId ? $user : null);
+    $: isViewingOthers = viewUserId && $user && viewUserId !== $user.discord_id;
+
     onMount(() => {
-        if ($user) {
+        if ($user || viewUserId) {
+            if (viewUserId) fetchViewedUser();
             fetchPlayerAccounts();
         }
 
@@ -77,44 +110,68 @@
         };
     });
 
+    let lastId = viewUserId;
+    $: if (viewUserId !== lastId) {
+        lastId = viewUserId;
+        hasInitialFetched = false;
+        if (viewUserId) fetchViewedUser();
+        else viewedUser = null;
+        fetchPlayerAccounts();
+    }
+
     $: if (
-        $user &&
+        ($user || viewUserId) &&
         !accountsLoading &&
-        playerAccounts.length === 0 &&
-        !accountsError
+        !hasInitialFetched &&
+        !accountsError &&
+        !userError
     ) {
+        if (viewUserId) fetchViewedUser();
         fetchPlayerAccounts();
     }
 </script>
 
 <div class="profile-page" class:light={theme === 'light'}>
     <div class="container">
-        {#if $loading}
+        {#if $loading || (viewUserId && !viewedUser && !accountsError && !userError)}
             <div class="loading-state">
                 <div class="spinner"></div>
                 <p>Lade Profil...</p>
             </div>
-        {:else if !$user}
+        {:else if !displayUser}
             <div class="error-state">
-                <h2>Nicht angemeldet</h2>
-                <p>Bitte melde dich mit Discord an, um dein Profil zu sehen.</p>
+                <h2>{isViewingOthers ? 'Benutzer nicht gefunden' : 'Nicht angemeldet'}</h2>
+                <p>
+                    {isViewingOthers 
+                        ? (userError || 'Der angeforderte Benutzer konnte nicht gefunden werden.')
+                        : 'Bitte melde dich mit Discord an, um dein Profil zu sehen.'}
+                </p>
             </div>
         {:else}
+            {#if isViewingOthers}
+                <div class="admin-view-banner" in:slide>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span>Admin-Ansicht: Du betrachtest das Profil eines anderen Mitglieds</span>
+                </div>
+            {/if}
+
             <div class="profile-header">
                 <div class="user-info">
                     <div class="avatar-container">
-                        {#if $user.avatar}
+                        {#if displayUser.avatar}
                             <img
-                                src={$user.avatar}
-                                alt={$user.username}
+                                src={displayUser.avatar}
+                                alt={displayUser.username}
                                 class="avatar"
                             />
                         {:else}
                             <div class="avatar-placeholder">
                                 {(
-                                    $user.nickname ||
-                                    $user.global_name ||
-                                    $user.username
+                                    displayUser.nickname ||
+                                    displayUser.global_name ||
+                                    displayUser.username
                                 )
                                     .charAt(0)
                                     .toUpperCase()}
@@ -124,18 +181,18 @@
                     </div>
                     <div class="user-details">
                         <h1>
-                            {$user.nickname ||
-                                $user.global_name ||
-                                $user.username}
+                            {displayUser.nickname ||
+                                displayUser.global_name ||
+                                displayUser.username}
                         </h1>
-                        <p class="discord-tag">@{$user.username}</p>
+                        <p class="discord-tag">@{displayUser.username}</p>
                         <div class="badges">
-                            {#if $user.highest_role && $user.highest_role !== 'ADMIN'}
+                            {#if displayUser.highest_role && displayUser.highest_role !== 'ADMIN'}
                                 <span class="badge role-badge"
-                                    >{$user.highest_role}</span
+                                    >{displayUser.highest_role}</span
                                 >
                             {/if}
-                            {#if $user.is_admin}
+                            {#if displayUser.is_admin}
                                 <span class="badge admin-badge">Admin</span>
                             {/if}
                         </div>
@@ -951,6 +1008,24 @@
     .empty-state {
         text-align: center;
         padding: 5rem 2rem;
+    }
+
+    .admin-view-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        margin-bottom: 2rem;
+        font-weight: 500;
+    }
+
+    .admin-view-banner svg {
+        width: 1.25rem;
+        height: 1.25rem;
     }
 
     .spinner {

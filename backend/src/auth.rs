@@ -153,7 +153,13 @@ pub async fn discord_callback(
     };
 
     let is_admin = metadata.as_ref().map(|m| m.admin).unwrap_or(false);
-    let highest_role = metadata.as_ref().and_then(|m| m.highest_role.clone());
+    let mut highest_role = metadata.as_ref().and_then(|m| m.highest_role.clone());
+
+    // Elevation: if user is admin, guarantee they have ADMIN role in token
+    if is_admin {
+        highest_role = Some("ADMIN".to_string());
+    }
+
     let nickname = metadata.as_ref().and_then(|m| m.nickname.clone());
     let linked_players_json = metadata
         .as_ref()
@@ -304,21 +310,28 @@ impl FromRequest for AuthenticatedUser {
             match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
-                    // Fetch linked players from DB
-                    let user_db = sqlx::query_as::<_, (String,)>(
-                        "SELECT linked_players FROM users WHERE discord_id = $1",
+                    // Fetch linked players and state from DB to ensure real-time permissions
+                    let user_db = sqlx::query_as::<_, (String, Option<String>, bool)>(
+                        "SELECT linked_players, highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)
                     .await;
 
-                    let linked_players = match user_db {
-                        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
-                        Err(_) => vec![],
+                    let (linked_players, db_role, is_admin) = match user_db {
+                        Ok((lp_json, role, admin)) => (serde_json::from_str(&lp_json).unwrap_or_default(), role, admin),
+                        Err(_) => (vec![], None, false),
                     };
 
+                    let mut claims = c.claims;
+                    if is_admin {
+                        claims.role = Some("ADMIN".to_string());
+                    } else if db_role.is_some() {
+                        claims.role = db_role;
+                    }
+
                     Ok(AuthenticatedUser {
-                        claims: c.claims,
+                        claims,
                         linked_players,
                     })
                 }
@@ -354,22 +367,29 @@ impl FromRequest for OptionalAuthenticatedUser {
             match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
-                    // Fetch linked players from DB
-                    let user_db = sqlx::query_as::<_, (String,)>(
-                        "SELECT linked_players FROM users WHERE discord_id = $1",
+                    // Fetch linked players and state from DB to ensure real-time permissions
+                    let user_db = sqlx::query_as::<_, (String, Option<String>, bool)>(
+                        "SELECT linked_players, highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)
                     .await;
 
-                    let linked_players = match user_db {
-                        Ok((lp_json,)) => serde_json::from_str(&lp_json).unwrap_or_default(),
-                        Err(_) => vec![],
+                    let (linked_players, db_role, is_admin) = match user_db {
+                        Ok((lp_json, role, admin)) => (serde_json::from_str(&lp_json).unwrap_or_default(), role, admin),
+                        Err(_) => (vec![], None, false),
                     };
+
+                    let mut claims = c.claims;
+                    if is_admin {
+                        claims.role = Some("ADMIN".to_string());
+                    } else if db_role.is_some() {
+                        claims.role = db_role;
+                    }
 
                     Ok(OptionalAuthenticatedUser {
                         user: Some(AuthenticatedUser {
-                            claims: c.claims,
+                            claims,
                             linked_players,
                         }),
                     })

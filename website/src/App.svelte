@@ -96,6 +96,12 @@
             <ClansPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/account'}
             <ProfilePage {theme} {apiBaseUrl} />
+        {:else if currentPath.startsWith('/profile/')}
+            <ProfilePage
+                {theme}
+                {apiBaseUrl}
+                viewUserId={currentPath.split('/').pop()}
+            />
         {:else if currentPath === '/admin'}
             <AdminPage {theme} {apiBaseUrl} />
         {:else if currentPath.startsWith('/clan/')}

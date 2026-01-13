@@ -493,7 +493,10 @@ pub async fn get_user(
         });
     }
 
-    forward_request(&data, &format!("/api/users/{}", user_id)).await
+    let url_path = format!("/api/users/{}", user_id);
+    // Ensure we have fresh user data for profiles (not pre-cached)
+    let _ = update_cache(&data, &url_path).await;
+    forward_request(&data, &url_path).await
 }
 
 // 10. Get Guild Info (Summarized for non-admins)
@@ -539,21 +542,21 @@ pub async fn get_guild_info(
     }
 }
 
-// 11. Get My Player Accounts (Protected: User only)
-pub async fn get_my_player_accounts(
-    data: web::Data<AppState>,
-    user: AuthenticatedUser,
-) -> impl Responder {
+// 11. Helper for Player Aggregation
+async fn fetch_aggregated_player_accounts(
+    data: &web::Data<AppState>,
+    linked_players: Vec<String>,
+) -> Vec<serde_json::Value> {
     let mut players_data = Vec::new();
-    for tag in user.linked_players {
+    for tag in linked_players {
         let encoded_tag = encode_tag(&tag);
         let clash_url_path = format!("/players/{}", encoded_tag);
         let upstream_url_path = format!("/api/players/{}", encoded_tag);
 
         // Fetch CoC data
-        let coc_res = update_clash_cache(&data, &clash_url_path).await;
+        let coc_res = update_clash_cache(data, &clash_url_path).await;
         // Fetch Upstream data
-        let upstream_res = update_cache(&data, &upstream_url_path).await;
+        let upstream_res = update_cache(data, &upstream_url_path).await;
 
         if let Ok(coc_body) = coc_res {
             if let Ok(mut coc_json) = serde_json::from_slice::<serde_json::Value>(&coc_body) {
@@ -586,7 +589,67 @@ pub async fn get_my_player_accounts(
             }
         }
     }
+    players_data
+}
 
+// 11b. Get My Player Accounts (Protected: User only)
+pub async fn get_my_player_accounts(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    let players_data = fetch_aggregated_player_accounts(&data, user.linked_players).await;
+    HttpResponse::Ok().json(players_data)
+}
+
+// 11c. Get Another User's Player Accounts (Protected: Admin only)
+pub async fn get_user_player_accounts(
+    data: web::Data<AppState>,
+    user_id: web::Path<String>,
+    auth_user: AuthenticatedUser,
+) -> impl Responder {
+    if !has_required_role(auth_user.claims.role.as_deref(), "ADMIN") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires ADMIN role".into(),
+        });
+    }
+
+    let uid = user_id.into_inner();
+
+    // 1. Try local DB
+    let user_db = sqlx::query_as::<_, (String,)>(
+        "SELECT linked_players FROM users WHERE discord_id = $1",
+    )
+    .bind(&uid)
+    .fetch_optional(&data.db_pool)
+    .await;
+
+    let linked_players: Vec<String> = match user_db {
+        Ok(Some((lp_json,))) => serde_json::from_str(&lp_json).unwrap_or_default(),
+        _ => {
+            // 2. Try Upstream
+            let url_path = format!("/api/users/{}", uid);
+            let upstream_res = update_cache(&data, &url_path).await;
+            match upstream_res {
+                Ok(body) => {
+                    let json: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+                    json.get("linkedPlayers")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|p| p.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                }
+                _ => {
+                    return HttpResponse::NotFound()
+                        .json(serde_json::json!({ "error": "User not found" }));
+                }
+            }
+        }
+    };
+
+    let players_data = fetch_aggregated_player_accounts(&data, linked_players).await;
     HttpResponse::Ok().json(players_data)
 }
 
