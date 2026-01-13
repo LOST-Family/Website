@@ -439,7 +439,8 @@
                                 {/if}
                                 {#if clan.kickpointsExpireAfterDays}
                                     <div class="expiry-info">
-                                        Verfall nach {clan.kickpointsExpireAfterDays} Tagen
+                                        Verfall nach {clan.kickpointsExpireAfterDays}
+                                        Tagen
                                     </div>
                                 {/if}
                             </section>
