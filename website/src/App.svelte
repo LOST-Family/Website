@@ -78,7 +78,7 @@
         {#if currentPath === '/' || currentPath === ''}
             <Hero banner={lostBanner} {theme} {mounted} />
 
-            <DiscordSection {theme} fallbackIcon={lostLogo} />
+            <DiscordSection theme="dark" fallbackIcon={lostLogo} />
 
             <ClansSection
                 {theme}

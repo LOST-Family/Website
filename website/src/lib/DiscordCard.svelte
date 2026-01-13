@@ -266,8 +266,11 @@
         width: 56px;
         height: 56px;
         border-radius: 16px;
+        background: #1e1f22;
+        padding: 4px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
         transition: box-shadow 0.4s ease;
+        object-fit: contain;
     }
 
     .discord-card.light .server-icon {

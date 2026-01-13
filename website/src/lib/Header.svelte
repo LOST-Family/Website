@@ -660,6 +660,8 @@
         width: 40px;
         height: 40px;
         border-radius: 10px;
+        background: #1e1f22;
+        padding: 4px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
         transition: transform 0.3s ease;
     }
