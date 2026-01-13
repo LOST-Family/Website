@@ -488,7 +488,8 @@
                     {:else}
                         <div class="accounts-grid">
                             {#each crPlayerAccounts as player}
-                                {@const activePoints = player.activeKickpointsSum || 0}
+                                {@const activePoints =
+                                    player.activeKickpointsSum || 0}
                                 <div
                                     class="account-card cr-card"
                                     class:light={theme === 'light'}
@@ -505,7 +506,8 @@
                                         <div class="player-rank">
                                             {#if player.arena}
                                                 <div class="arena-badge">
-                                                    {player.arena.name || `Arena ${player.arena.id}`}
+                                                    {player.arena.name ||
+                                                        `Arena ${player.arena.id}`}
                                                 </div>
                                             {:else}
                                                 <div class="level-badge">
@@ -532,25 +534,42 @@
 
                                     <div class="player-stats">
                                         <div class="stat-item">
-                                            <span class="stat-label">Level</span>
-                                            <span class="stat-value">{player.expLevel || '-'}</span>
+                                            <span class="stat-label">Level</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.expLevel || '-'}</span
+                                            >
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label">Kickpunkte</span>
+                                            <span class="stat-label"
+                                                >Kickpunkte</span
+                                            >
                                             <span
                                                 class="stat-value"
-                                                class:danger={activePoints >= (player.clanDB?.maxKickpoints || 9)}
+                                                class:danger={activePoints >=
+                                                    (player.clanDB
+                                                        ?.maxKickpoints || 9)}
                                             >
-                                                {activePoints} / {player.clanDB?.maxKickpoints || '-'}
+                                                {activePoints} / {player.clanDB
+                                                    ?.maxKickpoints || '-'}
                                             </span>
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label">Gesamtanzahl Kickpunkte</span>
-                                            <span class="stat-value">{player.totalKickpoints || 0}</span>
+                                            <span class="stat-label"
+                                                >Gesamtanzahl Kickpunkte</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.totalKickpoints ||
+                                                    0}</span
+                                            >
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label">Trophäen</span>
-                                            <span class="stat-value">{player.trophies || '-'}</span>
+                                            <span class="stat-label"
+                                                >Trophäen</span
+                                            >
+                                            <span class="stat-value"
+                                                >{player.trophies || '-'}</span
+                                            >
                                         </div>
                                         <div class="stat-item">
                                             <span class="stat-label"
@@ -659,12 +678,18 @@
                                 class="league-icon-large"
                             />
                         {:else if selectedPlayer.arena}
-                             <div class="arena-icon-container">
-                                <div class="arena-id-label">A{selectedPlayer.arena.id.toString().slice(-2)}</div>
-                             </div>
+                            <div class="arena-icon-container">
+                                <div class="arena-id-label">
+                                    A{selectedPlayer.arena.id
+                                        .toString()
+                                        .slice(-2)}
+                                </div>
+                            </div>
                         {/if}
                         <div class="player-titles">
-                            <h2>{selectedPlayer.nameDB || selectedPlayer.name}</h2>
+                            <h2>
+                                {selectedPlayer.nameDB || selectedPlayer.name}
+                            </h2>
                             <p class="tag">{selectedPlayer.tag}</p>
                             {#if selectedPlayer.clan}
                                 <div class="clan-info-small">
@@ -690,7 +715,8 @@
                             {/if}
                         {:else}
                             <div class="th-level cr-level">
-                                {selectedPlayer.arena?.name || `Arena ${selectedPlayer.arena?.id || '?'}`}
+                                {selectedPlayer.arena?.name ||
+                                    `Arena ${selectedPlayer.arena?.id || '?'}`}
                             </div>
                         {/if}
                     </div>
@@ -705,12 +731,16 @@
                         {#if selectedGameType === 'coc'}
                             <div class="stat-card">
                                 <span class="label">Kriegssterne</span>
-                                <span class="value">{selectedPlayer.warStars}</span>
+                                <span class="value"
+                                    >{selectedPlayer.warStars}</span
+                                >
                             </div>
                         {:else}
                             <div class="stat-card">
                                 <span class="label">Trophäen</span>
-                                <span class="value">{selectedPlayer.trophies || 0}</span>
+                                <span class="value"
+                                    >{selectedPlayer.trophies || 0}</span
+                                >
                             </div>
                         {/if}
                         <div class="stat-card">
@@ -733,8 +763,20 @@
                             <div class="deck-grid">
                                 {#each selectedPlayer.currentDeck as card}
                                     <div class="card-item" title={card.name}>
-                                        <img src={card.iconUrls?.medium} alt={card.name} />
-                                        <span class="card-level">LVL {card.level + (card.rarity === 'legendary' ? 8 : card.rarity === 'epic' ? 5 : card.rarity === 'rare' ? 2 : 0)}</span>
+                                        <img
+                                            src={card.iconUrls?.medium}
+                                            alt={card.name}
+                                        />
+                                        <span class="card-level"
+                                            >LVL {card.level +
+                                                (card.rarity === 'legendary'
+                                                    ? 8
+                                                    : card.rarity === 'epic'
+                                                      ? 5
+                                                      : card.rarity === 'rare'
+                                                        ? 2
+                                                        : 0)}</span
+                                        >
                                     </div>
                                 {/each}
                             </div>
@@ -746,10 +788,18 @@
                             <h3>Abzeichen</h3>
                             <div class="badges-grid-cr">
                                 {#each selectedPlayer.badges as badge}
-                                    <div class="badge-item-cr" title={badge.name}>
-                                        <img src={badge.iconUrls?.large} alt={badge.name} />
+                                    <div
+                                        class="badge-item-cr"
+                                        title={badge.name}
+                                    >
+                                        <img
+                                            src={badge.iconUrls?.large}
+                                            alt={badge.name}
+                                        />
                                         {#if badge.level}
-                                            <span class="badge-level-cr">Lvl {badge.level}</span>
+                                            <span class="badge-level-cr"
+                                                >Lvl {badge.level}</span
+                                            >
                                         {/if}
                                     </div>
                                 {/each}

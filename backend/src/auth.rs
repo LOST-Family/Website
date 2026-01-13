@@ -171,7 +171,7 @@ pub async fn discord_callback(
                 if m.admin {
                     final_is_admin = true;
                 }
-                
+
                 let cr_role = m.highest_role.unwrap_or_else(|| "NOTINCLAN".to_string());
                 if get_role_priority(&cr_role) > get_role_priority(&final_highest_role) {
                     final_highest_role = cr_role;
@@ -210,8 +210,10 @@ pub async fn discord_callback(
         final_highest_role = "ADMIN".to_string();
     }
 
-    let linked_players_json = serde_json::to_string(&coc_linked).unwrap_or_else(|_| "[]".to_string());
-    let linked_cr_players_json = serde_json::to_string(&cr_linked).unwrap_or_else(|_| "[]".to_string());
+    let linked_players_json =
+        serde_json::to_string(&coc_linked).unwrap_or_else(|_| "[]".to_string());
+    let linked_cr_players_json =
+        serde_json::to_string(&cr_linked).unwrap_or_else(|_| "[]".to_string());
 
     // Construct avatar URL
     let avatar_url = match &user_info.avatar {

@@ -1020,20 +1020,30 @@ pub async fn get_my_player_accounts(
     // If lists are empty, try a live refresh from upstreams
     if coc_players.is_empty() || cr_players.is_empty() {
         let url_path = format!("/api/users/{}", user.claims.sub);
-        
+
         // Try CoC Upstream
         if let Ok(body) = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
                 if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let tags: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                     for tag in tags {
-                        if !coc_players.contains(&tag) { coc_players.push(tag); }
+                        if !coc_players.contains(&tag) {
+                            coc_players.push(tag);
+                        }
                     }
                 }
                 if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let tags: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                     for tag in tags {
-                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                        if !cr_players.contains(&tag) {
+                            cr_players.push(tag);
+                        }
                     }
                 }
             }
@@ -1043,15 +1053,25 @@ pub async fn get_my_player_accounts(
         if let Ok(body) = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
                 if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let tags: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                     for tag in tags {
-                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                        if !cr_players.contains(&tag) {
+                            cr_players.push(tag);
+                        }
                     }
                 }
                 if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
-                    let tags: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let tags: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
                     for tag in tags {
-                        if !cr_players.contains(&tag) { cr_players.push(tag); }
+                        if !cr_players.contains(&tag) {
+                            cr_players.push(tag);
+                        }
                     }
                 }
             }
