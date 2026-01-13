@@ -51,31 +51,60 @@
     async function fetchUserClans() {
         if (!$user) return;
         try {
-            const response = await fetch(`${apiBaseUrl}/api/me/accounts`, {
-                credentials: 'include',
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const clansMap = new Map<string, {name: string, gameType: string}>();
-                
+            const [accountsRes, cocClansRes, crClansRes] = await Promise.all([
+                fetch(`${apiBaseUrl}/api/me/accounts`, {
+                    credentials: 'include',
+                }),
+                fetch(`${apiBaseUrl}/api/coc/clans`),
+                fetch(`${apiBaseUrl}/api/cr/clans`),
+            ]);
+
+            if (accountsRes.ok && cocClansRes.ok && crClansRes.ok) {
+                const accounts = await accountsRes.json();
+                const cocClans = await cocClansRes.json();
+                const crClans = await crClansRes.json();
+
+                const officialCocTags = new Set(
+                    cocClans.map((c: any) => c.tag)
+                );
+                const officialCrTags = new Set(
+                    crClans.map((c: any) => c.tag)
+                );
+
+                const clansMap = new Map<
+                    string,
+                    { name: string; gameType: string }
+                >();
+
                 // Process Clash of Clans accounts
-                const cocAccounts = data.coc || (Array.isArray(data) ? data : []);
+                const cocAccounts =
+                    accounts.coc || (Array.isArray(accounts) ? accounts : []);
                 cocAccounts.forEach((acc: any) => {
-                    if (acc.clan) {
-                        clansMap.set(acc.clan.tag, { name: acc.clan.name, gameType: 'coc' });
+                    if (acc.clan && officialCocTags.has(acc.clan.tag)) {
+                        clansMap.set(acc.clan.tag, {
+                            name: acc.clan.name,
+                            gameType: 'coc',
+                        });
                     }
                 });
 
                 // Process Clash Royale accounts
-                const crAccounts = data.cr || [];
+                const crAccounts = accounts.cr || [];
                 crAccounts.forEach((acc: any) => {
-                    if (acc.clan) {
-                        clansMap.set(acc.clan.tag, { name: acc.clan.name, gameType: 'cr' });
+                    if (acc.clan && officialCrTags.has(acc.clan.tag)) {
+                        clansMap.set(acc.clan.tag, {
+                            name: acc.clan.name,
+                            gameType: 'cr',
+                        });
                     }
                 });
 
                 userClans = Array.from(clansMap.entries()).map(
-                    ([tag, info]) => ({ tag, name: info.name, gameType: info.gameType })
+                    ([tag, info]) => ({
+                        tag,
+                        name: info.name,
+                        gameType: info.gameType,
+                    })
                 );
             }
         } catch (error) {
@@ -297,42 +326,28 @@
                                     Dein Clan
                                 </a>
                             {:else}
-                                {#each userClans as clan}
-                                    <a
-                                        href="/{clan.gameType}/clan/{clan.tag.replace(
-                                            '#',
-                                            ''
-                                        )}"
-                                        class="dropdown-item"
-                                        on:click|preventDefault={() =>
-                                            navigate(
-                                                `${clan.gameType}/clan/${clan.tag.replace(
-                                                    '#',
-                                                    ''
-                                                )}`
-                                            )}
+                                <a
+                                    href="/my-clans"
+                                    class="dropdown-item"
+                                    on:click|preventDefault={() =>
+                                        navigate('my-clans')}
+                                >
+                                    <svg
+                                        class="item-icon"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
                                     >
-                                        <svg
-                                            class="item-icon"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                        >
-                                            <path
-                                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                                            />
-                                            <circle cx="9" cy="7" r="4" />
-                                            <path
-                                                d="M23 21v-2a4 4 0 0 0-3-3.87"
-                                            />
-                                            <path
-                                                d="M16 3.13a4 4 0 0 1 0 7.75"
-                                            />
-                                        </svg>
-                                        {clan.name}
-                                    </a>
-                                {/each}
+                                        <path
+                                            d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                        />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                    </svg>
+                                    Deine Clans
+                                </a>
                             {/if}
                         {/if}
 
@@ -513,11 +528,15 @@
                 <div class="drawer-section">
                     <span class="section-title">Account</span>
                     <button class="drawer-nav-link" on:click={() => navigate('account')}>Verknüpfte Accounts</button>
-                    {#each userClans as clan}
-                        <a href="/{clan.gameType}/clan/{clan.tag.replace('#', '')}" class="drawer-nav-link" on:click|preventDefault={() => navigate(`${clan.gameType}/clan/${clan.tag.replace('#', '')}`)}>
-                            {clan.name}
-                        </a>
-                    {/each}
+                    {#if userClans.length > 0}
+                        {#if userClans.length === 1}
+                            <a href="/{userClans[0].gameType}/clan/{userClans[0].tag.replace('#', '')}" class="drawer-nav-link" on:click|preventDefault={() => navigate(`${userClans[0].gameType}/clan/${userClans[0].tag.replace('#', '')}`)}>
+                                Dein Clan
+                            </a>
+                        {:else}
+                            <button class="drawer-nav-link" on:click={() => navigate('my-clans')}>Deine Clans</button>
+                        {/if}
+                    {/if}
                     
                     {#if $user.is_admin}
                         <div class="drawer-nav-group admin">

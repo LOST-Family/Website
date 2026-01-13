@@ -10,6 +10,7 @@
     import FeaturesSection from './lib/FeaturesSection.svelte';
     import ClansSection from './lib/ClansSection.svelte';
     import ClansPage from './lib/ClansPage.svelte';
+    import MyClansPage from './lib/MyClansPage.svelte';
     import AllClansAdminPage from './lib/AllClansAdminPage.svelte';
     import ProfilePage from './lib/ProfilePage.svelte';
     import AdminPage from './lib/AdminPage.svelte';
@@ -116,6 +117,8 @@
                 gameType="cr"
                 on:navigate={handleNavigate}
             />
+        {:else if currentPath === '/my-clans'}
+            <MyClansPage {theme} {apiBaseUrl} on:navigate={handleNavigate} />
         {:else if currentPath === '/account'}
             <ProfilePage {theme} {apiBaseUrl} />
         {:else if currentPath.startsWith('/profile/')}
