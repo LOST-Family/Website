@@ -1,3 +1,16 @@
+<script context="module" lang="ts">
+    interface DiscordCache {
+        data: any;
+        serverIcon: string | null;
+        serverDescription: string | null;
+        inviteUrl: string | null;
+        totalMembers: number | null;
+        timestamp: number;
+    }
+    const discordCache = new Map<string, DiscordCache>();
+    const CACHE_DURATION = 1000 * 60 * 5; // 5 minutes cache
+</script>
+
 <script lang="ts">
     import { onMount } from 'svelte';
 
@@ -29,24 +42,56 @@
     let loading = true;
     let error = false;
 
+    // Use totalMembers prop as initial value if provided
+    let localTotalMembers = totalMembers;
+    $: if (totalMembers !== null) localTotalMembers = totalMembers;
+
     onMount(async () => {
+        // Check cache first
+        const cached = discordCache.get(guildId);
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+            data = cached.data;
+            serverIcon = cached.serverIcon;
+            serverDescription = cached.serverDescription;
+            inviteUrl = cached.inviteUrl;
+            if (localTotalMembers === null) localTotalMembers = cached.totalMembers;
+            loading = false;
+            return;
+        }
+
         try {
-            const response = await fetch(
+            // Start fetches in parallel if possible
+            const widgetPromise = fetch(
                 `https://discord.com/api/guilds/${guildId}/widget.json`
-            );
-            if (!response.ok) throw new Error('Failed to fetch widget');
-            data = await response.json();
+            ).then(res => {
+                if (!res.ok) throw new Error('Failed to fetch widget');
+                return res.json();
+            });
 
-            inviteUrl = data?.instant_invite ?? null;
-            let code = inviteCode || data?.instant_invite?.split('/').pop();
+            let invitePromise: Promise<any> | null = null;
+            if (inviteCode) {
+                invitePromise = fetch(
+                    `https://discord.com/api/v10/invites/${inviteCode}?with_counts=true`
+                ).then(res => (res.ok ? res.json() : null));
+            }
 
-            if (code && !totalMembers) {
-                const inviteRes = await fetch(
-                    `https://discord.com/api/v10/invites/${code}?with_counts=true`
-                );
-                if (inviteRes.ok) {
-                    const inviteData = await inviteRes.json();
-                    totalMembers = inviteData.approximate_member_count;
+            // Wait for widget first as we might need it for the invite code
+            data = await widgetPromise;
+            inviteUrl = data?.instant_invite ?? (inviteCode ? `https://discord.gg/${inviteCode}` : null);
+            
+            let code = inviteCode || inviteUrl?.split('/').pop();
+
+            if (code && localTotalMembers === null) {
+                // If we didn't start the invite fetch yet, do it now
+                if (!invitePromise) {
+                    invitePromise = fetch(
+                        `https://discord.com/api/v10/invites/${code}?with_counts=true`
+                    ).then(res => (res.ok ? res.json() : null));
+                }
+
+                const inviteData = await invitePromise;
+                if (inviteData) {
+                    localTotalMembers = inviteData.approximate_member_count;
                     serverDescription = inviteData.guild?.description;
                     if (inviteData.guild?.icon) {
                         serverIcon = `https://cdn.discordapp.com/icons/${guildId}/${inviteData.guild.icon}.png?size=128`;
@@ -54,7 +99,18 @@
                     if (!inviteUrl) inviteUrl = `https://discord.gg/${code}`;
                 }
             }
+
+            // Update cache
+            discordCache.set(guildId, {
+                data,
+                serverIcon,
+                serverDescription,
+                inviteUrl,
+                totalMembers: localTotalMembers,
+                timestamp: Date.now()
+            });
         } catch (e) {
+            console.error(`Discord fetch failed for ${guildId}:`, e);
             error = true;
         } finally {
             loading = false;
@@ -108,9 +164,9 @@
                 <div class="text">
                     <h3>{data.name}</h3>
                     <div class="stats">
-                        {#if totalMembers}
+                        {#if localTotalMembers}
                             <span class="total-count"
-                                >{totalMembers.toLocaleString()} Members</span
+                                >{localTotalMembers.toLocaleString()} Members</span
                             >
                             <span class="dot">•</span>
                         {/if}
