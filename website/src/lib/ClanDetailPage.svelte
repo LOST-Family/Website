@@ -58,6 +58,8 @@
         isLinked?: boolean;
         discordId?: string;
         nickname?: string;
+        global_name?: string;
+        username?: string;
         avatar?: string;
         totalKickpoints?: number;
         activeKickpointsCount?: number;
@@ -170,7 +172,7 @@
             const kickpoints = kpRes.ok ? await kpRes.json() : [];
             const identity = idRes.ok ? await idRes.json() : {};
 
-            selectedPlayer = {
+            let updatedPlayer: Player = {
                 ...player,
                 ...detailedPlayer,
                 ...identity,
@@ -181,26 +183,29 @@
             };
 
             // If the player has a userId, fetch their other accounts
-            if (selectedPlayer.userId) {
+            if (updatedPlayer.userId) {
                 const userRes = await fetch(
-                    `${apiBaseUrl}/api/users/${selectedPlayer.userId}`,
+                    `${apiBaseUrl}/api/users/${updatedPlayer.userId}`,
                     { credentials: 'include' }
                 );
                 if (userRes.ok) {
+                    const userData = await userRes.json();
                     playerOtherAccounts = (
                         userData.playerAccounts || []
                     ).filter((acc: any) => acc.tag !== player.tag);
 
-                    // Update selectedPlayer with Discord info from the user fetch
-                    selectedPlayer = {
-                        ...selectedPlayer,
+                    // Update with Discord info from the user fetch
+                    updatedPlayer = {
+                        ...updatedPlayer,
                         nickname:
                             userData.nickname ||
                             userData.global_name ||
                             userData.username,
-                        avatar: userData.avatar || selectedPlayer.avatar,
+                        avatar: userData.avatar || updatedPlayer.avatar,
                     };
+                }
             }
+            selectedPlayer = updatedPlayer;
         } catch (e) {
             console.error('Failed to fetch player details:', e);
         } finally {
@@ -544,9 +549,17 @@
                                     <div class="m-main-info">
                                         <h4 class="m-name">{member.name}</h4>
                                         <div class="m-sub-info">
-                                            <span class="m-tag-small" title={member.tag}>
+                                            <span class="m-role-label">
+                                                {getRoleDisplay(member.role)}
+                                            </span>
+                                            <span class="dot">•</span>
+                                            <span
+                                                class="m-tag-small"
+                                                title={member.tag}
+                                            >
                                                 {member.tag}
                                             </span>
+                                        </div>
                                     </div>
                                     <div class="m-points-info">
                                         <div class="m-th-badge">
@@ -727,23 +740,23 @@
                     <div class="drawer-content">
                         <div class="player-hero">
                             <div class="p-hero-top">
-                                {#if selectedPlayer.leagueTier || selectedPlayer.league}
+                                {#if selectedPlayer?.leagueTier || selectedPlayer?.league}
                                     <img
-                                        src={selectedPlayer.leagueTier?.iconUrls
+                                        src={selectedPlayer?.leagueTier?.iconUrls
                                             .large ||
-                                            selectedPlayer.league?.iconUrls
+                                            selectedPlayer?.league?.iconUrls
                                                 .large ||
-                                            selectedPlayer.league?.iconUrls
+                                            selectedPlayer?.league?.iconUrls
                                                 .medium}
-                                        alt={selectedPlayer.leagueTier?.name ||
-                                            selectedPlayer.league?.name}
+                                        alt={selectedPlayer?.leagueTier?.name ||
+                                            selectedPlayer?.league?.name}
                                         class="p-league-img"
                                     />
                                 {/if}
                                 <div class="p-title">
-                                    <h2>{selectedPlayer.name}</h2>
+                                    <h2>{selectedPlayer?.name}</h2>
                                     <span class="p-tag"
-                                        >{selectedPlayer.tag}</span
+                                        >{selectedPlayer?.tag}</span
                                     >
                                 </div>
                             </div>
@@ -753,15 +766,15 @@
                                     ? 'rgba(88, 101, 242, 0.1)'
                                     : 'rgba(88, 101, 242, 0.2)'}"
                             >
-                                {getRoleDisplay(selectedPlayer.role)}
+                                {getRoleDisplay(selectedPlayer?.role || '')}
                             </div>
                         </div>
 
-                        {#if selectedPlayer.userId || selectedPlayer.isLinked}
+                        {#if selectedPlayer?.userId || selectedPlayer?.isLinked}
                             <section class="discord-profile">
                                 <div class="d-header">
                                     <div class="d-avatar-box">
-                                        {#if selectedPlayer.avatar}
+                                        {#if selectedPlayer?.avatar}
                                             <img
                                                 src={selectedPlayer.avatar}
                                                 alt="Discord Avatar"
@@ -769,8 +782,8 @@
                                         {:else}
                                             <div class="d-placeholder">
                                                 {(
-                                                    selectedPlayer.nickname ||
-                                                    selectedPlayer.name ||
+                                                    selectedPlayer?.nickname ||
+                                                    selectedPlayer?.name ||
                                                     'U'
                                                 )
                                                     .charAt(0)
@@ -780,9 +793,9 @@
                                     </div>
                                     <div class="d-info">
                                         <div class="d-name">
-                                            {selectedPlayer.nickname ||
-                                                selectedPlayer.global_name ||
-                                                selectedPlayer.username ||
+                                            {selectedPlayer?.nickname ||
+                                                selectedPlayer?.global_name ||
+                                                selectedPlayer?.username ||
                                                 'Unbekannt'}
                                         </div>
                                         <div class="d-status">Verknüpft</div>
@@ -793,7 +806,7 @@
                                             on:click={() =>
                                                 dispatch(
                                                     'navigate',
-                                                    `profile/${selectedPlayer.userId}`
+                                                    `profile/${selectedPlayer?.userId}`
                                                 )}
                                         >
                                             <svg
@@ -819,47 +832,47 @@
                                 <div class="s-item">
                                     <span class="s-label">Rathaus</span>
                                     <span class="s-value"
-                                        >Level {selectedPlayer.townHallLevel}</span
+                                        >Level {selectedPlayer?.townHallLevel}</span
                                     >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Erfahrung</span>
                                     <span class="s-value"
-                                        >Lvl {selectedPlayer.expLevel}</span
+                                        >Lvl {selectedPlayer?.expLevel}</span
                                     >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Trophäen</span>
                                     <span class="s-value"
-                                        >{selectedPlayer.trophies}</span
+                                        >{selectedPlayer?.trophies}</span
                                     >
                                 </div>
                                 <div class="s-item">
                                     <span class="s-label">Spenden</span>
                                     <span class="s-value"
-                                        >▲ {selectedPlayer.donations} / ▼ {selectedPlayer.donationsReceived}</span
+                                        >▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}</span
                                     >
                                 </div>
-                                {#if selectedPlayer.totalKickpoints !== undefined}
+                                {#if selectedPlayer?.totalKickpoints !== undefined}
                                     <div class="s-item highlighted">
                                         <span class="s-label">Kickpunkte</span>
                                         <span class="s-value"
-                                            >{selectedPlayer.activeKickpointsSum ??
+                                            >{selectedPlayer?.activeKickpointsSum ??
                                                 (
-                                                    selectedPlayer.activeKickpoints ||
+                                                    selectedPlayer?.activeKickpoints ||
                                                     []
                                                 ).reduce(
                                                     (a, b) =>
                                                         a + (b.amount || 0),
                                                     0
-                                                )} (Gesamt: {selectedPlayer.totalKickpoints})</span
+                                                )} (Gesamt: {selectedPlayer?.totalKickpoints})</span
                                         >
                                     </div>
                                 {/if}
                             </div>
                         </section>
 
-                        {#if selectedPlayer.activeKickpoints && selectedPlayer.activeKickpoints.length > 0}
+                        {#if selectedPlayer?.activeKickpoints && selectedPlayer?.activeKickpoints.length > 0}
                             <section class="detail-section">
                                 <h3>Kickpunkt Details</h3>
                                 <div class="kp-list">
