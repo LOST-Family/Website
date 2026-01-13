@@ -12,8 +12,10 @@
     }
 
     let statusData: {
-        upstream: ServiceStatus;
-        supercell: ServiceStatus;
+        upstream_coc: ServiceStatus;
+        upstream_cr: ServiceStatus;
+        supercell_coc: ServiceStatus;
+        supercell_cr: ServiceStatus;
         website: ServiceStatus;
     } | null = null;
     let latencyHistory: { api: string; latency: number; timestamp: number }[] =
@@ -76,11 +78,17 @@
         return 'text-gray-500';
     }
 
-    $: upstreamData = latencyHistory.filter(
-        (d) => d.api === 'upstream' && d.latency !== -1
+    $: upstreamCocData = latencyHistory.filter(
+        (d) => d.api === 'upstream_coc' && d.latency !== -1
     );
-    $: supercellData = latencyHistory.filter(
-        (d) => d.api === 'supercell' && d.latency !== -1
+    $: upstreamCrData = latencyHistory.filter(
+        (d) => d.api === 'upstream_cr' && d.latency !== -1
+    );
+    $: supercellCocData = latencyHistory.filter(
+        (d) => d.api === 'supercell_coc' && d.latency !== -1
+    );
+    $: supercellCrData = latencyHistory.filter(
+        (d) => d.api === 'supercell_cr' && d.latency !== -1
     );
     $: websiteData = latencyHistory.filter(
         (d) => d.api === 'website' && d.latency !== -1
@@ -224,16 +232,16 @@
                     </div>
                 </div>
 
-                <div class="status-card">
-                    <div class="status-icon">🖥️</div>
+                <div class="status-card coc-card">
+                    <div class="status-icon">⚔️</div>
                     <div class="status-info">
-                        <h3>Upstream API</h3>
+                        <h3>CoC Upstream API</h3>
                         <div
                             class="status-badge"
-                            class:online={statusData.upstream.status ===
+                            class:online={statusData.upstream_coc.status ===
                                 'ONLINE'}
                         >
-                            {statusData.upstream.status}
+                            {statusData.upstream_coc.status}
                         </div>
                     </div>
                     <div class="status-metrics">
@@ -241,29 +249,29 @@
                             <span class="label">Uptime</span>
                             <span class="value"
                                 >{formatDuration(
-                                    statusData.upstream.uptime_minutes
+                                    statusData.upstream_coc.uptime_minutes
                                 )}</span
                             >
                         </div>
                         <div class="metric">
                             <span class="label">Latenz</span>
                             <span class="value"
-                                >{statusData.upstream.latency}ms</span
+                                >{statusData.upstream_coc.latency}ms</span
                             >
                         </div>
                     </div>
                 </div>
 
-                <div class="status-card">
-                    <div class="status-icon">⚔️</div>
+                <div class="status-card coc-card">
+                    <div class="status-icon">🛡️</div>
                     <div class="status-info">
-                        <h3>Supercell API</h3>
+                        <h3>CoC Supercell API</h3>
                         <div
                             class="status-badge"
-                            class:online={statusData.supercell.status ===
+                            class:online={statusData.supercell_coc.status ===
                                 'ONLINE'}
                         >
-                            {statusData.supercell.status}
+                            {statusData.supercell_coc.status}
                         </div>
                     </div>
                     <div class="status-metrics">
@@ -271,14 +279,74 @@
                             <span class="label">Uptime</span>
                             <span class="value"
                                 >{formatDuration(
-                                    statusData.supercell.uptime_minutes
+                                    statusData.supercell_coc.uptime_minutes
                                 )}</span
                             >
                         </div>
                         <div class="metric">
                             <span class="label">Latenz</span>
                             <span class="value"
-                                >{statusData.supercell.latency}ms</span
+                                >{statusData.supercell_coc.latency}ms</span
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-card cr-card">
+                    <div class="status-icon">👑</div>
+                    <div class="status-info">
+                        <h3>CR Upstream API</h3>
+                        <div
+                            class="status-badge"
+                            class:online={statusData.upstream_cr.status ===
+                                'ONLINE'}
+                        >
+                            {statusData.upstream_cr.status}
+                        </div>
+                    </div>
+                    <div class="status-metrics">
+                        <div class="metric">
+                            <span class="label">Uptime</span>
+                            <span class="value"
+                                >{formatDuration(
+                                    statusData.upstream_cr.uptime_minutes
+                                )}</span
+                            >
+                        </div>
+                        <div class="metric">
+                            <span class="label">Latenz</span>
+                            <span class="value"
+                                >{statusData.upstream_cr.latency}ms</span
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-card cr-card">
+                    <div class="status-icon">🏆</div>
+                    <div class="status-info">
+                        <h3>CR Supercell API</h3>
+                        <div
+                            class="status-badge"
+                            class:online={statusData.supercell_cr.status ===
+                                'ONLINE'}
+                        >
+                            {statusData.supercell_cr.status}
+                        </div>
+                    </div>
+                    <div class="status-metrics">
+                        <div class="metric">
+                            <span class="label">Uptime</span>
+                            <span class="value"
+                                >{formatDuration(
+                                    statusData.supercell_cr.uptime_minutes
+                                )}</span
+                            >
+                        </div>
+                        <div class="metric">
+                            <span class="label">Latenz</span>
+                            <span class="value"
+                                >{statusData.supercell_cr.latency}ms</span
                             >
                         </div>
                     </div>
@@ -287,17 +355,20 @@
 
             <section class="latency-section">
                 <h2>Latenz (24h)</h2>
+
+                <!-- CoC Charts -->
+                <h3 class="charts-game-title">Clash of Clans</h3>
                 <div class="charts-container">
                     <div class="chart-box">
                         <div class="chart-header">
-                            <h3>Upstream API</h3>
+                            <h3>CoC Upstream API</h3>
                             <span class="avg-latency">
-                                {upstreamData.length > 0
+                                {upstreamCocData.length > 0
                                     ? Math.round(
-                                          upstreamData.reduce(
+                                          upstreamCocData.reduce(
                                               (a, b) => a + b.latency,
                                               0
-                                          ) / upstreamData.length
+                                          ) / upstreamCocData.length
                                       )
                                     : 0}ms avg
                             </span>
@@ -306,24 +377,28 @@
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
                         >
-                            {#if upstreamData.length > 1}
+                            {#if upstreamCocData.length > 1}
                                 <svg
                                     viewBox="0 0 400 100"
                                     preserveAspectRatio="none"
                                     on:mousemove={(e) =>
                                         handleMouseMove(
                                             e,
-                                            upstreamData,
-                                            'upstream'
+                                            upstreamCocData,
+                                            'upstream_coc'
                                         )}
                                 >
                                     <path
-                                        d={generatePath(upstreamData, 400, 100)}
+                                        d={generatePath(
+                                            upstreamCocData,
+                                            400,
+                                            100
+                                        )}
                                         fill="none"
-                                        stroke="#5865f2"
+                                        stroke="#3ba55c"
                                         stroke-width="2"
                                     />
-                                    {#if hoveredPoint && hoveredPoint.api === 'upstream'}
+                                    {#if hoveredPoint && hoveredPoint.api === 'upstream_coc'}
                                         <line
                                             x1={hoverX}
                                             y1="0"
@@ -336,12 +411,12 @@
                                             cx={hoverX}
                                             cy={hoverY}
                                             r="4"
-                                            fill="#5865f2"
+                                            fill="#3ba55c"
                                         />
                                     {/if}
                                 </svg>
 
-                                {#if hoveredPoint && hoveredPoint.api === 'upstream'}
+                                {#if hoveredPoint && hoveredPoint.api === 'upstream_coc'}
                                     <div
                                         class="tooltip"
                                         style="left: {(hoverX / SVG_WIDTH) *
@@ -365,14 +440,14 @@
 
                     <div class="chart-box">
                         <div class="chart-header">
-                            <h3>Supercell API</h3>
+                            <h3>CoC Supercell API</h3>
                             <span class="avg-latency sc">
-                                {supercellData.length > 0
+                                {supercellCocData.length > 0
                                     ? Math.round(
-                                          supercellData.reduce(
+                                          supercellCocData.reduce(
                                               (a, b) => a + b.latency,
                                               0
-                                          ) / supercellData.length
+                                          ) / supercellCocData.length
                                       )
                                     : 0}ms avg
                             </span>
@@ -381,20 +456,20 @@
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
                         >
-                            {#if supercellData.length > 1}
+                            {#if supercellCocData.length > 1}
                                 <svg
                                     viewBox="0 0 400 100"
                                     preserveAspectRatio="none"
                                     on:mousemove={(e) =>
                                         handleMouseMove(
                                             e,
-                                            supercellData,
-                                            'supercell'
+                                            supercellCocData,
+                                            'supercell_coc'
                                         )}
                                 >
                                     <path
                                         d={generatePath(
-                                            supercellData,
+                                            supercellCocData,
                                             400,
                                             100
                                         )}
@@ -402,7 +477,7 @@
                                         stroke="#22c55e"
                                         stroke-width="2"
                                     />
-                                    {#if hoveredPoint && hoveredPoint.api === 'supercell'}
+                                    {#if hoveredPoint && hoveredPoint.api === 'supercell_coc'}
                                         <line
                                             x1={hoverX}
                                             y1="0"
@@ -420,7 +495,90 @@
                                     {/if}
                                 </svg>
 
-                                {#if hoveredPoint && hoveredPoint.api === 'supercell'}
+                                {#if hoveredPoint && hoveredPoint.api === 'supercell_coc'}
+                                    <div
+                                        class="tooltip"
+                                        style="left: {(hoverX / SVG_WIDTH) *
+                                            100}%; top: {hoverY}%"
+                                    >
+                                        <span class="time"
+                                            >{formatTime(
+                                                hoveredPoint.timestamp
+                                            )}</span
+                                        >
+                                        <span class="value"
+                                            >{hoveredPoint.latency}ms</span
+                                        >
+                                    </div>
+                                {/if}
+                            {:else}
+                                <div class="no-data">Keine Daten verfügbar</div>
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CR Charts -->
+                <h3 class="charts-game-title">Clash Royale</h3>
+                <div class="charts-container">
+                    <div class="chart-box">
+                        <div class="chart-header">
+                            <h3>CR Upstream API</h3>
+                            <span class="avg-latency cr">
+                                {upstreamCrData.length > 0
+                                    ? Math.round(
+                                          upstreamCrData.reduce(
+                                              (a, b) => a + b.latency,
+                                              0
+                                          ) / upstreamCrData.length
+                                      )
+                                    : 0}ms avg
+                            </span>
+                        </div>
+                        <div
+                            class="svg-container"
+                            on:mouseleave={() => (hoveredPoint = null)}
+                        >
+                            {#if upstreamCrData.length > 1}
+                                <svg
+                                    viewBox="0 0 400 100"
+                                    preserveAspectRatio="none"
+                                    on:mousemove={(e) =>
+                                        handleMouseMove(
+                                            e,
+                                            upstreamCrData,
+                                            'upstream_cr'
+                                        )}
+                                >
+                                    <path
+                                        d={generatePath(
+                                            upstreamCrData,
+                                            400,
+                                            100
+                                        )}
+                                        fill="none"
+                                        stroke="#5865f2"
+                                        stroke-width="2"
+                                    />
+                                    {#if hoveredPoint && hoveredPoint.api === 'upstream_cr'}
+                                        <line
+                                            x1={hoverX}
+                                            y1="0"
+                                            x2={hoverX}
+                                            y2="100"
+                                            stroke="rgba(255,255,255,0.2)"
+                                            stroke-width="1"
+                                        />
+                                        <circle
+                                            cx={hoverX}
+                                            cy={hoverY}
+                                            r="4"
+                                            fill="#5865f2"
+                                        />
+                                    {/if}
+                                </svg>
+
+                                {#if hoveredPoint && hoveredPoint.api === 'upstream_cr'}
                                     <div
                                         class="tooltip"
                                         style="left: {(hoverX / SVG_WIDTH) *
@@ -442,6 +600,89 @@
                         </div>
                     </div>
 
+                    <div class="chart-box">
+                        <div class="chart-header">
+                            <h3>CR Supercell API</h3>
+                            <span class="avg-latency cr">
+                                {supercellCrData.length > 0
+                                    ? Math.round(
+                                          supercellCrData.reduce(
+                                              (a, b) => a + b.latency,
+                                              0
+                                          ) / supercellCrData.length
+                                      )
+                                    : 0}ms avg
+                            </span>
+                        </div>
+                        <div
+                            class="svg-container"
+                            on:mouseleave={() => (hoveredPoint = null)}
+                        >
+                            {#if supercellCrData.length > 1}
+                                <svg
+                                    viewBox="0 0 400 100"
+                                    preserveAspectRatio="none"
+                                    on:mousemove={(e) =>
+                                        handleMouseMove(
+                                            e,
+                                            supercellCrData,
+                                            'supercell_cr'
+                                        )}
+                                >
+                                    <path
+                                        d={generatePath(
+                                            supercellCrData,
+                                            400,
+                                            100
+                                        )}
+                                        fill="none"
+                                        stroke="#7289da"
+                                        stroke-width="2"
+                                    />
+                                    {#if hoveredPoint && hoveredPoint.api === 'supercell_cr'}
+                                        <line
+                                            x1={hoverX}
+                                            y1="0"
+                                            x2={hoverX}
+                                            y2="100"
+                                            stroke="rgba(255,255,255,0.2)"
+                                            stroke-width="1"
+                                        />
+                                        <circle
+                                            cx={hoverX}
+                                            cy={hoverY}
+                                            r="4"
+                                            fill="#7289da"
+                                        />
+                                    {/if}
+                                </svg>
+
+                                {#if hoveredPoint && hoveredPoint.api === 'supercell_cr'}
+                                    <div
+                                        class="tooltip"
+                                        style="left: {(hoverX / SVG_WIDTH) *
+                                            100}%; top: {hoverY}%"
+                                    >
+                                        <span class="time"
+                                            >{formatTime(
+                                                hoveredPoint.timestamp
+                                            )}</span
+                                        >
+                                        <span class="value"
+                                            >{hoveredPoint.latency}ms</span
+                                        >
+                                    </div>
+                                {/if}
+                            {:else}
+                                <div class="no-data">Keine Daten verfügbar</div>
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Website Chart -->
+                <h3 class="charts-game-title">Website</h3>
+                <div class="charts-container single">
                     <div class="chart-box">
                         <div class="chart-header">
                             <h3>Website</h3>
@@ -739,15 +980,41 @@
     .avg-latency {
         font-size: 0.9rem;
         font-weight: 600;
-        color: #5865f2;
+        color: #3ba55c;
     }
 
     .avg-latency.sc {
         color: #22c55e;
     }
 
+    .avg-latency.cr {
+        color: #5865f2;
+    }
+
     .avg-latency.web {
         color: #f59e0b;
+    }
+
+    .charts-game-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.8);
+        margin: 1.5rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .charts-game-title:first-of-type {
+        margin-top: 0;
+    }
+
+    .light .charts-game-title {
+        color: rgba(0, 0, 0, 0.7);
+        border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .charts-container.single {
+        max-width: 600px;
     }
 
     .svg-container {

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { fade, slide } from 'svelte/transition';
+    import type { GameType } from './auth';
 
     // Import banners
     import banner3 from '../assets/Clans/Lost-X-3.png';
@@ -18,10 +19,13 @@
     export let apiBaseUrl: string = '';
     export let theme: 'dark' | 'light' = 'dark';
     export let clansData: Clan[] | null = null;
+    export let gameType: GameType = 'coc';
 
     // Exported stats for parent component
     export let clanCount: number = 0;
     export let playerCount: number = 0;
+
+    $: apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
 
     interface Clan {
         tag: string;
@@ -160,7 +164,7 @@
             if (clansData) {
                 fetchedClanData = clansData;
             } else {
-                const response = await fetch(`${apiBaseUrl}/api/clans`);
+                const response = await fetch(`${apiBaseUrl}${apiPrefix}/clans`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 fetchedClanData = await response.json();
             }
@@ -183,7 +187,7 @@
                     try {
                         const encodedTag = encodeURIComponent(clan.tag);
                         const res = await fetch(
-                            `${apiBaseUrl}/api/clans/${encodedTag}/members`
+                            `${apiBaseUrl}${apiPrefix}/clans/${encodedTag}/members`
                         );
 
                         if (!res.ok) throw new Error(`Failed to load`);

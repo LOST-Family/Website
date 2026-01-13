@@ -22,9 +22,21 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     env_logger::init();
 
-    let upstream_url = env::var("UPSTREAM_API_URL").expect("UPSTREAM_API_URL must be set");
-    let api_token = env::var("BOT_SERVER_API_TOKEN").expect("BOT_SERVER_API_TOKEN must be set");
-    let clash_api_token = env::var("CLASH_API_TOKEN").expect("CLASH_API_TOKEN must be set");
+    // CoC Upstream API (renamed from UPSTREAM_API_URL)
+    let upstream_coc_url =
+        env::var("UPSTREAM_COC_API_URL").expect("UPSTREAM_COC_API_URL must be set");
+    let coc_api_token = env::var("COC_BOT_API_TOKEN").expect("COC_BOT_API_TOKEN must be set");
+
+    // CR Upstream API (new)
+    let upstream_cr_url = env::var("UPSTREAM_CR_API_URL").expect("UPSTREAM_CR_API_URL must be set");
+    let cr_api_token = env::var("CR_BOT_API_TOKEN").expect("CR_BOT_API_TOKEN must be set");
+
+    // Official Supercell API tokens
+    let clash_of_clans_api_token =
+        env::var("CLASH_OF_CLANS_API_TOKEN").expect("CLASH_OF_CLANS_API_TOKEN must be set");
+    let clash_royale_api_token =
+        env::var("CLASH_ROYALE_API_TOKEN").expect("CLASH_ROYALE_API_TOKEN must be set");
+
     let port = env::var("SERVER_PORT")
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
@@ -88,12 +100,20 @@ async fn main() -> std::io::Result<()> {
             highest_role TEXT,
             is_admin BOOLEAN DEFAULT FALSE,
             linked_players TEXT,
+            linked_cr_players TEXT DEFAULT '[]',
             updated_at BIGINT NOT NULL
         )",
     )
     .execute(&pool)
     .await
     .expect("Failed to run migrations (users)");
+
+    // Add linked_cr_players column if it doesn't exist (for existing databases)
+    let _ = sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_cr_players TEXT DEFAULT '[]'",
+    )
+    .execute(&pool)
+    .await;
 
     // Create latency_measurements table if not exists
     sqlx::query(
@@ -120,9 +140,12 @@ async fn main() -> std::io::Result<()> {
 
     let app_state = AppState {
         client,
-        upstream_url,
-        api_token,
-        clash_api_token,
+        upstream_coc_url,
+        coc_api_token,
+        upstream_cr_url,
+        cr_api_token,
+        clash_of_clans_api_token,
+        clash_royale_api_token,
         db_pool: pool,
         oauth_client,
         jwt_secret,
@@ -155,39 +178,75 @@ async fn main() -> std::io::Result<()> {
                 "/api/users/{id}/accounts",
                 web::get().to(get_user_player_accounts),
             )
-            .route("/api/clans", web::get().to(get_clans))
-            .route("/api/clans/{tag}", web::get().to(get_clan_info))
-            .route("/api/clans/{tag}/config", web::get().to(get_clan_config))
-            .route("/api/clans/{tag}/members", web::get().to(get_clan_members))
+            // CoC Routes
+            .route("/api/coc/clans", web::get().to(get_coc_clans))
+            .route("/api/coc/clans/{tag}", web::get().to(get_coc_clan_info))
             .route(
-                "/api/clans/{tag}/kickpoint-reasons",
-                web::get().to(get_clan_kickpoint_reasons),
+                "/api/coc/clans/{tag}/config",
+                web::get().to(get_coc_clan_config),
             )
             .route(
-                "/api/clans/{tag}/war-members",
-                web::get().to(get_clan_war_members),
+                "/api/coc/clans/{tag}/members",
+                web::get().to(get_coc_clan_members),
             )
             .route(
-                "/api/clans/{tag}/raid-members",
-                web::get().to(get_raid_members),
+                "/api/coc/clans/{tag}/kickpoint-reasons",
+                web::get().to(get_coc_clan_kickpoint_reasons),
             )
             .route(
-                "/api/clans/{tag}/cwl-members",
-                web::get().to(get_cwl_members),
-            )
-            .route("/api/players/{tag}", web::get().to(get_player))
-            .route(
-                "/api/players/{tag}/identity",
-                web::get().to(get_player_identity),
+                "/api/coc/clans/{tag}/war-members",
+                web::get().to(get_coc_clan_war_members),
             )
             .route(
-                "/api/players/{tag}/kickpoints",
-                web::get().to(get_player_kickpoints),
+                "/api/coc/clans/{tag}/raid-members",
+                web::get().to(get_coc_raid_members),
             )
             .route(
-                "/api/players/{tag}/kickpoints/details",
-                web::get().to(get_player_kickpoints_details),
+                "/api/coc/clans/{tag}/cwl-members",
+                web::get().to(get_coc_cwl_members),
             )
+            .route("/api/coc/players/{tag}", web::get().to(get_coc_player))
+            .route(
+                "/api/coc/players/{tag}/identity",
+                web::get().to(get_coc_player_identity),
+            )
+            .route(
+                "/api/coc/players/{tag}/kickpoints",
+                web::get().to(get_coc_player_kickpoints),
+            )
+            .route(
+                "/api/coc/players/{tag}/kickpoints/details",
+                web::get().to(get_coc_player_kickpoints_details),
+            )
+            // CR Routes
+            .route("/api/cr/clans", web::get().to(get_cr_clans))
+            .route("/api/cr/clans/{tag}", web::get().to(get_cr_clan_info))
+            .route(
+                "/api/cr/clans/{tag}/config",
+                web::get().to(get_cr_clan_config),
+            )
+            .route(
+                "/api/cr/clans/{tag}/members",
+                web::get().to(get_cr_clan_members),
+            )
+            .route(
+                "/api/cr/clans/{tag}/kickpoint-reasons",
+                web::get().to(get_cr_clan_kickpoint_reasons),
+            )
+            .route("/api/cr/players/{tag}", web::get().to(get_cr_player))
+            .route(
+                "/api/cr/players/{tag}/identity",
+                web::get().to(get_cr_player_identity),
+            )
+            .route(
+                "/api/cr/players/{tag}/kickpoints",
+                web::get().to(get_cr_player_kickpoints),
+            )
+            .route(
+                "/api/cr/players/{tag}/kickpoints/details",
+                web::get().to(get_cr_player_kickpoints_details),
+            )
+            // Common/Legacy Routes
             .route("/api/guild", web::get().to(get_guild_info))
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))

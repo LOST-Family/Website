@@ -38,7 +38,7 @@
         if (!$user) return;
         try {
             if ($user.is_admin) {
-                const response = await fetch(`${apiBaseUrl}/api/clans`);
+                const response = await fetch(`${apiBaseUrl}/api/coc/clans`);
                 if (response.ok) {
                     const clansData = await response.json();
                     userClans = clansData.map((c: any) => ({
@@ -51,8 +51,11 @@
                     credentials: 'include',
                 });
                 if (response.ok) {
-                    const accounts = await response.json();
+                    const data = await response.json();
                     const clansMap = new Map<string, string>();
+                    // Handle new format { coc: [...], cr: [...] }
+                    const accounts =
+                        data.coc || (Array.isArray(data) ? data : []);
                     accounts.forEach((acc: any) => {
                         if (acc.clan) {
                             clansMap.set(acc.clan.tag, acc.clan.name);
@@ -131,7 +134,12 @@
                     </svg>
                 </button>
                 <div class="dropdown-menu">
-                    <a href="/cr/clans" class="dropdown-item">Clans (WIP)</a>
+                    <a
+                        href="/cr/clans"
+                        class="dropdown-item"
+                        on:click|preventDefault={() => navigate('cr/clans')}
+                        >Clans</a
+                    >
                 </div>
             </div>
 
@@ -154,11 +162,11 @@
                     <div class="dropdown-menu">
                         {#each userClans as clan}
                             <a
-                                href="/clan/{clan.tag.replace('#', '')}"
+                                href="/coc/clan/{clan.tag.replace('#', '')}"
                                 class="dropdown-item"
                                 on:click|preventDefault={() =>
                                     navigate(
-                                        `clan/${clan.tag.replace('#', '')}`
+                                        `coc/clan/${clan.tag.replace('#', '')}`
                                     )}
                             >
                                 {clan.name}

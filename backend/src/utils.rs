@@ -1,9 +1,8 @@
-use crate::models::{AppState, ErrorResponse};
-use actix_web::http::StatusCode;
+use crate::models::{AppState, ErrorResponse, GameType};
 use actix_web::HttpResponse;
+use actix_web::http::StatusCode;
 use bytes::Bytes;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use serde_json;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 pub fn format_url(base: &str, path: &str) -> String {
     format!("{}{}", base, path)
@@ -16,6 +15,41 @@ pub fn encode_tag(tag: &str) -> String {
         format!("#{}", tag)
     };
     utf8_percent_encode(&tag, NON_ALPHANUMERIC).to_string()
+}
+
+fn get_cache_prefix(game: GameType) -> &'static str {
+    match game {
+        GameType::ClashOfClans => "coc",
+        GameType::ClashRoyale => "cr",
+    }
+}
+
+fn get_supercell_api_url(game: GameType) -> &'static str {
+    match game {
+        GameType::ClashOfClans => "https://api.clashofclans.com/v1",
+        GameType::ClashRoyale => "https://api.clashroyale.com/v1",
+    }
+}
+
+fn get_upstream_url(data: &AppState, game: GameType) -> &str {
+    match game {
+        GameType::ClashOfClans => &data.upstream_coc_url,
+        GameType::ClashRoyale => &data.upstream_cr_url,
+    }
+}
+
+fn get_upstream_token(data: &AppState, game: GameType) -> &str {
+    match game {
+        GameType::ClashOfClans => &data.coc_api_token,
+        GameType::ClashRoyale => &data.cr_api_token,
+    }
+}
+
+fn get_supercell_token(data: &AppState, game: GameType) -> &str {
+    match game {
+        GameType::ClashOfClans => &data.clash_of_clans_api_token,
+        GameType::ClashRoyale => &data.clash_royale_api_token,
+    }
 }
 
 // Function to filter out specific fields from clan data
@@ -36,11 +70,14 @@ pub fn filter_clan_data(body: Bytes) -> Bytes {
                     // Fix badgeUrl mismatch (singular vs plural)
                     if !obj.contains_key("badgeUrls") {
                         if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                            obj.insert("badgeUrls".to_string(), serde_json::json!({
-                                "small": url,
-                                "medium": url,
-                                "large": url
-                            }));
+                            obj.insert(
+                                "badgeUrls".to_string(),
+                                serde_json::json!({
+                                    "small": url,
+                                    "medium": url,
+                                    "large": url
+                                }),
+                            );
                         }
                     }
 
@@ -54,11 +91,14 @@ pub fn filter_clan_data(body: Bytes) -> Bytes {
             // Fix badgeUrl mismatch (singular vs plural)
             if !obj.contains_key("badgeUrls") {
                 if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                    obj.insert("badgeUrls".to_string(), serde_json::json!({
-                        "small": url,
-                        "medium": url,
-                        "large": url
-                    }));
+                    obj.insert(
+                        "badgeUrls".to_string(),
+                        serde_json::json!({
+                            "small": url,
+                            "medium": url,
+                            "large": url
+                        }),
+                    );
                 }
             }
 
@@ -110,16 +150,21 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             if is_member {
                 // For members: Return count and sum instead of full details
                 if let Some(akp) = obj.get("activeKickpoints").and_then(|v| v.as_array()) {
-                    let sum: i64 = akp.iter().filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64())).sum();
-                    obj.insert("activeKickpointsCount".to_string(), serde_json::json!(akp.len()));
+                    let sum: i64 = akp
+                        .iter()
+                        .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
+                        .sum();
+                    obj.insert(
+                        "activeKickpointsCount".to_string(),
+                        serde_json::json!(akp.len()),
+                    );
                     obj.insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
                 }
                 obj.remove("activeKickpoints");
-                
+
                 // Hide raw IDs for members (privacy), but keep nickname/avatar/points
                 let is_coleader = has_required_role(user_role, "COLEADER");
                 if !is_coleader {
-                    // We keep a flag so the frontend knows they're linked
                     if obj.contains_key("userId") {
                         obj.insert("isLinked".to_string(), serde_json::json!(true));
                     }
@@ -137,7 +182,11 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
 
         if let Some(members) = value.as_array_mut() {
             for member in members {
-                let tag = member.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                let tag = member
+                    .get("tag")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 if let Some(obj) = member.as_object_mut() {
                     if process_obj(obj, &tag) {
                         modified = true;
@@ -145,7 +194,11 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
-            let tag = obj.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            let tag = obj
+                .get("tag")
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
             if process_obj(obj, &tag) {
                 modified = true;
             }
@@ -160,14 +213,21 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
     body
 }
 
-// Public function used by both handlers and background task
-pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, String> {
-    let full_url = format_url(&data.upstream_url, url_path);
+// Update upstream cache (bot server)
+pub async fn update_upstream_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let upstream_url = get_upstream_url(data, game);
+    let token = get_upstream_token(data, game);
+    let full_url = format_url(upstream_url, url_path);
 
     match data
         .client
         .get(&full_url)
-        .header("Authorization", format!("Bearer {}", data.api_token))
+        .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
     {
@@ -180,7 +240,8 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
                 .unwrap()
                 .as_secs() as i64;
 
-            // We use ON CONFLICT to update existing keys
+            let cache_key = format!("{}:upstream:{}", prefix, url_path);
+
             let _ = sqlx::query(
                 "INSERT INTO cache (key, body, status, updated_at) 
                  VALUES ($1, $2, $3, $4)
@@ -189,7 +250,7 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
                     status = EXCLUDED.status, 
                     updated_at = EXCLUDED.updated_at",
             )
-            .bind(url_path)
+            .bind(&cache_key)
             .bind(body.to_vec())
             .bind(status as i32)
             .bind(timestamp)
@@ -202,20 +263,24 @@ pub async fn update_cache(data: &AppState, url_path: &str) -> Result<Bytes, Stri
     }
 }
 
-pub async fn forward_request(data: &AppState, url_path: &str) -> HttpResponse {
-    forward_request_with_filter(data, url_path, None, &[]).await
+pub async fn forward_request(data: &AppState, game: GameType, url_path: &str) -> HttpResponse {
+    forward_request_with_filter(data, game, url_path, None, &[]).await
 }
 
 pub async fn forward_request_with_filter(
     data: &AppState,
+    game: GameType,
     url_path: &str,
     user_role: Option<&str>,
     exempt_tags: &[String],
 ) -> HttpResponse {
-    // 1. serve from cache ONLY
+    let prefix = get_cache_prefix(game);
+    let cache_key = format!("{}:upstream:{}", prefix, url_path);
+
+    // Serve from cache ONLY
     let result =
         sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = $1")
-            .bind(url_path)
+            .bind(&cache_key)
             .fetch_optional(&data.db_pool)
             .await;
 
@@ -233,9 +298,7 @@ pub async fn forward_request_with_filter(
                     || parts[4] == "war-members"
                     || parts[4] == "raid-members"
                     || parts[4] == "cwl-members"))
-                || (parts.len() == 4 && parts[1] == "api" && parts[2] == "players")
-                || (parts.len() == 3 && parts[1] == "players")
-                || (url_path.starts_with("clash:/players/"));
+                || (parts.len() == 4 && parts[1] == "api" && parts[2] == "players");
 
             if is_clan_path && !crate::auth::has_required_role(user_role, "MEMBER") {
                 body = filter_clan_data(body);
@@ -248,12 +311,9 @@ pub async fn forward_request_with_filter(
                 .content_type("application/json")
                 .body(body)
         }
-        Ok(None) => {
-            // Data is not in cache (either not yet refreshed or not supported for proactive caching)
-            HttpResponse::ServiceUnavailable().json(ErrorResponse {
-                error: "Data not yet available in cache. Background refresh is in progress.".into(),
-            })
-        }
+        Ok(None) => HttpResponse::ServiceUnavailable().json(ErrorResponse {
+            error: "Data not yet available in cache. Background refresh is in progress.".into(),
+        }),
         Err(e) => {
             eprintln!("Database error: {}", e);
             HttpResponse::InternalServerError().json(ErrorResponse {
@@ -263,13 +323,21 @@ pub async fn forward_request_with_filter(
     }
 }
 
-pub async fn update_clash_cache(data: &AppState, url_path: &str) -> Result<Bytes, String> {
-    let full_url = format!("https://api.clashofclans.com/v1{}", url_path);
+// Update Supercell API cache
+pub async fn update_supercell_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let api_url = get_supercell_api_url(game);
+    let token = get_supercell_token(data, game);
+    let full_url = format!("{}{}", api_url, url_path);
 
     match data
         .client
         .get(&full_url)
-        .header("Authorization", format!("Bearer {}", data.clash_api_token))
+        .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
     {
@@ -282,9 +350,8 @@ pub async fn update_clash_cache(data: &AppState, url_path: &str) -> Result<Bytes
                 .unwrap()
                 .as_secs() as i64;
 
-            let cache_key = format!("clash:{}", url_path);
+            let cache_key = format!("{}:supercell:{}", prefix, url_path);
 
-            // We use ON CONFLICT to update existing keys
             let _ = sqlx::query(
                 "INSERT INTO cache (key, body, status, updated_at) 
                  VALUES ($1, $2, $3, $4)

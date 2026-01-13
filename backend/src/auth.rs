@@ -39,6 +39,8 @@ struct UserMetadata {
     nickname: Option<String>,
     #[serde(rename = "linkedPlayers")]
     linked_players: Vec<String>,
+    #[serde(rename = "linkedCrPlayers", default)]
+    linked_cr_players: Vec<String>,
     #[serde(rename = "highestRole")]
     highest_role: Option<String>,
 }
@@ -119,10 +121,10 @@ pub async fn discord_callback(
     // Fetch extra metadata from internal API
     let metadata: Option<UserMetadata> = match client
         .get(format!(
-            "http://45.81.234.14:8070/api/users/{}",
-            user_info.id
+            "{}/api/users/{}",
+            data.upstream_coc_url, user_info.id
         ))
-        .header("Authorization", format!("Bearer {}", data.api_token))
+        .header("Authorization", format!("Bearer {}", data.coc_api_token))
         .send()
         .await
     {
@@ -133,6 +135,7 @@ pub async fn discord_callback(
                     admin: false,
                     nickname: None,
                     linked_players: vec![],
+                    linked_cr_players: vec![],
                     highest_role: Some("NOTINCLAN".to_string()),
                 })
             } else if !res.status().is_success() {
@@ -165,6 +168,10 @@ pub async fn discord_callback(
         .as_ref()
         .map(|m| serde_json::to_string(&m.linked_players).unwrap_or_else(|_| "[]".to_string()))
         .unwrap_or_else(|| "[]".to_string());
+    let linked_cr_players_json = metadata
+        .as_ref()
+        .map(|m| serde_json::to_string(&m.linked_cr_players).unwrap_or_else(|_| "[]".to_string()))
+        .unwrap_or_else(|| "[]".to_string());
 
     // Construct avatar URL
     let avatar_url = match &user_info.avatar {
@@ -180,8 +187,8 @@ pub async fn discord_callback(
 
     // Save user to DB
     let db_res = sqlx::query(
-        "INSERT INTO users (discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        "INSERT INTO users (discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players, linked_cr_players, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT(discord_id) DO UPDATE SET
             username = EXCLUDED.username,
             global_name = EXCLUDED.global_name,
@@ -190,6 +197,7 @@ pub async fn discord_callback(
             highest_role = EXCLUDED.highest_role,
             is_admin = EXCLUDED.is_admin,
             linked_players = EXCLUDED.linked_players,
+            linked_cr_players = EXCLUDED.linked_cr_players,
             updated_at = EXCLUDED.updated_at",
     )
     .bind(&user_info.id)
@@ -200,6 +208,7 @@ pub async fn discord_callback(
     .bind(&highest_role)
     .bind(is_admin)
     .bind(&linked_players_json)
+    .bind(&linked_cr_players_json)
     .bind(Utc::now().timestamp())
     .execute(&data.db_pool)
     .await;
@@ -243,8 +252,8 @@ pub async fn discord_callback(
 }
 
 pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl Responder {
-    let user_db = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool, String)>(
-        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players FROM users WHERE discord_id = $1",
+    let user_db = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, bool, String, String)>(
+        "SELECT discord_id, username, global_name, nickname, avatar, highest_role, is_admin, linked_players, COALESCE(linked_cr_players, '[]') FROM users WHERE discord_id = $1",
     )
     .bind(&user.claims.sub)
     .fetch_one(&data.db_pool)
@@ -253,6 +262,7 @@ pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl 
     match user_db {
         Ok(u) => {
             let linked_players: Vec<String> = serde_json::from_str(&u.7).unwrap_or_default();
+            let linked_cr_players: Vec<String> = serde_json::from_str(&u.8).unwrap_or_default();
             HttpResponse::Ok().json(serde_json::json!({
                 "discord_id": u.0,
                 "username": u.1,
@@ -262,6 +272,7 @@ pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl 
                 "highest_role": u.5,
                 "is_admin": u.6,
                 "linked_players": linked_players,
+                "linked_cr_players": linked_cr_players,
             }))
         }
         Err(_) => HttpResponse::NotFound().finish(),
@@ -284,6 +295,7 @@ use std::future::ready;
 pub struct AuthenticatedUser {
     pub claims: Claims,
     pub linked_players: Vec<String>,
+    pub linked_cr_players: Vec<String>,
 }
 
 impl FromRequest for AuthenticatedUser {
@@ -299,7 +311,9 @@ impl FromRequest for AuthenticatedUser {
         let token = match req.cookie("auth_token") {
             Some(c) => c.value().to_string(),
             None => {
-                return Box::pin(ready(Err(actix_web::error::ErrorUnauthorized("No auth token"))));
+                return Box::pin(ready(Err(actix_web::error::ErrorUnauthorized(
+                    "No auth token",
+                ))));
             }
         };
 
@@ -311,16 +325,21 @@ impl FromRequest for AuthenticatedUser {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
-                    let user_db = sqlx::query_as::<_, (String, Option<String>, bool)>(
-                        "SELECT linked_players, highest_role, is_admin FROM users WHERE discord_id = $1",
+                    let user_db = sqlx::query_as::<_, (String, String, Option<String>, bool)>(
+                        "SELECT linked_players, COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)
                     .await;
 
-                    let (linked_players, db_role, is_admin) = match user_db {
-                        Ok((lp_json, role, admin)) => (serde_json::from_str(&lp_json).unwrap_or_default(), role, admin),
-                        Err(_) => (vec![], None, false),
+                    let (linked_players, linked_cr_players, db_role, is_admin) = match user_db {
+                        Ok((lp_json, cr_json, role, admin)) => (
+                            serde_json::from_str(&lp_json).unwrap_or_default(),
+                            serde_json::from_str(&cr_json).unwrap_or_default(),
+                            role,
+                            admin,
+                        ),
+                        Err(_) => (vec![], vec![], None, false),
                     };
 
                     let mut claims = c.claims;
@@ -333,6 +352,7 @@ impl FromRequest for AuthenticatedUser {
                     Ok(AuthenticatedUser {
                         claims,
                         linked_players,
+                        linked_cr_players,
                     })
                 }
                 Err(_) => Err(actix_web::error::ErrorUnauthorized("Invalid token")),
@@ -368,16 +388,21 @@ impl FromRequest for OptionalAuthenticatedUser {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
-                    let user_db = sqlx::query_as::<_, (String, Option<String>, bool)>(
-                        "SELECT linked_players, highest_role, is_admin FROM users WHERE discord_id = $1",
+                    let user_db = sqlx::query_as::<_, (String, String, Option<String>, bool)>(
+                        "SELECT linked_players, COALESCE(linked_cr_players, '[]'), highest_role, is_admin FROM users WHERE discord_id = $1",
                     )
                     .bind(&user_id)
                     .fetch_one(&data.db_pool)
                     .await;
 
-                    let (linked_players, db_role, is_admin) = match user_db {
-                        Ok((lp_json, role, admin)) => (serde_json::from_str(&lp_json).unwrap_or_default(), role, admin),
-                        Err(_) => (vec![], None, false),
+                    let (linked_players, linked_cr_players, db_role, is_admin) = match user_db {
+                        Ok((lp_json, cr_json, role, admin)) => (
+                            serde_json::from_str(&lp_json).unwrap_or_default(),
+                            serde_json::from_str(&cr_json).unwrap_or_default(),
+                            role,
+                            admin,
+                        ),
+                        Err(_) => (vec![], vec![], None, false),
                     };
 
                     let mut claims = c.claims;
@@ -391,6 +416,7 @@ impl FromRequest for OptionalAuthenticatedUser {
                         user: Some(AuthenticatedUser {
                             claims,
                             linked_players,
+                            linked_cr_players,
                         }),
                     })
                 }
