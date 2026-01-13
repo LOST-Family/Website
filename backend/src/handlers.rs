@@ -6,6 +6,7 @@ use crate::utils::{
 };
 use actix_web::{HttpResponse, Responder, web};
 use bytes::Bytes;
+use log::error;
 
 // ============================================================================
 // CLASH OF CLANS HANDLERS
@@ -1208,7 +1209,7 @@ pub async fn get_latency_history(
             HttpResponse::Ok().json(data)
         }
         Err(e) => {
-            eprintln!("Database error fetching latency: {:?}", e);
+            error!("Database error fetching latency: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }

@@ -27,7 +27,7 @@ services:
             # Cache cargo registry (avoids re-downloading crates)
             - cargo_registry:/usr/local/cargo/registry
         environment:
-            - RUST_LOG=debug
+            - RUST_LOG=info,sqlx=warn,actix_web=warn
             - SERVER_PORT=8888
             - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-website}
             - UPSTREAM_COC_API_URL=${UPSTREAM_COC_API_URL}

@@ -1,5 +1,6 @@
 use crate::models::{AppState, GameType};
 use crate::utils::{update_supercell_cache, update_upstream_cache};
+use log::{debug, error, info};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::interval;
@@ -49,7 +50,7 @@ async fn measure_and_save_latency(data: &AppState) {
         .unwrap()
         .as_secs() as i64;
 
-    println!("Background: Measuring latency...");
+    debug!("Background: Measuring latency...");
 
     // 1. Measure CoC Upstream API
     let start = std::time::Instant::now();
@@ -196,7 +197,7 @@ async fn refresh_clans(data: &AppState, game: GameType) {
         GameType::ClashRoyale => "CR",
     };
 
-    println!("Background Refresh [{}]: Starting...", game_name);
+    info!("Background Refresh [{}]: Starting...", game_name);
 
     // 1. Fetch & Cache Guild Info (only for CoC which has the main guild)
     if game == GameType::ClashOfClans {
@@ -208,7 +209,7 @@ async fn refresh_clans(data: &AppState, game: GameType) {
     match update_upstream_cache(data, game, clans_url).await {
         Ok(body_bytes) => {
             if let Ok(clans) = serde_json::from_slice::<Vec<Clan>>(&body_bytes) {
-                println!(
+                info!(
                     "Background Refresh [{}]: Found {} clans. Updating detailed data...",
                     game_name,
                     clans.len()
@@ -222,15 +223,13 @@ async fn refresh_clans(data: &AppState, game: GameType) {
 
                     let encoded_tag = crate::utils::encode_tag(&clan.tag);
 
-                    print!(
-                        "\rBackground Refresh [{}]: Processing clan {}/{} ({})      ",
+                    debug!(
+                        "Background Refresh [{}]: Processing clan {}/{} ({})",
                         game_name,
                         i + 1,
                         clans.len(),
                         clan.tag
                     );
-                    use std::io::{Write, stdout};
-                    let _ = stdout().flush();
 
                     // Upstream endpoints
                     let upstream_endpoints = if game == GameType::ClashOfClans {
@@ -274,7 +273,7 @@ async fn refresh_clans(data: &AppState, game: GameType) {
 
                     while let Some(res) = set.join_next().await {
                         if let Ok((endpoint, Err(e))) = res {
-                            eprintln!("\n    Error refreshing {}: {}", endpoint, e);
+                            error!("Error refreshing {}: {}", endpoint, e);
                         }
                     }
 
@@ -384,25 +383,25 @@ async fn refresh_clans(data: &AppState, game: GameType) {
                         }
                     }
                 }
-                println!(
-                    "\nBackground Refresh [{}]: All clan and member data updated.",
+                info!(
+                    "Background Refresh [{}]: All clan and member data updated.",
                     game_name
                 );
             } else {
-                eprintln!(
-                    "\nBackground Refresh [{}] Error: Failed to deserialize clans list response.",
+                error!(
+                    "Background Refresh [{}] Error: Failed to deserialize clans list response.",
                     game_name
                 );
             }
         }
-        Err(e) => eprintln!(
+        Err(e) => error!(
             "Background Refresh [{}] Error: Failed to fetch clans list: {}",
             game_name, e
         ),
     }
 
-    println!(
-        "\nBackground Refresh [{}]: Cycle complete. Next run in 10 minutes.",
+    info!(
+        "Background Refresh [{}]: Cycle complete. Next run in 10 minutes.",
         game_name
     );
 }

@@ -21,6 +21,7 @@ services:
         depends_on:
             - db
         environment:
+            RUST_LOG: info,sqlx=warn,actix_web=warn
             DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-website}
             UPSTREAM_COC_API_URL: ${UPSTREAM_COC_API_URL}
             COC_BOT_API_TOKEN: ${COC_BOT_API_TOKEN}

@@ -6,6 +6,7 @@ use actix_web::{
 };
 use chrono::{Duration as ChronoDuration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
+use log::error;
 use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse, reqwest::async_http_client};
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +89,7 @@ pub async fn discord_callback(
     {
         Ok(token) => token,
         Err(e) => {
-            eprintln!("Token exchange error: {:?}", e);
+            error!("Token exchange error: {:?}", e);
             return HttpResponse::BadRequest().json(ErrorResponse {
                 error: "Failed to exchange token".into(),
             });
@@ -108,12 +109,12 @@ pub async fn discord_callback(
         Ok(res) => match res.json().await {
             Ok(user) => user,
             Err(e) => {
-                eprintln!("User info parse error: {:?}", e);
+                error!("User info parse error: {:?}", e);
                 return HttpResponse::InternalServerError().finish();
             }
         },
         Err(e) => {
-            eprintln!("User info fetch error: {:?}", e);
+            error!("User info fetch error: {:?}", e);
             return HttpResponse::InternalServerError().finish();
         }
     };
@@ -139,7 +140,7 @@ pub async fn discord_callback(
                     highest_role: Some("NOTINCLAN".to_string()),
                 })
             } else if !res.status().is_success() {
-                eprintln!(
+                error!(
                     "Metadata fetch failed for {}: {}",
                     user_info.id,
                     res.status()
@@ -150,7 +151,7 @@ pub async fn discord_callback(
             }
         }
         Err(e) => {
-            eprintln!("Metadata request error: {:?}", e);
+            error!("Metadata request error: {:?}", e);
             None
         }
     };
@@ -214,7 +215,7 @@ pub async fn discord_callback(
     .await;
 
     if let Err(e) = db_res {
-        eprintln!("Database error saving user: {:?}", e);
+        error!("Database error saving user: {:?}", e);
     }
 
     // Create JWT

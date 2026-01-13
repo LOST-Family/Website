@@ -2,6 +2,7 @@ use crate::models::{AppState, ErrorResponse, GameType};
 use actix_web::HttpResponse;
 use actix_web::http::StatusCode;
 use bytes::Bytes;
+use log::error;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 pub fn format_url(base: &str, path: &str) -> String {
@@ -315,7 +316,7 @@ pub async fn forward_request_with_filter(
             error: "Data not yet available in cache. Background refresh is in progress.".into(),
         }),
         Err(e) => {
-            eprintln!("Database error: {}", e);
+            error!("Database error: {}", e);
             HttpResponse::InternalServerError().json(ErrorResponse {
                 error: "Internal Database Error".into(),
             })
