@@ -78,6 +78,9 @@
     let playerDetailsLoading = false;
     let playerOtherAccounts: any[] = [];
 
+    $: viewerIsCoLeader = $user && members.some(m => ($user.linked_players || []).includes(m.tag) && (m.role === 'coLeader' || m.role === 'leader'));
+    $: hasPrivilegedAccess = $user?.is_admin || viewerIsCoLeader;
+
     const roleOrder: Record<string, number> = {
         leader: 1,
         coLeader: 2,
@@ -227,6 +230,9 @@
     $: sortedByTrophies = [...members]
         .sort((a, b) => (b.trophies || 0) - (a.trophies || 0))
         .slice(0, 3);
+    $: sortedByStars = [...members]
+        .sort((a, b) => (b.warStars || 0) - (a.warStars || 0))
+        .slice(0, 3);
 
     $: filteredMembers = members.filter((m) => {
         const nameMatch =
@@ -354,16 +360,16 @@
                                         <svg
                                             viewBox="0 0 24 24"
                                             fill="currentColor"
-                                            class="t-icon trophies"
+                                            class="t-icon stars"
                                         >
                                             <path
-                                                d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
+                                                d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
                                             />
                                         </svg>
-                                        <span>Trophäen</span>
+                                        <span>Top Sterne</span>
                                     </div>
                                     <div class="mini-rank-list">
-                                        {#each sortedByTrophies as player, i}
+                                        {#each sortedByStars as player, i}
                                             <button
                                                 class="rank-item"
                                                 on:click={() =>
@@ -376,7 +382,7 @@
                                                     >{player.name}</span
                                                 >
                                                 <span class="rank-val"
-                                                    >{player.trophies}</span
+                                                    >{player.warStars || 0}</span
                                                 >
                                             </button>
                                         {/each}
@@ -583,23 +589,6 @@
                                                         '???'}</span
                                                 >
                                             </div>
-                                            <div
-                                                class="m-trophies-badge m-trophies-small"
-                                                title="Trophäen"
-                                            >
-                                                <svg
-                                                    viewBox="0 0 24 24"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
-                                                    />
-                                                </svg>
-                                                <span
-                                                    >{member.trophies ||
-                                                        0}</span
-                                                >
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -638,20 +627,6 @@
                                         </div>
                                     {/if}
                                     <div class="footer-stats-row">
-                                        <div
-                                            class="m-trophies-mini"
-                                            title="Trophäen"
-                                        >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="currentColor"
-                                            >
-                                                <path
-                                                    d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v3c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 10V7h2v3c0 1.1-.9 2-2 2zm14 0c-1.1 0-2-.9-2-2V7h2v3z"
-                                                />
-                                            </svg>
-                                            {member.trophies}
-                                        </div>
                                         <div class="donation-stats-mini">
                                             <span>▲ {member.donations}</span>
                                             <span
@@ -704,7 +679,7 @@
     <!-- Player Details Overlay -->
     {#if selectedPlayer}
         <div
-            class="overlay"
+            class="modal-backdrop"
             on:click|self={closePlayerDetails}
             on:keydown={(e) => e.key === 'Escape' && closePlayerDetails()}
             role="button"
@@ -712,15 +687,12 @@
             transition:fade={{ duration: 200 }}
         >
             <div
-                class="drawer"
-                transition:slide={{
-                    axis: 'x',
-                    duration: 400,
-                    easing: quintOut,
-                }}
+                class="player-modal coc-modal"
+                class:light={theme === 'light'}
+                transition:scale={{ duration: 300, start: 0.95, easing: quintOut }}
             >
                 <button 
-                    class="close-btn" 
+                    class="close-modal" 
                     on:click={closePlayerDetails}
                     aria-label="Schließen"
                 >
@@ -728,7 +700,7 @@
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        stroke-width="2"
+                        stroke-width="2.5"
                     >
                         <line x1="18" y1="6" x2="6" y2="18" /><line
                             x1="6"
@@ -740,211 +712,159 @@
                 </button>
 
                 {#if playerDetailsLoading}
-                    <div class="drawer-loading">
+                    <div class="modal-loading">
                         <div class="spinner"></div>
+                        <p>Lade Spielerdetails...</p>
                     </div>
                 {:else}
-                    <div class="drawer-content">
-                        <div class="player-hero">
-                            <div class="p-hero-top">
-                                {#if selectedPlayer?.leagueTier || selectedPlayer?.league}
-                                    <img
-                                        src={selectedPlayer?.leagueTier?.iconUrls
-                                            .large ||
-                                            selectedPlayer?.league?.iconUrls
-                                                .large ||
-                                            selectedPlayer?.league?.iconUrls
-                                                .medium}
-                                        alt={selectedPlayer?.leagueTier?.name ||
-                                            selectedPlayer?.league?.name}
-                                        class="p-league-img"
-                                    />
-                                {/if}
-                                <div class="p-title">
-                                    <h2>{selectedPlayer?.name}</h2>
-                                    <span class="p-tag"
-                                        >{selectedPlayer?.tag}</span
-                                    >
+                    <div class="modal-scroll-area">
+                        <div class="modal-header">
+                            <div class="player-header-info">
+                                <div class="player-avatar-large">
+                                    {#if selectedPlayer?.leagueTier || selectedPlayer?.league}
+                                        <img
+                                            src={selectedPlayer?.leagueTier?.iconUrls.large ||
+                                                selectedPlayer?.league?.iconUrls.large ||
+                                                selectedPlayer?.league?.iconUrls.medium}
+                                            alt={selectedPlayer?.leagueTier?.name ||
+                                                selectedPlayer?.league?.name}
+                                            class="p-league-img"
+                                        />
+                                    {/if}
                                 </div>
-                            </div>
-                            <div
-                                class="p-role-badge"
-                                style="background: {theme === 'light'
-                                    ? 'rgba(88, 101, 242, 0.1)'
-                                    : 'rgba(88, 101, 242, 0.2)'}"
-                            >
-                                {getRoleDisplay(selectedPlayer?.role || '')}
+                                <div class="player-main-info">
+                                    <h2>{selectedPlayer?.name}</h2>
+                                    <p class="player-tag">{selectedPlayer?.tag}</p>
+                                    <div class="p-header-actions">
+                                        <div class="p-role-badge">
+                                            {getRoleDisplay(selectedPlayer?.role || '')}
+                                        </div>
+                                        {#if selectedPlayer?.userId && $user?.is_admin}
+                                            <button
+                                                class="view-profile-btn header-btn"
+                                                on:click={() => dispatch('navigate', `profile/${selectedPlayer?.userId}`)}
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                                                </svg>
+                                                Profil
+                                            </button>
+                                        {/if}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {#if selectedPlayer?.userId || selectedPlayer?.isLinked}
-                            <section class="discord-profile">
-                                <div class="d-header">
-                                    <div class="d-avatar-box">
-                                        {#if selectedPlayer?.avatar}
-                                            <img
-                                                src={selectedPlayer.avatar}
-                                                alt="Discord Avatar"
-                                            />
-                                        {:else}
-                                            <div class="d-placeholder">
-                                                {(
-                                                    selectedPlayer?.nickname ||
-                                                    selectedPlayer?.name ||
-                                                    'U'
-                                                )
-                                                    .charAt(0)
-                                                    .toUpperCase()}
-                                            </div>
-                                        {/if}
-                                    </div>
-                                    <div class="d-info">
-                                        <div class="d-name">
-                                            {selectedPlayer?.nickname ||
-                                                selectedPlayer?.global_name ||
-                                                selectedPlayer?.username ||
-                                                'Unbekannt'}
+                        <div class="modal-body">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <span class="stat-label">Rathaus</span>
+                                    <span class="stat-value">Level {selectedPlayer?.townHallLevel}</span>
+                                </div>
+                                <div class="stat-card">
+                                    <span class="stat-label">Erfahrung</span>
+                                    <span class="stat-value">Lvl {selectedPlayer?.expLevel}</span>
+                                </div>
+                                <div class="stat-card">
+                                    <span class="stat-label">Trophäen</span>
+                                    <span class="stat-value">{selectedPlayer?.trophies}</span>
+                                </div>
+                                <div class="stat-card">
+                                    <span class="stat-label">Kriegssterne</span>
+                                    <span class="stat-value">{selectedPlayer?.warStars || 0}</span>
+                                </div>
+                            </div>
+
+                            <div class="donations-section">
+                                <span class="stat-label">Spenden</span>
+                                <div class="stat-value">▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}</div>
+                            </div>
+
+                            {#if selectedPlayer?.userId || selectedPlayer?.isLinked}
+                                <div class="modal-section discord-section">
+                                    <h4>Discord</h4>
+                                    <div class="discord-info">
+                                        <div class="d-avatar-box">
+                                            {#if selectedPlayer?.avatar}
+                                                <img src={selectedPlayer.avatar} alt="Discord Avatar" class="discord-avatar" />
+                                            {:else}
+                                                <div class="d-placeholder">
+                                                    {(selectedPlayer?.nickname || selectedPlayer?.name || 'U').charAt(0).toUpperCase()}
+                                                </div>
+                                            {/if}
                                         </div>
-                                        <div class="d-status">Verknüpft</div>
+                                        <div class="d-info">
+                                            <div class="discord-name">
+                                                {selectedPlayer?.nickname || selectedPlayer?.global_name || selectedPlayer?.username || 'Unbekannt'}
+                                            </div>
+                                            <div class="d-status">Verknüpft</div>
+                                        </div>
                                     </div>
-                                    {#if $user?.is_admin}
-                                        <button
-                                            class="view-profile-btn"
-                                            on:click={() =>
-                                                dispatch(
-                                                    'navigate',
-                                                    `profile/${selectedPlayer?.userId}`
-                                                )}
-                                        >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2.5"
-                                            >
-                                                <path
-                                                    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
-                                                />
-                                            </svg>
-                                            Profil ansehen
-                                        </button>
+                                </div>
+                            {/if}
+
+                            {#if selectedPlayer?.totalKickpoints !== undefined}
+                                <div class="modal-section kickpoints-section">
+                                    <h4>Kickpunkte</h4>
+                                    <div class="kp-summary-card">
+                                        <div class="kp-stat">
+                                            <span class="stat-label">Aktuell</span>
+                                            <span class="stat-value">{selectedPlayer?.activeKickpointsSum ?? (selectedPlayer?.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)}</span>
+                                        </div>
+                                        <div class="kp-stat">
+                                            <span class="stat-label">Gesamt</span>
+                                            <span class="stat-value">{selectedPlayer?.totalKickpoints}</span>
+                                        </div>
+                                    </div>
+
+                                    {#if hasPrivilegedAccess && selectedPlayer?.activeKickpoints && selectedPlayer?.activeKickpoints.length > 0}
+                                        <div class="kp-details-list">
+                                            {#each selectedPlayer.activeKickpoints as kp}
+                                                <div class="kp-detail-item">
+                                                    <div class="kp-detail-header">
+                                                        <span class="kp-amount">+{kp.amount}</span>
+                                                        <span class="kp-date">
+                                                            {new Date(kp.date).toLocaleDateString('de-DE')}
+                                                        </span>
+                                                    </div>
+                                                    {#if kp.reason}
+                                                        <div class="kp-reason">{kp.reason}</div>
+                                                    {/if}
+                                                    {#if kp.description}
+                                                        <div class="kp-desc">{kp.description}</div>
+                                                    {/if}
+                                                </div>
+                                            {/each}
+                                        </div>
                                     {/if}
                                 </div>
-                            </section>
-                        {/if}
+                            {/if}
 
-                        <section class="detail-section">
-                            <h3>Spiel-Statistiken</h3>
-                            <div class="stat-list">
-                                <div class="s-item">
-                                    <span class="s-label">Rathaus</span>
-                                    <span class="s-value"
-                                        >Level {selectedPlayer?.townHallLevel}</span
-                                    >
-                                </div>
-                                <div class="s-item">
-                                    <span class="s-label">Erfahrung</span>
-                                    <span class="s-value"
-                                        >Lvl {selectedPlayer?.expLevel}</span
-                                    >
-                                </div>
-                                <div class="s-item">
-                                    <span class="s-label">Trophäen</span>
-                                    <span class="s-value"
-                                        >{selectedPlayer?.trophies}</span
-                                    >
-                                </div>
-                                <div class="s-item">
-                                    <span class="s-label">Spenden</span>
-                                    <span class="s-value"
-                                        >▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}</span
-                                    >
-                                </div>
-                                {#if selectedPlayer?.totalKickpoints !== undefined}
-                                    <div class="s-item highlighted">
-                                        <span class="s-label">Kickpunkte</span>
-                                        <span class="s-value"
-                                            >{selectedPlayer?.activeKickpointsSum ??
-                                                (
-                                                    selectedPlayer?.activeKickpoints ||
-                                                    []
-                                                ).reduce(
-                                                    (a, b) =>
-                                                        a + (b.amount || 0),
-                                                    0
-                                                )} (Gesamt: {selectedPlayer?.totalKickpoints})</span
-                                        >
+                            {#if playerOtherAccounts.length > 0}
+                                <div class="modal-section accounts-section">
+                                    <h4>Weitere Accounts ({playerOtherAccounts.length})</h4>
+                                    <div class="other-accounts">
+                                        {#each playerOtherAccounts as acc}
+                                            <button
+                                                class="acc-mini-card"
+                                                on:click={() => selectPlayer(acc)}
+                                            >
+                                                <img
+                                                    src={acc.clan?.badgeUrls?.small || ''}
+                                                    alt=""
+                                                    class="acc-badge"
+                                                />
+                                                <div class="acc-info">
+                                                    <div class="acc-name">{acc.nameDB}</div>
+                                                    <div class="acc-clan">{acc.clan?.name || 'Kein Clan'}</div>
+                                                </div>
+                                                <div class="acc-tag">{acc.tag}</div>
+                                            </button>
+                                        {/each}
                                     </div>
-                                {/if}
-                            </div>
-                        </section>
-
-                        {#if selectedPlayer?.activeKickpoints && selectedPlayer?.activeKickpoints.length > 0}
-                            <section class="detail-section">
-                                <h3>Kickpunkt Details</h3>
-                                <div class="kp-list">
-                                    {#each selectedPlayer.activeKickpoints as kp}
-                                        <div class="kp-detail-item">
-                                            <div class="kp-detail-header">
-                                                <span class="kp-amount"
-                                                    >+{kp.amount}</span
-                                                >
-                                                <span class="kp-date"
-                                                    >{new Date(
-                                                        kp.date
-                                                    ).toLocaleDateString(
-                                                        'de-DE'
-                                                    )}</span
-                                                >
-                                            </div>
-                                            {#if kp.reason}
-                                                <div class="kp-reason">
-                                                    {kp.reason}
-                                                </div>
-                                            {/if}
-                                            {#if kp.description}
-                                                <div class="kp-desc">
-                                                    {kp.description}
-                                                </div>
-                                            {/if}
-                                        </div>
-                                    {/each}
                                 </div>
-                            </section>
-                        {/if}
-
-                        {#if playerOtherAccounts.length > 0}
-                            <section class="detail-section">
-                                <h3>
-                                    Weitere Accounts ({playerOtherAccounts.length})
-                                </h3>
-                                <div class="other-accounts">
-                                    {#each playerOtherAccounts as acc}
-                                        <button
-                                            class="acc-mini-card"
-                                            on:click={() => selectPlayer(acc)}
-                                        >
-                                            <img
-                                                src={acc.clan?.badgeUrls
-                                                    ?.small || ''}
-                                                alt=""
-                                                class="acc-badge"
-                                            />
-                                            <div class="acc-info">
-                                                <div class="acc-name">
-                                                    {acc.nameDB}
-                                                </div>
-                                                <div class="acc-clan">
-                                                    {acc.clan?.name ||
-                                                        'Kein Clan'}
-                                                </div>
-                                            </div>
-                                            <div class="acc-tag">{acc.tag}</div>
-                                        </button>
-                                    {/each}
-                                </div>
-                            </section>
-                        {/if}
+                            {/if}
+                        </div>
                     </div>
                 {/if}
             </div>
@@ -1232,6 +1152,9 @@
     }
     .trophies {
         color: #ffcc00;
+    }
+    .stars {
+        color: #ff9900;
     }
     .donation {
         color: #00ff88;
@@ -1751,105 +1674,284 @@
         width: 18px;
     }
 
-    /* Drawer / Overlay Styles */
-    .overlay {
+    /* Modal / Overlay Styles */
+    .modal-backdrop {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(8px);
-        z-index: 1000;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        z-index: 2000;
         display: flex;
-        justify-content: flex-end;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
     }
 
-    .drawer {
+    .player-modal {
         width: 100%;
-        max-width: 550px;
-        height: 100%;
-        background: var(--bg-dark);
-        border-left: 1px solid var(--border-dark);
+        max-width: 600px;
+        max-height: 90vh;
+        background: #12121e;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 32px;
         position: relative;
-        padding: 4rem 2.5rem;
-        overflow-y: auto;
-        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
     }
 
-    .light .drawer {
-        background: var(--bg-light);
-        border-left-color: var(--border-light);
+    .player-modal.light {
+        background: #ffffff;
+        border-color: rgba(0, 0, 0, 0.1);
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
     }
 
-    .close-btn {
+    .close-modal {
         position: absolute;
         top: 1.5rem;
         right: 1.5rem;
         background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--border-dark);
+        border: none;
         color: #fff;
-        width: 44px;
-        height: 44px;
+        width: 40px;
+        height: 40px;
         border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s;
+        z-index: 10;
     }
 
-    .light .close-btn {
+    .player-modal.light .close-modal {
         background: rgba(0, 0, 0, 0.05);
-        border-color: var(--border-light);
         color: #1a1a2e;
     }
 
-    .close-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
+    .close-modal:hover {
+        background: rgba(255, 255, 255, 0.15);
         transform: rotate(90deg);
     }
 
-    /* Player Detail Content */
-    .player-hero {
-        margin-bottom: 3rem;
+    .modal-scroll-area {
+        overflow-y: auto;
+        flex: 1;
+        padding: 3rem;
+        scrollbar-width: none;
     }
 
-    .p-hero-top {
+    .modal-scroll-area::-webkit-scrollbar {
+        display: none;
+    }
+
+    .modal-header {
+        margin-bottom: 2.5rem;
+    }
+
+    .player-header-info {
         display: flex;
         align-items: center;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
+        gap: 2rem;
     }
 
-    .p-league-img {
-        width: 80px;
-        height: 80px;
+    .player-avatar-large {
+        width: 100px;
+        height: 100px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
     }
 
-    .p-title h2 {
-        font-size: 2.5rem;
+    .player-modal.light .player-avatar-large {
+        background: rgba(0, 0, 0, 0.03);
+    }
+
+    .player-avatar-large img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .player-main-info h2 {
+        font-size: 2.2rem;
         font-weight: 900;
-        margin: 0;
-        line-height: 1;
+        margin: 0 0 0.25rem 0;
+        letter-spacing: -0.02em;
     }
 
-    .p-tag {
+    .player-tag {
         font-family: 'JetBrains Mono', monospace;
         color: var(--text-dim);
         font-size: 1.1rem;
+        margin: 0 0 0.75rem 0;
+        opacity: 0.6;
+    }
+
+    .p-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .view-profile-btn.header-btn {
+        background: var(--accent-color);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: all 0.2s;
+    }
+
+    .view-profile-btn.header-btn:hover {
+        background: var(--accent-hover);
+        transform: translateY(-2px);
     }
 
     .p-role-badge {
         display: inline-block;
-        padding: 6px 16px;
-        border-radius: 10px;
+        padding: 4px 12px;
+        background: rgba(88, 101, 242, 0.1);
+        color: #5865f2;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .stat-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .player-modal.light .stat-card {
+        background: #f8fafc;
+        border-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .kp-summary-card {
+        background: rgba(244, 63, 94, 0.08);
+        border: 1px solid rgba(244, 63, 94, 0.15);
+        border-radius: 20px;
+        padding: 1.5rem;
+        display: flex;
+        gap: 3rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .player-modal.light .kp-summary-card {
+        background: rgba(244, 63, 94, 0.05);
+    }
+
+    .kp-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .kp-stat .stat-value {
+        color: #f43f5e;
+        font-size: 1.5rem;
+    }
+
+    .kp-details-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--accent-color);
+        color: var(--text-dim);
     }
 
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 800;
+    }
+
+    .donations-section {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 20px;
+        padding: 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .player-modal.light .donations-section {
+        background: #f8fafc;
+    }
+
+    .modal-section h4 {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
+        margin: 0 0 1rem 0;
+    }
+
+    .discord-info {
+        background: #5865f2;
+        border-radius: 24px;
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        color: white;
+    }
+
+    .discord-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .discord-name {
+        font-size: 1.2rem;
+        font-weight: 800;
+    }
+
+    .d-status {
+        font-size: 0.8rem;
+        opacity: 0.8;
+        font-weight: 600;
+    }
+
+    /* Player Detail Content */
     .detail-section {
         margin-bottom: 3rem;
     }

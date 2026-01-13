@@ -380,7 +380,7 @@
                         {#if $user.is_admin}
                             <a
                                 href="/admin/clans"
-                                class="dropdown-item"
+                                class="dropdown-item admin-link"
                                 on:click|preventDefault={() =>
                                     navigate('admin/clans')}
                             >
@@ -587,8 +587,8 @@
                     {#if $user.is_admin}
                         <div class="drawer-nav-group admin">
                             <div class="group-header">Admin</div>
-                            <button class="drawer-sub-link" on:click={() => navigate('admin/clans')}>Alle Clans</button>
-                            <button class="drawer-sub-link" on:click={() => navigate('admin')}>Dashboard</button>
+                            <button class="drawer-sub-link admin-link" on:click={() => navigate('admin/clans')}>Alle Clans</button>
+                            <button class="drawer-sub-link admin-link" on:click={() => navigate('admin')}>Dashboard</button>
                         </div>
                     {/if}
                 </div>
