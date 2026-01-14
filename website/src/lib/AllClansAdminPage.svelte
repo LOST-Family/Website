@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
     import { fade } from 'svelte/transition';
-    import { user } from './auth';
+    import { user, loading as authLoading } from './auth';
 
     // Import banners
     import banner3 from '../assets/Clans/Clash of Clans/Lost-X-3.png';
@@ -48,22 +48,22 @@
 
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2')) return bannerCR2;
-            if (name.includes('3')) return bannerCR3;
-            if (name.includes('4')) return bannerCR4;
-            if (name.includes('5')) return bannerCR5;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('4') || name.includes('IV')) return bannerCR4;
+            if (name.includes('5') || name.includes('V')) return bannerCR5;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3')) return banner3;
-        if (name.includes('4')) return banner4;
-        if (name.includes('5')) return banner5;
-        if (name.includes('6')) return banner6;
-        if (name.includes('7')) return banner7;
-        if (name.includes('8')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('4') || name.includes('IV')) return banner4;
+        if (name.includes('5') || name.includes('V')) return banner5;
+        if (name.includes('6') || name.includes('VI')) return banner6;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }
@@ -88,6 +88,12 @@
     }
 
     async function loadClans() {
+        if (!$user?.is_admin) {
+            error = 'Administrator-Zutritt verweigert.';
+            loading = false;
+            return;
+        }
+
         loading = true;
         error = null;
         try {
@@ -134,13 +140,24 @@
     }
 
     onMount(() => {
+        if (!$authLoading) {
+            if ($user?.is_admin) {
+                loadClans();
+            } else {
+                error = 'Administrator-Zutritt verweigert.';
+                loading = false;
+            }
+        }
+    });
+
+    $: if (!$authLoading && !allClans.length && !error && loading) {
         if ($user?.is_admin) {
             loadClans();
         } else {
             error = 'Administrator-Zutritt verweigert.';
             loading = false;
         }
-    });
+    }
 
     function navigateToClan(clan: Clan) {
         const type = clan.gameType || 'coc';
@@ -168,30 +185,51 @@
         </header>
 
         {#if loading}
-            <div class="state-container">
+            <div class="state-container" in:fade>
                 <div class="spinner"></div>
                 <p>Clans werden geladen...</p>
             </div>
         {:else if error}
-            <div class="state-container error">
-                <svg
-                    class="error-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                >
-                    <circle cx="12" cy="12" r="10" /><line
-                        x1="12"
-                        y1="8"
-                        x2="12"
-                        y2="12"
-                    /><line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                <p>{error}</p>
-                <button class="retry-btn" on:click={loadClans}
-                    >Erneut versuchen</button
-                >
+            <div class="state-container error" in:fade>
+                {#if error === 'Administrator-Zutritt verweigert.'}
+                    <div class="access-denied-container">
+                        <div class="lock-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                        </div>
+                        <h3>Zutritt verweigert</h3>
+                        <p>Du benötigst Administrator-Rechte, um auf diese Seite zuzugreifen.</p>
+                        <div class="deny-actions">
+                            <button class="action-btn secondary" on:click={() => dispatch('navigate', 'home')}>
+                                Zurück zur Startseite
+                            </button>
+                            <button class="action-btn" on:click={() => dispatch('navigate', 'clans')}>
+                                Zu den Clans
+                            </button>
+                        </div>
+                    </div>
+                {:else}
+                    <svg
+                        class="error-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="10" /><line
+                            x1="12"
+                            y1="8"
+                            x2="12"
+                            y2="12"
+                        /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <p>{error}</p>
+                    <button class="retry-btn" on:click={loadClans}
+                        >Erneut versuchen</button
+                    >
+                {/if}
             </div>
         {:else}
             <div class="sections-container">
@@ -433,6 +471,107 @@
         padding: 4rem;
         text-align: center;
         gap: 1.5rem;
+        min-height: 400px;
+    }
+
+    .access-denied-container {
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 3rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+
+    .light .access-denied-container {
+        background: white;
+        border-color: #e2e8f0;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .lock-icon {
+        width: 80px;
+        height: 80px;
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 20px;
+        margin-bottom: 0.5rem;
+    }
+
+    .lock-icon svg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .access-denied-container h3 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0;
+        color: white;
+    }
+
+    .light .access-denied-container h3 {
+        color: #1e293b;
+    }
+
+    .access-denied-container p {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1.1rem;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .light .access-denied-container p {
+        color: #64748b;
+    }
+
+    .deny-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .action-btn {
+        padding: 0.8rem 1.75rem;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+        background: #5865f2;
+        color: white;
+    }
+
+    .action-btn:hover {
+        background: #4752c4;
+        transform: translateY(-2px);
+    }
+
+    .action-btn.secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .light .action-btn.secondary {
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+        color: #475569;
+    }
+
+    .action-btn.secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .light .action-btn.secondary:hover {
+        background: #e2e8f0;
     }
 
     .spinner {

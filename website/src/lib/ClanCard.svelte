@@ -370,22 +370,22 @@
         // Clash Royale clans use their own banners
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2')) return bannerCR2;
-            if (name.includes('3')) return bannerCR3;
-            if (name.includes('4')) return bannerCR4;
-            if (name.includes('5')) return bannerCR5;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('4') || name.includes('IV')) return bannerCR4;
+            if (name.includes('5') || name.includes('V')) return bannerCR5;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3')) return banner3;
-        if (name.includes('4')) return banner4;
-        if (name.includes('5')) return banner5;
-        if (name.includes('6')) return banner6;
-        if (name.includes('7')) return banner7;
-        if (name.includes('8')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('4') || name.includes('IV')) return banner4;
+        if (name.includes('5') || name.includes('V')) return banner5;
+        if (name.includes('6') || name.includes('VI')) return banner6;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }

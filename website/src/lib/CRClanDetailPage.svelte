@@ -1856,6 +1856,31 @@
         background: rgba(0, 0, 0, 0.05);
     }
 
+    .clan-detail-page.light .m-rank-indicator {
+        background: rgba(0, 0, 0, 0.05);
+        color: rgba(0, 0, 0, 0.4);
+    }
+
+    .clan-detail-page.light .m-tag-small {
+        color: rgba(0, 0, 0, 0.4);
+    }
+
+    .clan-detail-page.light .m-th-badge {
+        background: rgba(0, 0, 0, 0.05);
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    .clan-detail-page.light .m-trophies-badge {
+        background: rgba(217, 119, 6, 0.1);
+        border-color: rgba(217, 119, 6, 0.2);
+        color: #d97706;
+    }
+    
+    .clan-detail-page.light .rank-val,
+    .clan-detail-page.light .rank-num {
+        color: #1e293b;
+    }
+
     @media (max-width: 768px) {
         .hero-content {
             flex-direction: column;

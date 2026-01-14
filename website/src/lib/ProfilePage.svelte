@@ -834,7 +834,7 @@
                         <div class="detail-section">
                             <h3>Truppen</h3>
                             <div class="items-grid">
-                                {#each selectedPlayer.troops as troop}
+                                {#each selectedPlayer.troops.filter((t: any) => !t.name.startsWith('Super ') && !['Sneaky Goblin', 'Rocket Balloon', 'Inferno Dragon', 'Ice Hound'].includes(t.name)) as troop}
                                     <div class="item-badge" title={troop.name}>
                                         <span class="item-name"
                                             >{troop.name}</span
@@ -1844,33 +1844,6 @@
         color: #fff;
         min-width: 48px;
         text-align: center;
-    }
-
-    .arena-display-badge {
-        background: linear-gradient(135deg, #5865f2, #7289da);
-        color: white;
-        padding: 0.75rem 1.25rem;
-        border-radius: 12px;
-        font-weight: 800;
-        font-size: 0.9rem;
-        box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        white-space: nowrap;
-    }
-
-    .arena-id-badge {
-        width: 64px;
-        height: 64px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #5865f2, #7289da);
-        border-radius: 16px;
-        color: white;
-        font-weight: 900;
-        font-size: 1.5rem;
-        box-shadow: 0 8px 16px rgba(88, 101, 242, 0.2);
     }
 
     .cr-role {
