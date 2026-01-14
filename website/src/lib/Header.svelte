@@ -72,9 +72,7 @@
                 const officialCocTags = new Set(
                     cocClans.map((c: any) => c.tag)
                 );
-                const officialCrTags = new Set(
-                    crClans.map((c: any) => c.tag)
-                );
+                const officialCrTags = new Set(crClans.map((c: any) => c.tag));
 
                 const badgeMap = new Map<string, string>();
                 cocClans.forEach((c: any) => {
@@ -310,7 +308,8 @@
                         {#if userClans.length > 0}
                             {#if userClans.length === 1}
                                 <a
-                                    href="/{userClans[0].gameType}/clan/{userClans[0].tag.replace(
+                                    href="/{userClans[0]
+                                        .gameType}/clan/{userClans[0].tag.replace(
                                         '#',
                                         ''
                                     )}"
@@ -474,142 +473,208 @@
             </button>
         </div>
     </div>
-
 </header>
 
 <!-- Mobile Navigation Drawer -->
-<div 
-    class="mobile-backdrop" 
-    class:visible={mobileMenuOpen} 
+<div
+    class="mobile-backdrop"
+    class:visible={mobileMenuOpen}
     on:click={toggleMobileMenu}
 ></div>
 
-<aside 
-    class="mobile-drawer" 
+<aside
+    class="mobile-drawer"
     class:open={mobileMenuOpen}
     class:light={theme === 'light'}
 >
-        <div class="drawer-header">
-            <button class="logo" on:click={() => navigate('home')}>
-                <img src={logo} alt="LOST Family" class="logo-icon" />
-                <span class="logo-text-drawer">LOST Family</span>
-            </button>
-            <button class="drawer-close" on:click={toggleMobileMenu}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
+    <div class="drawer-header">
+        <button class="logo" on:click={() => navigate('home')}>
+            <img src={logo} alt="LOST Family" class="logo-icon" />
+            <span class="logo-text-drawer">LOST Family</span>
+        </button>
+        <button class="drawer-close" on:click={toggleMobileMenu}>
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+            >
+                <path d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
 
-        <div class="drawer-content">
-            {#if $user}
-                <div class="drawer-user-section">
-                    <div class="drawer-user-info">
-                        <div class="avatar-wrapper large">
-                            {#if $user.avatar}
-                                <img src={$user.avatar} alt={$user.username} class="user-avatar-large" />
-                            {:else}
-                                <div class="user-avatar-placeholder large">
-                                    {($user.nickname || $user.username).charAt(0).toUpperCase()}
-                                </div>
-                            {/if}
-                            <div class="status-indicator"></div>
-                        </div>
-                        <div class="drawer-user-details">
-                            <span class="drawer-username">{$user.nickname || $user.global_name || $user.username}</span>
-                            <span class="drawer-role">{$user.highest_role || 'Member'}</span>
-                        </div>
+    <div class="drawer-content">
+        {#if $user}
+            <div class="drawer-user-section">
+                <div class="drawer-user-info">
+                    <div class="avatar-wrapper large">
+                        {#if $user.avatar}
+                            <img
+                                src={$user.avatar}
+                                alt={$user.username}
+                                class="user-avatar-large"
+                            />
+                        {:else}
+                            <div class="user-avatar-placeholder large">
+                                {($user.nickname || $user.username)
+                                    .charAt(0)
+                                    .toUpperCase()}
+                            </div>
+                        {/if}
+                        <div class="status-indicator"></div>
+                    </div>
+                    <div class="drawer-user-details">
+                        <span class="drawer-username"
+                            >{$user.nickname ||
+                                $user.global_name ||
+                                $user.username}</span
+                        >
+                        <span class="drawer-role"
+                            >{$user.highest_role || 'Member'}</span
+                        >
                     </div>
                 </div>
-            {:else}
-                <div class="drawer-login-section">
-                    <button class="login-btn full-width" on:click={login}>
-                        <svg class="discord-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                        </svg>
-                        Social Login
-                    </button>
-                </div>
-            {/if}
+            </div>
+        {:else}
+            <div class="drawer-login-section">
+                <button class="login-btn full-width" on:click={login}>
+                    <svg
+                        class="discord-icon"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                    >
+                        <path
+                            d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"
+                        />
+                    </svg>
+                    Social Login
+                </button>
+            </div>
+        {/if}
 
-            <div class="drawer-section">
-                <span class="section-title">Navigation</span>
-                <div class="drawer-nav-item">
-                    <button class="drawer-nav-link" on:click={() => navigate('home')}>Home</button>
-                </div>
-                
-                <div class="drawer-nav-group">
-                    <div class="group-header">Clash of Clans</div>
-                    <a href="/coc/clans" class="drawer-sub-link" on:click|preventDefault={() => navigate('coc/clans')}>Clans</a>
-                    <a href="/coc/cwl" class="drawer-sub-link" on:click|preventDefault={() => navigate('coc/cwl')}>Clankriegsliga</a>
-                </div>
-
-                <div class="drawer-nav-group">
-                    <div class="group-header">Clash Royale</div>
-                    <a href="/cr/clans" class="drawer-sub-link" on:click|preventDefault={() => navigate('cr/clans')}>Clans</a>
-                </div>
+        <div class="drawer-section">
+            <span class="section-title">Navigation</span>
+            <div class="drawer-nav-item">
+                <button
+                    class="drawer-nav-link"
+                    on:click={() => navigate('home')}>Home</button
+                >
             </div>
 
-            {#if $user}
-                <div class="drawer-section">
-                    <span class="section-title">Account</span>
-                    <button class="drawer-nav-link" on:click={() => navigate('account')}>Verknüpfte Accounts</button>
-                    {#if userClans.length > 0}
-                        {#if userClans.length === 1}
-                            <a
-                                href="/{userClans[0].gameType}/clan/{userClans[0]
-                                    .tag.replace('#', '')}"
-                                class="drawer-nav-link"
-                                on:click|preventDefault={() =>
-                                    navigate(
-                                        `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
-                                            '#',
-                                            ''
-                                        )}`
-                                    )}
-                            >
-                                <div class="drawer-link-content">
-                                    {#if userClans[0].badgeUrl}
-                                        <img
-                                            src={userClans[0].badgeUrl}
-                                            alt={userClans[0].name}
-                                            class="drawer-item-icon clan-badge-mini"
-                                        />
-                                    {/if}
-                                    Dein Clan
-                                </div>
-                            </a>
-                        {:else}
-                            <button class="drawer-nav-link" on:click={() => navigate('my-clans')}>Deine Clans</button>
-                        {/if}
-                    {/if}
-                    
-                    {#if $user.is_admin}
-                        <div class="drawer-nav-group admin">
-                            <div class="group-header">Admin</div>
-                            <button class="drawer-sub-link admin-link" on:click={() => navigate('admin/clans')}>Alle Clans</button>
-                            <button class="drawer-sub-link admin-link" on:click={() => navigate('admin')}>Dashboard</button>
-                        </div>
-                    {/if}
-                </div>
-            {/if}
+            <div class="drawer-nav-group">
+                <div class="group-header">Clash of Clans</div>
+                <a
+                    href="/coc/clans"
+                    class="drawer-sub-link"
+                    on:click|preventDefault={() => navigate('coc/clans')}
+                    >Clans</a
+                >
+                <a
+                    href="/coc/cwl"
+                    class="drawer-sub-link"
+                    on:click|preventDefault={() => navigate('coc/cwl')}
+                    >Clankriegsliga</a
+                >
+            </div>
+
+            <div class="drawer-nav-group">
+                <div class="group-header">Clash Royale</div>
+                <a
+                    href="/cr/clans"
+                    class="drawer-sub-link"
+                    on:click|preventDefault={() => navigate('cr/clans')}
+                    >Clans</a
+                >
+            </div>
         </div>
 
-        <div class="drawer-footer">
-            <button 
-                class="logout-btn-drawer" 
-                on:click={() => {
-                    logout();
-                    mobileMenuOpen = false;
-                }}
+        {#if $user}
+            <div class="drawer-section">
+                <span class="section-title">Account</span>
+                <button
+                    class="drawer-nav-link"
+                    on:click={() => navigate('account')}
+                    >Verknüpfte Accounts</button
+                >
+                {#if userClans.length > 0}
+                    {#if userClans.length === 1}
+                        <a
+                            href="/{userClans[0]
+                                .gameType}/clan/{userClans[0].tag.replace(
+                                '#',
+                                ''
+                            )}"
+                            class="drawer-nav-link"
+                            on:click|preventDefault={() =>
+                                navigate(
+                                    `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
+                                        '#',
+                                        ''
+                                    )}`
+                                )}
+                        >
+                            <div class="drawer-link-content">
+                                {#if userClans[0].badgeUrl}
+                                    <img
+                                        src={userClans[0].badgeUrl}
+                                        alt={userClans[0].name}
+                                        class="drawer-item-icon clan-badge-mini"
+                                    />
+                                {/if}
+                                Dein Clan
+                            </div>
+                        </a>
+                    {:else}
+                        <button
+                            class="drawer-nav-link"
+                            on:click={() => navigate('my-clans')}
+                            >Deine Clans</button
+                        >
+                    {/if}
+                {/if}
+
+                {#if $user.is_admin}
+                    <div class="drawer-nav-group admin">
+                        <div class="group-header">Admin</div>
+                        <button
+                            class="drawer-sub-link admin-link"
+                            on:click={() => navigate('admin/clans')}
+                            >Alle Clans</button
+                        >
+                        <button
+                            class="drawer-sub-link admin-link"
+                            on:click={() => navigate('admin')}>Dashboard</button
+                        >
+                    </div>
+                {/if}
+            </div>
+        {/if}
+    </div>
+
+    <div class="drawer-footer">
+        <button
+            class="logout-btn-drawer"
+            on:click={() => {
+                logout();
+                mobileMenuOpen = false;
+            }}
+        >
+            <svg
+                class="logout-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
             >
-                <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-                </svg>
-                Logout
-            </button>
-        </div>
-    </aside>
+                <path
+                    d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"
+                />
+            </svg>
+            Logout
+        </button>
+    </div>
+</aside>
 
 <style>
     .header {
@@ -660,6 +725,8 @@
         width: 40px;
         height: 40px;
         border-radius: 10px;
+        background: #1e1f22;
+        padding: 4px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
         transition: transform 0.3s ease;
     }
@@ -1234,7 +1301,8 @@
         gap: 1.5rem;
     }
 
-    .drawer-user-section, .drawer-login-section {
+    .drawer-user-section,
+    .drawer-login-section {
         padding: 0 1.25rem;
     }
 
@@ -1437,7 +1505,8 @@
             display: none;
         }
 
-        .pc-user, .pc-login {
+        .pc-user,
+        .pc-login {
             display: none;
         }
 

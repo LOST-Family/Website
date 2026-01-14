@@ -78,7 +78,7 @@
         {#if currentPath === '/' || currentPath === ''}
             <Hero banner={lostBanner} {theme} {mounted} />
 
-            <DiscordSection {theme} fallbackIcon={lostLogo} />
+            <DiscordSection theme="dark" fallbackIcon={lostLogo} />
 
             <ClansSection
                 {theme}
@@ -130,7 +130,11 @@
         {:else if currentPath === '/admin'}
             <AdminPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/admin/clans'}
-            <AllClansAdminPage {theme} {apiBaseUrl} on:navigate={handleNavigate} />
+            <AllClansAdminPage
+                {theme}
+                {apiBaseUrl}
+                on:navigate={handleNavigate}
+            />
         {:else if currentPath.startsWith('/coc/clan/')}
             {#if $loading}
                 <div class="auth-message-container">

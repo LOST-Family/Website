@@ -54,7 +54,8 @@
             serverIcon = cached.serverIcon;
             serverDescription = cached.serverDescription;
             inviteUrl = cached.inviteUrl;
-            if (localTotalMembers === null) localTotalMembers = cached.totalMembers;
+            if (localTotalMembers === null)
+                localTotalMembers = cached.totalMembers;
             loading = false;
             return;
         }
@@ -63,7 +64,7 @@
             // Start fetches in parallel if possible
             const widgetPromise = fetch(
                 `https://discord.com/api/guilds/${guildId}/widget.json`
-            ).then(res => {
+            ).then((res) => {
                 if (!res.ok) throw new Error('Failed to fetch widget');
                 return res.json();
             });
@@ -72,13 +73,15 @@
             if (inviteCode) {
                 invitePromise = fetch(
                     `https://discord.com/api/v10/invites/${inviteCode}?with_counts=true`
-                ).then(res => (res.ok ? res.json() : null));
+                ).then((res) => (res.ok ? res.json() : null));
             }
 
             // Wait for widget first as we might need it for the invite code
             data = await widgetPromise;
-            inviteUrl = data?.instant_invite ?? (inviteCode ? `https://discord.gg/${inviteCode}` : null);
-            
+            inviteUrl =
+                data?.instant_invite ??
+                (inviteCode ? `https://discord.gg/${inviteCode}` : null);
+
             let code = inviteCode || inviteUrl?.split('/').pop();
 
             if (code && localTotalMembers === null) {
@@ -86,7 +89,7 @@
                 if (!invitePromise) {
                     invitePromise = fetch(
                         `https://discord.com/api/v10/invites/${code}?with_counts=true`
-                    ).then(res => (res.ok ? res.json() : null));
+                    ).then((res) => (res.ok ? res.json() : null));
                 }
 
                 const inviteData = await invitePromise;
@@ -107,7 +110,7 @@
                 serverDescription,
                 inviteUrl,
                 totalMembers: localTotalMembers,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             });
         } catch (e) {
             console.error(`Discord fetch failed for ${guildId}:`, e);
@@ -266,8 +269,11 @@
         width: 56px;
         height: 56px;
         border-radius: 16px;
+        background: #1e1f22;
+        padding: 4px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
         transition: box-shadow 0.4s ease;
+        object-fit: contain;
     }
 
     .discord-card.light .server-icon {

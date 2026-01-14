@@ -46,6 +46,8 @@
         width: 32px;
         height: 32px;
         border-radius: 8px;
+        background: #1e1f22;
+        padding: 4px;
     }
 
     .footer-name {
