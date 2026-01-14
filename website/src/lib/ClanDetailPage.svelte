@@ -1150,9 +1150,6 @@
         width: 20px;
         height: 20px;
     }
-    .trophies {
-        color: #ffcc00;
-    }
     .stars {
         color: #ff9900;
     }
@@ -1490,21 +1487,6 @@
         align-items: center;
         width: 100%;
         padding: 0.75rem 0.25rem 0;
-    }
-
-    .m-trophies-mini {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--text-dim);
-    }
-
-    .m-trophies-mini svg {
-        width: 12px;
-        color: #ffcc00;
-        opacity: 0.8;
     }
 
     .donation-stats-mini {
@@ -1951,75 +1933,7 @@
         font-weight: 600;
     }
 
-    /* Player Detail Content */
-    .detail-section {
-        margin-bottom: 3rem;
-    }
-
-    .detail-section h3 {
-        font-size: 0.95rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-dim);
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid var(--border-dark);
-        padding-bottom: 0.75rem;
-    }
-
-    .stat-list {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-    }
-
-    .s-item {
-        background: rgba(255, 255, 255, 0.03);
-        padding: 1.25rem;
-        border-radius: 18px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-        border: 1px solid var(--border-dark);
-    }
-
-    .light .s-item {
-        background: #fff;
-        border-color: var(--border-light);
-    }
-
-    .s-item.highlighted {
-        background: rgba(88, 101, 242, 0.1);
-        border-color: rgba(88, 101, 242, 0.2);
-    }
-
-    .s-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-dim);
-        text-transform: uppercase;
-    }
-
-    .s-value {
-        font-size: 1.2rem;
-        font-weight: 800;
-    }
-
     /* Discord Card inside Drawer */
-    .discord-profile {
-        background: #5865f2;
-        border-radius: 24px;
-        padding: 1.5rem;
-        margin-bottom: 3rem;
-        color: white;
-        box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
-    }
-
-    .d-header {
-        display: flex;
-        align-items: center;
-        gap: 1.25rem;
-    }
-
     .d-avatar-box {
         position: relative;
         width: 64px;
@@ -2049,10 +1963,6 @@
         border: 2px dashed rgba(255, 255, 255, 0.3);
     }
 
-    .d-name {
-        font-size: 1.4rem;
-        font-weight: 800;
-    }
     .d-status {
         font-size: 0.9rem;
         opacity: 0.8;
@@ -2136,12 +2046,6 @@
     }
 
     /* Kickpoint Styling */
-    .kp-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
     .kp-detail-item {
         background: rgba(244, 63, 94, 0.05);
         border-radius: 16px;
