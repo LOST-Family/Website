@@ -128,10 +128,12 @@
             userClans = {
                 coc: allCocClans
                     .filter(c => cocAccountClans.has(c.tag))
-                    .map(c => ({...c, gameType: 'coc' as const})),
+                    .map(c => ({...c, gameType: 'coc' as const}))
+                    .sort((a, b) => (a.index || 0) - (b.index || 0)),
                 cr: allCrClans
                     .filter(c => crAccountClans.has(c.tag))
                     .map(c => ({...c, gameType: 'cr' as const}))
+                    .sort((a, b) => (a.index || 0) - (b.index || 0))
             };
 
         } catch (e) {

@@ -2,10 +2,12 @@ use crate::auth::{AuthenticatedUser, OptionalAuthenticatedUser, has_required_rol
 use crate::models::{AppState, ErrorResponse, GameType};
 use crate::utils::{
     encode_tag, filter_member_data, forward_request, forward_request_with_filter,
+    get_cached_or_update_supercell_cache, get_cached_or_update_upstream_cache,
     update_supercell_cache, update_upstream_cache,
 };
 use actix_web::{HttpResponse, Responder, web};
 use bytes::Bytes;
+use futures_util::future::join_all;
 use log::error;
 
 // ============================================================================
@@ -1005,116 +1007,127 @@ async fn fetch_aggregated_player_accounts(
     coc_linked_players: Vec<String>,
     cr_linked_players: Vec<String>,
 ) -> serde_json::Value {
-    let mut coc_players_data = Vec::new();
-    let mut cr_players_data = Vec::new();
+    let mut coc_players_futures = Vec::new();
+    let mut cr_players_futures = Vec::new();
 
-    // Fetch CoC players
+    // Prepare CoC futures
     for tag in coc_linked_players {
-        let encoded_tag = encode_tag(&tag);
-        let supercell_url_path = format!("/players/{}", encoded_tag);
-        let upstream_url_path = format!("/api/players/{}", encoded_tag);
+        let data = data.clone();
+        coc_players_futures.push(async move {
+            let encoded_tag = encode_tag(&tag);
+            let supercell_url_path = format!("/players/{}", encoded_tag);
+            let upstream_url_path = format!("/api/players/{}", encoded_tag);
 
-        let supercell_res =
-            update_supercell_cache(data, GameType::ClashOfClans, &supercell_url_path).await;
-        let upstream_res =
-            update_upstream_cache(data, GameType::ClashOfClans, &upstream_url_path).await;
+            let supercell_res =
+                get_cached_or_update_supercell_cache(&data, GameType::ClashOfClans, &supercell_url_path, 600).await;
+            let upstream_res =
+                get_cached_or_update_upstream_cache(&data, GameType::ClashOfClans, &upstream_url_path, 600).await;
 
-        if let Ok(supercell_body) = supercell_res {
-            if let Ok(mut player_json) =
-                serde_json::from_slice::<serde_json::Value>(&supercell_body)
-            {
-                if let Some(player_obj) = player_json.as_object_mut() {
-                    player_obj.insert("gameType".to_string(), serde_json::json!("coc"));
+            if let Ok(supercell_body) = supercell_res {
+                if let Ok(mut player_json) =
+                    serde_json::from_slice::<serde_json::Value>(&supercell_body)
+                {
+                    if let Some(player_obj) = player_json.as_object_mut() {
+                        player_obj.insert("gameType".to_string(), serde_json::json!("coc"));
 
-                    if let Ok(u_body) = upstream_res {
-                        if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
-                            if let Some(u_obj) = u_json.as_object() {
-                                for (k, v) in u_obj {
-                                    if !player_obj.contains_key(k) {
-                                        player_obj.insert(k.clone(), v.clone());
-                                    } else if k != "tag" {
-                                        player_obj.insert(format!("upstream_{}", k), v.clone());
+                        if let Ok(u_body) = upstream_res {
+                            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
+                                if let Some(u_obj) = u_json.as_object() {
+                                    for (k, v) in u_obj {
+                                        if !player_obj.contains_key(k) {
+                                            player_obj.insert(k.clone(), v.clone());
+                                        } else if k != "tag" {
+                                            player_obj.insert(format!("upstream_{}", k), v.clone());
+                                        }
                                     }
-                                }
-                                if let Some(akp) = player_obj
-                                    .get("activeKickpoints")
-                                    .and_then(|v| v.as_array())
-                                {
-                                    let sum: i64 = akp
-                                        .iter()
-                                        .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
-                                        .sum();
-                                    player_obj.insert(
-                                        "activeKickpointsCount".to_string(),
-                                        serde_json::json!(akp.len()),
-                                    );
-                                    player_obj.insert(
-                                        "activeKickpointsSum".to_string(),
-                                        serde_json::json!(sum),
-                                    );
+                                    if let Some(akp) = player_obj
+                                        .get("activeKickpoints")
+                                        .and_then(|v| v.as_array())
+                                    {
+                                        let sum: i64 = akp
+                                            .iter()
+                                            .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
+                                            .sum();
+                                        player_obj.insert(
+                                            "activeKickpointsCount".to_string(),
+                                            serde_json::json!(akp.len()),
+                                        );
+                                        player_obj.insert(
+                                            "activeKickpointsSum".to_string(),
+                                            serde_json::json!(sum),
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
+                    return Some(player_json);
                 }
-                coc_players_data.push(player_json);
             }
-        }
+            None
+        });
     }
 
-    // Fetch CR players
+    // Prepare CR futures
     for tag in cr_linked_players {
-        let encoded_tag = encode_tag(&tag);
-        let supercell_url_path = format!("/players/{}", encoded_tag);
-        let upstream_url_path = format!("/api/players/{}", encoded_tag);
+        let data = data.clone();
+        cr_players_futures.push(async move {
+            let encoded_tag = encode_tag(&tag);
+            let supercell_url_path = format!("/players/{}", encoded_tag);
+            let upstream_url_path = format!("/api/players/{}", encoded_tag);
 
-        let supercell_res =
-            update_supercell_cache(data, GameType::ClashRoyale, &supercell_url_path).await;
-        let upstream_res =
-            update_upstream_cache(data, GameType::ClashRoyale, &upstream_url_path).await;
+            let supercell_res =
+                get_cached_or_update_supercell_cache(&data, GameType::ClashRoyale, &supercell_url_path, 600).await;
+            let upstream_res =
+                get_cached_or_update_upstream_cache(&data, GameType::ClashRoyale, &upstream_url_path, 600).await;
 
-        if let Ok(supercell_body) = supercell_res {
-            if let Ok(mut player_json) =
-                serde_json::from_slice::<serde_json::Value>(&supercell_body)
-            {
-                if let Some(player_obj) = player_json.as_object_mut() {
-                    player_obj.insert("gameType".to_string(), serde_json::json!("cr"));
+            if let Ok(supercell_body) = supercell_res {
+                if let Ok(mut player_json) =
+                    serde_json::from_slice::<serde_json::Value>(&supercell_body)
+                {
+                    if let Some(player_obj) = player_json.as_object_mut() {
+                        player_obj.insert("gameType".to_string(), serde_json::json!("cr"));
 
-                    if let Ok(u_body) = upstream_res {
-                        if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
-                            if let Some(u_obj) = u_json.as_object() {
-                                for (k, v) in u_obj {
-                                    if !player_obj.contains_key(k) {
-                                        player_obj.insert(k.clone(), v.clone());
-                                    } else if k != "tag" {
-                                        player_obj.insert(format!("upstream_{}", k), v.clone());
+                        if let Ok(u_body) = upstream_res {
+                            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
+                                if let Some(u_obj) = u_json.as_object() {
+                                    for (k, v) in u_obj {
+                                        if !player_obj.contains_key(k) {
+                                            player_obj.insert(k.clone(), v.clone());
+                                        } else if k != "tag" {
+                                            player_obj.insert(format!("upstream_{}", k), v.clone());
+                                        }
                                     }
-                                }
-                                if let Some(akp) = player_obj
-                                    .get("activeKickpoints")
-                                    .and_then(|v| v.as_array())
-                                {
-                                    let sum: i64 = akp
-                                        .iter()
-                                        .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
-                                        .sum();
-                                    player_obj.insert(
-                                        "activeKickpointsCount".to_string(),
-                                        serde_json::json!(akp.len()),
-                                    );
-                                    player_obj.insert(
-                                        "activeKickpointsSum".to_string(),
-                                        serde_json::json!(sum),
-                                    );
+                                    if let Some(akp) = player_obj
+                                        .get("activeKickpoints")
+                                        .and_then(|v| v.as_array())
+                                    {
+                                        let sum: i64 = akp
+                                            .iter()
+                                            .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
+                                            .sum();
+                                        player_obj.insert(
+                                            "activeKickpointsCount".to_string(),
+                                            serde_json::json!(akp.len()),
+                                        );
+                                        player_obj.insert(
+                                            "activeKickpointsSum".to_string(),
+                                            serde_json::json!(sum),
+                                        );
+                                    }
                                 }
                             }
                         }
                     }
+                    return Some(player_json);
                 }
-                cr_players_data.push(player_json);
             }
-        }
+            None
+        });
     }
+
+    let coc_players_data: Vec<serde_json::Value> = join_all(coc_players_futures).await.into_iter().flatten().collect();
+    let cr_players_data: Vec<serde_json::Value> = join_all(cr_players_futures).await.into_iter().flatten().collect();
 
     serde_json::json!({
         "coc": coc_players_data,

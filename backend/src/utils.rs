@@ -292,6 +292,62 @@ pub async fn update_upstream_cache(
     }
 }
 
+pub async fn get_cached_or_update_supercell_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+    ttl_seconds: i64,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let cache_key = format!("{}:supercell:{}", prefix, url_path);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let result = sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+        .bind(&cache_key)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    if let Ok(Some((body, updated_at))) = result {
+        if now - updated_at < ttl_seconds {
+            return Ok(Bytes::from(body));
+        }
+    }
+
+    update_supercell_cache(data, game, url_path).await
+}
+
+pub async fn get_cached_or_update_upstream_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+    ttl_seconds: i64,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let cache_key = format!("{}:upstream:{}", prefix, url_path);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let result = sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+        .bind(&cache_key)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    if let Ok(Some((body, updated_at))) = result {
+        if now - updated_at < ttl_seconds {
+            return Ok(Bytes::from(body));
+        }
+    }
+
+    update_upstream_cache(data, game, url_path).await
+}
+
 pub async fn forward_request(data: &AppState, game: GameType, url_path: &str) -> HttpResponse {
     forward_request_with_filter(data, game, url_path, None, &[]).await
 }

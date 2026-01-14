@@ -60,7 +60,10 @@
         try {
             const response = await fetch(`${apiBaseUrl}${apiPrefix}/clans`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            allClans = await response.json();
+            const data = await response.json();
+            allClans = Array.isArray(data) 
+                ? data.sort((a, b) => (a.index || 0) - (b.index || 0)) 
+                : [];
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unknown error';
         } finally {
