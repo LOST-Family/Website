@@ -98,13 +98,13 @@
                 fetch(`${apiBaseUrl}/api/cr/clans`)
             ]);
 
-            if (!accountsRes.ok || !cocClansRes.ok || !crClansRes.ok) {
-                throw new Error('Fehler beim Laden der Daten');
+            if (!accountsRes.ok) {
+                throw new Error('Fehler beim Laden der Accounts');
             }
 
             const accounts = await accountsRes.json();
-            const allCocClans: Clan[] = await cocClansRes.json();
-            const allCrClans: Clan[] = await crClansRes.json();
+            const allCocClans: Clan[] = cocClansRes.ok ? await cocClansRes.json() : [];
+            const allCrClans: Clan[] = crClansRes.ok ? await crClansRes.json() : [];
 
             const officialCocTags = new Set(allCocClans.map(c => c.tag));
             const officialCrTags = new Set(allCrClans.map(c => c.tag));

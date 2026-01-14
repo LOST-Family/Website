@@ -279,14 +279,13 @@ pub async fn update_upstream_cache(
                 .bind(timestamp)
                 .execute(&data.db_pool)
                 .await;
-            } else {
-                eprintln!(
-                    "Background Refresh: Upstream {} returned status {}",
-                    full_url, status
-                );
-            }
 
-            Ok(body)
+                Ok(body)
+            } else {
+                let err_msg = format!("Upstream {} returned status {}", full_url, status);
+                eprintln!("Background Refresh: {}", err_msg);
+                Err(err_msg)
+            }
         }
         Err(e) => Err(e.to_string()),
     }
@@ -306,18 +305,28 @@ pub async fn get_cached_or_update_supercell_cache(
         .unwrap()
         .as_secs() as i64;
 
-    let result = sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
-        .bind(&cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
+    let cached_result =
+        sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+            .bind(&cache_key)
+            .fetch_optional(&data.db_pool)
+            .await;
 
-    if let Ok(Some((body, updated_at))) = result {
+    if let Ok(Some((body, updated_at))) = &cached_result {
         if now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body));
+            return Ok(Bytes::from(body.clone()));
         }
     }
 
-    update_supercell_cache(data, game, url_path).await
+    match update_supercell_cache(data, game, url_path).await {
+        Ok(body) => Ok(body),
+        Err(e) => {
+            // Fallback to expired cache on error
+            if let Ok(Some((body, _))) = cached_result {
+                return Ok(Bytes::from(body));
+            }
+            Err(e)
+        }
+    }
 }
 
 pub async fn get_cached_or_update_upstream_cache(
@@ -334,18 +343,28 @@ pub async fn get_cached_or_update_upstream_cache(
         .unwrap()
         .as_secs() as i64;
 
-    let result = sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
-        .bind(&cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
+    let cached_result =
+        sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+            .bind(&cache_key)
+            .fetch_optional(&data.db_pool)
+            .await;
 
-    if let Ok(Some((body, updated_at))) = result {
+    if let Ok(Some((body, updated_at))) = &cached_result {
         if now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body));
+            return Ok(Bytes::from(body.clone()));
         }
     }
 
-    update_upstream_cache(data, game, url_path).await
+    match update_upstream_cache(data, game, url_path).await {
+        Ok(body) => Ok(body),
+        Err(e) => {
+            // Fallback to expired cache on error
+            if let Ok(Some((body, _))) = cached_result {
+                return Ok(Bytes::from(body));
+            }
+            Err(e)
+        }
+    }
 }
 
 pub async fn forward_request(data: &AppState, game: GameType, url_path: &str) -> HttpResponse {
@@ -459,14 +478,13 @@ pub async fn update_supercell_cache(
                 .bind(timestamp)
                 .execute(&data.db_pool)
                 .await;
-            } else {
-                eprintln!(
-                    "Background Refresh: Supercell {} returned status {}",
-                    full_url, status
-                );
-            }
 
-            Ok(body)
+                Ok(body)
+            } else {
+                let err_msg = format!("Supercell {} returned status {}", full_url, status);
+                eprintln!("Background Refresh: {}", err_msg);
+                Err(err_msg)
+            }
         }
         Err(e) => Err(e.to_string()),
     }

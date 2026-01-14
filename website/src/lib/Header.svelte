@@ -60,65 +60,88 @@
                 fetch(`${apiBaseUrl}/api/me/accounts`, {
                     credentials: 'include',
                 }),
-                fetch(`${apiBaseUrl}/api/coc/clans`),
-                fetch(`${apiBaseUrl}/api/cr/clans`),
+                fetch(`${apiBaseUrl}/api/coc/clans`, {
+                    credentials: 'include',
+                }),
+                fetch(`${apiBaseUrl}/api/cr/clans`, {
+                    credentials: 'include',
+                }),
             ]);
 
-            if (accountsRes.ok && cocClansRes.ok && crClansRes.ok) {
-                const accounts = await accountsRes.json();
-                const cocClans = await cocClansRes.json();
-                const crClans = await crClansRes.json();
+            const accounts = accountsRes.ok
+                ? await accountsRes.json()
+                : { coc: [], cr: [] };
+            const cocClans = cocClansRes.ok ? await cocClansRes.json() : [];
+            const crClans = crClansRes.ok ? await crClansRes.json() : [];
 
-                const officialCocTags = new Set(
-                    cocClans.map((c: any) => c.tag)
-                );
-                const officialCrTags = new Set(crClans.map((c: any) => c.tag));
+            const officialCocTags = new Set(
+                cocClans.map((c: any) => c.tag.toUpperCase())
+            );
+            const officialCrTags = new Set(
+                crClans.map((c: any) => c.tag.toUpperCase())
+            );
 
-                const badgeMap = new Map<string, string>();
-                cocClans.forEach((c: any) => {
-                    if (c.badgeUrl) badgeMap.set(c.tag, c.badgeUrl);
-                });
-                crClans.forEach((c: any) => {
-                    if (c.badgeUrl) badgeMap.set(c.tag, c.badgeUrl);
-                });
+            const badgeMap = new Map<string, string>();
+            cocClans.forEach((c: any) => {
+                if (c.badgeUrl) badgeMap.set(c.tag.toUpperCase(), c.badgeUrl);
+            });
+            crClans.forEach((c: any) => {
+                if (c.badgeUrl) badgeMap.set(c.tag.toUpperCase(), c.badgeUrl);
+            });
 
-                const clansMap = new Map<
-                    string,
-                    { name: string; gameType: string }
-                >();
+            const clansMap = new Map<
+                string,
+                { tag: string; name: string; gameType: string; index: number }
+            >();
 
-                // Process Clash of Clans accounts
-                const cocAccounts =
-                    accounts.coc || (Array.isArray(accounts) ? accounts : []);
-                cocAccounts.forEach((acc: any) => {
-                    if (acc.clan && officialCocTags.has(acc.clan.tag)) {
-                        clansMap.set(acc.clan.tag, {
+            // Process Clash of Clans accounts
+            const cocAccounts =
+                accounts.coc || (Array.isArray(accounts) ? accounts : []);
+            cocAccounts.forEach((acc: any) => {
+                if (acc.clan) {
+                    const tag = acc.clan.tag.toUpperCase();
+                    if (officialCocTags.has(tag)) {
+                        const clanData = cocClans.find(
+                            (c: any) => c.tag.toUpperCase() === tag
+                        );
+                        clansMap.set(`coc-${tag}`, {
+                            tag: acc.clan.tag,
                             name: acc.clan.name,
                             gameType: 'coc',
+                            index: clanData?.index || 0,
                         });
                     }
-                });
+                }
+            });
 
-                // Process Clash Royale accounts
-                const crAccounts = accounts.cr || [];
-                crAccounts.forEach((acc: any) => {
-                    if (acc.clan && officialCrTags.has(acc.clan.tag)) {
-                        clansMap.set(acc.clan.tag, {
+            // Process Clash Royale accounts
+            const crAccounts = accounts.cr || [];
+            crAccounts.forEach((acc: any) => {
+                if (acc.clan) {
+                    const tag = acc.clan.tag.toUpperCase();
+                    if (officialCrTags.has(tag)) {
+                        const clanData = crClans.find(
+                            (c: any) => c.tag.toUpperCase() === tag
+                        );
+                        clansMap.set(`cr-${tag}`, {
+                            tag: acc.clan.tag,
                             name: acc.clan.name,
                             gameType: 'cr',
+                            index: clanData?.index || 0,
                         });
                     }
-                });
+                }
+            });
 
-                userClans = Array.from(clansMap.entries()).map(
-                    ([tag, info]) => ({
-                        tag,
-                        name: info.name,
-                        gameType: info.gameType,
-                        badgeUrl: badgeMap.get(tag),
-                    })
-                );
-            }
+            userClans = Array.from(clansMap.values())
+                .map((info) => ({
+                    tag: info.tag,
+                    name: info.name,
+                    gameType: info.gameType,
+                    badgeUrl: badgeMap.get(info.tag.toUpperCase()),
+                    index: info.index,
+                }))
+                .sort((a, b) => a.index - b.index);
         } catch (error) {
             console.error('Failed to fetch user clans:', error);
         }
