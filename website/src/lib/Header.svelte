@@ -315,10 +315,10 @@
 
                         <div class="dropdown-divider"></div>
 
-                        <button
-                            on:click={() => navigate('account')}
+                        <a
+                            href="/account"
                             class="dropdown-item"
-                            style="width: 100%; border: none; background: transparent; cursor: pointer; outline: none;"
+                            on:click|preventDefault={() => navigate('account')}
                         >
                             <svg
                                 class="item-icon"
@@ -332,7 +332,7 @@
                                 /><circle cx="12" cy="7" r="4" />
                             </svg>
                             Verknüpfte Accounts
-                        </button>
+                        </a>
 
                         {#if userClans.length > 0}
                             {#if userClans.length === 1}
@@ -629,11 +629,26 @@
         {#if $user}
             <div class="drawer-section">
                 <span class="section-title">Account</span>
-                <button
+                <a
+                    href="/account"
                     class="drawer-nav-link"
-                    on:click={() => navigate('account')}
-                    >Verknüpfte Accounts</button
+                    on:click|preventDefault={() => navigate('account')}
                 >
+                    <div class="drawer-link-content">
+                        <svg
+                            class="drawer-item-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                            /><circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Verknüpfte Accounts
+                    </div>
+                </a>
                 {#if userClans.length > 0}
                     {#if userClans.length === 1}
                         <a
@@ -663,11 +678,29 @@
                             </div>
                         </a>
                     {:else}
-                        <button
+                        <a
+                            href="/my-clans"
                             class="drawer-nav-link"
-                            on:click={() => navigate('my-clans')}
-                            >Deine Clans</button
+                            on:click|preventDefault={() => navigate('my-clans')}
                         >
+                            <div class="drawer-link-content">
+                                <svg
+                                    class="drawer-item-icon"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                    />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                                Deine Clans
+                            </div>
+                        </a>
                     {/if}
                 {/if}
 
@@ -882,6 +915,11 @@
         border-radius: 8px;
         transition: all 0.2s ease;
         outline: none;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: inherit;
+        justify-content: flex-start;
     }
 
     .dropdown-item:focus {
