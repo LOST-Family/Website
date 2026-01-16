@@ -7,7 +7,7 @@ use actix_web::{
 use chrono::{Duration as ChronoDuration, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use log::error;
-use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse, reqwest::async_http_client};
+use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -66,7 +66,7 @@ pub fn has_required_role(user_role: Option<&str>, required_role: &str) -> bool {
 }
 
 pub async fn discord_login(data: web::Data<AppState>) -> impl Responder {
-    let (auth_url, _csrf_token) = data
+    let (auth_url, _csrf_token): (reqwest::Url, CsrfToken) = data
         .oauth_client
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new("identify".to_string()))
@@ -82,10 +82,10 @@ pub async fn discord_callback(
     query: web::Query<AuthRequest>,
 ) -> impl Responder {
     let code = AuthorizationCode::new(query.code.clone());
-    let token = match data
+    let token: oauth2::basic::BasicTokenResponse = match data
         .oauth_client
         .exchange_code(code)
-        .request_async(async_http_client)
+        .request_async(&data.client)
         .await
     {
         Ok(token) => token,

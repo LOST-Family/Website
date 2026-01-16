@@ -1,7 +1,6 @@
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenv::dotenv;
 use oauth2::{AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl, basic::BasicClient};
-use reqwest::Client;
 use std::env;
 
 mod auth;
@@ -66,13 +65,11 @@ async fn main() -> std::io::Result<()> {
         .parse::<u64>()
         .unwrap_or(10);
 
-    let oauth_client = BasicClient::new(
-        discord_client_id,
-        Some(discord_client_secret),
-        auth_url,
-        Some(token_url),
-    )
-    .set_redirect_uri(redirect_url);
+    let oauth_client = BasicClient::new(discord_client_id)
+        .set_client_secret(discord_client_secret)
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(redirect_url);
 
     // Initialize Postgres Database
     let pool = sqlx::postgres::PgPool::connect(&database_url)
@@ -137,7 +134,7 @@ async fn main() -> std::io::Result<()> {
         .execute(&pool)
         .await;
 
-    let client = Client::builder()
+    let client = oauth2::reqwest::Client::builder()
         .timeout(Duration::from_secs(200))
         .build()
         .expect("Failed to build reqwest client");

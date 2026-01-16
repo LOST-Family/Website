@@ -1477,7 +1477,7 @@ pub async fn get_user_player_accounts(
     .fetch_optional(&data.db_pool)
     .await;
 
-    let (mut coc_linked, mut cr_linked): (Vec<String>, Vec<String>) = match user_db {
+    let (coc_linked, cr_linked): (Vec<String>, Vec<String>) = match user_db {
         Ok(Some((lp_json, cr_json))) => (
             serde_json::from_str(&lp_json).unwrap_or_default(),
             serde_json::from_str(&cr_json).unwrap_or_default(),
