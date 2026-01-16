@@ -31,6 +31,14 @@
     let theme: 'dark' | 'light' = 'dark';
     let mounted = false;
     let currentPath = window.location.pathname;
+    let lastClansPath =
+        currentPath === '/my-clans'
+            ? '/my-clans'
+            : currentPath === '/cr/clans'
+              ? '/cr/clans'
+              : currentPath === '/admin/clans'
+                ? '/admin/clans'
+                : '/coc/clans';
 
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
@@ -58,6 +66,17 @@
 
     function handleNavigate(event: CustomEvent<string>) {
         const newPath = event.detail === 'home' ? '/' : `/${event.detail}`;
+
+        // Track the last clans list page visited
+        if (
+            newPath === '/coc/clans' ||
+            newPath === '/cr/clans' ||
+            newPath === '/my-clans' ||
+            newPath === '/admin/clans'
+        ) {
+            lastClansPath = newPath;
+        }
+
         if (currentPath !== newPath) {
             window.history.pushState({}, '', newPath);
             currentPath = newPath;
@@ -78,7 +97,7 @@
         {#if currentPath === '/' || currentPath === ''}
             <Hero banner={lostBanner} {theme} {mounted} />
 
-            <DiscordSection theme="dark" fallbackIcon={lostLogo} />
+            <DiscordSection {theme} fallbackIcon={lostLogo} />
 
             <ClansSection
                 {theme}
@@ -165,6 +184,7 @@
                     {apiBaseUrl}
                     gameType="coc"
                     clanTag={'#' + currentPath.split('/')[3]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}
@@ -198,6 +218,7 @@
                     {apiBaseUrl}
                     gameType="cr"
                     clanTag={'#' + currentPath.split('/')[3]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}
@@ -232,6 +253,7 @@
                     {apiBaseUrl}
                     gameType="coc"
                     clanTag={'#' + currentPath.split('/')[2]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}

@@ -21,22 +21,26 @@ pub fn spawn_background_task(data: AppState) {
         }
     });
 
-    // 2. Task for CoC Cache Refresh (Every 10 minutes)
+    // 2. Task for CoC Cache Refresh
     let coc_cache_data = data.clone();
     tokio::spawn(async move {
-        let mut ticker = interval(Duration::from_secs(10 * 60));
+        let mut ticker = interval(Duration::from_secs(
+            coc_cache_data.background_refresh_interval * 60,
+        ));
         loop {
             ticker.tick().await;
             refresh_clans(&coc_cache_data, GameType::ClashOfClans).await;
         }
     });
 
-    // 3. Task for CR Cache Refresh (Every 10 minutes, offset by 15 seconds)
+    // 3. Task for CR Cache Refresh (offset by 15 seconds)
     let cr_cache_data = data.clone();
     tokio::spawn(async move {
         // Offset by a bit to spread load
         tokio::time::sleep(Duration::from_secs(15)).await;
-        let mut ticker = interval(Duration::from_secs(10 * 60));
+        let mut ticker = interval(Duration::from_secs(
+            cr_cache_data.background_refresh_interval * 60,
+        ));
         loop {
             ticker.tick().await;
             refresh_clans(&cr_cache_data, GameType::ClashRoyale).await;
@@ -275,112 +279,6 @@ async fn refresh_clans(data: &AppState, game: GameType) {
                             error!("Error refreshing {}: {}", endpoint, e);
                         }
                     }
-
-                    // For CoC: Refresh members to ensure profile pages are fast
-                    if game == GameType::ClashOfClans {
-                        let prefix = "coc";
-                        let members_cache_key =
-                            format!("{}:upstream:/api/clans/{}/members", prefix, encoded_tag);
-                        let members_res = sqlx::query_as::<_, (Vec<u8>,)>(
-                            "SELECT body FROM cache WHERE key = $1",
-                        )
-                        .bind(&members_cache_key)
-                        .fetch_optional(&data.db_pool)
-                        .await;
-
-                        if let Ok(Some((body,))) = members_res {
-                            if let Ok(members) = serde_json::from_slice::<serde_json::Value>(&body)
-                            {
-                                if let Some(member_list) = members.as_array() {
-                                    let mut player_set = tokio::task::JoinSet::new();
-                                    for member in member_list.iter().take(50) {
-                                        if let Some(player_tag) =
-                                            member.get("tag").and_then(|t| t.as_str())
-                                        {
-                                            let enc_player_tag =
-                                                crate::utils::encode_tag(player_tag);
-                                            let data_sc = data.clone();
-                                            let path_sc = format!("/players/{}", enc_player_tag);
-                                            player_set.spawn(async move {
-                                                let _ = update_supercell_cache(
-                                                    &data_sc,
-                                                    GameType::ClashOfClans,
-                                                    &path_sc,
-                                                )
-                                                .await;
-                                            });
-
-                                            let data_up = data.clone();
-                                            let path_up =
-                                                format!("/api/players/{}", enc_player_tag);
-                                            player_set.spawn(async move {
-                                                let _ = update_upstream_cache(
-                                                    &data_up,
-                                                    GameType::ClashOfClans,
-                                                    &path_up,
-                                                )
-                                                .await;
-                                            });
-                                        }
-                                    }
-                                    while let Some(_) = player_set.join_next().await {}
-                                }
-                            }
-                        }
-                    }
-
-                    // For CR: Also refresh player data
-                    if game == GameType::ClashRoyale {
-                        let prefix = "cr";
-                        let members_cache_key =
-                            format!("{}:upstream:/api/clans/{}/members", prefix, encoded_tag);
-                        let members_res = sqlx::query_as::<_, (Vec<u8>,)>(
-                            "SELECT body FROM cache WHERE key = $1",
-                        )
-                        .bind(&members_cache_key)
-                        .fetch_optional(&data.db_pool)
-                        .await;
-
-                        if let Ok(Some((body,))) = members_res {
-                            if let Ok(members) = serde_json::from_slice::<serde_json::Value>(&body)
-                            {
-                                if let Some(member_list) = members.as_array() {
-                                    let mut player_set = tokio::task::JoinSet::new();
-                                    for member in member_list.iter().take(50) {
-                                        if let Some(player_tag) =
-                                            member.get("tag").and_then(|t| t.as_str())
-                                        {
-                                            let enc_player_tag =
-                                                crate::utils::encode_tag(player_tag);
-                                            let data_sc = data.clone();
-                                            let path_sc = format!("/players/{}", enc_player_tag);
-                                            player_set.spawn(async move {
-                                                let _ = update_supercell_cache(
-                                                    &data_sc,
-                                                    GameType::ClashRoyale,
-                                                    &path_sc,
-                                                )
-                                                .await;
-                                            });
-
-                                            let data_up = data.clone();
-                                            let path_up =
-                                                format!("/api/players/{}", enc_player_tag);
-                                            player_set.spawn(async move {
-                                                let _ = update_upstream_cache(
-                                                    &data_up,
-                                                    GameType::ClashRoyale,
-                                                    &path_up,
-                                                )
-                                                .await;
-                                            });
-                                        }
-                                    }
-                                    while let Some(_) = player_set.join_next().await {}
-                                }
-                            }
-                        }
-                    }
                 }
                 info!(
                     "Background Refresh [{}]: All clan and member data updated.",
@@ -400,7 +298,7 @@ async fn refresh_clans(data: &AppState, game: GameType) {
     }
 
     info!(
-        "Background Refresh [{}]: Cycle complete. Next run in 10 minutes.",
-        game_name
+        "Background Refresh [{}]: Cycle complete. Next run in {} minutes.",
+        game_name, data.background_refresh_interval
     );
 }

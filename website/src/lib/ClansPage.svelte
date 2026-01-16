@@ -9,6 +9,8 @@
     export let apiBaseUrl: string;
     export let clanTag: string | null = null;
     export let gameType: GameType = 'coc';
+    export let backPath: string =
+        gameType === 'coc' ? '/coc/clans' : '/cr/clans';
 
     const dispatch = createEventDispatcher<{ navigate: string }>();
 
@@ -61,8 +63,8 @@
             const response = await fetch(`${apiBaseUrl}${apiPrefix}/clans`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            allClans = Array.isArray(data) 
-                ? data.sort((a, b) => (a.index || 0) - (b.index || 0)) 
+            allClans = Array.isArray(data)
+                ? data.sort((a, b) => (a.index || 0) - (b.index || 0))
                 : [];
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unknown error';
@@ -96,9 +98,21 @@
         </div>
     {:else if clanTag}
         {#if gameType === 'coc'}
-            <ClanDetailPage {theme} {apiBaseUrl} {clanTag} on:navigate />
+            <ClanDetailPage
+                {theme}
+                {apiBaseUrl}
+                {clanTag}
+                {backPath}
+                on:navigate
+            />
         {:else}
-            <CRClanDetailPage {theme} {apiBaseUrl} {clanTag} on:navigate />
+            <CRClanDetailPage
+                {theme}
+                {apiBaseUrl}
+                {clanTag}
+                {backPath}
+                on:navigate
+            />
         {/if}
     {:else if gameType === 'coc'}
         {#if f2pClans.length > 0}

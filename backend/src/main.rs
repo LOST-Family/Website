@@ -61,6 +61,10 @@ async fn main() -> std::io::Result<()> {
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let frontend_url =
         env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let background_refresh_interval = env::var("BACKGROUND_REFRESH_INTERVAL_MINS")
+        .unwrap_or_else(|_| "10".to_string())
+        .parse::<u64>()
+        .unwrap_or(10);
 
     let oauth_client = BasicClient::new(
         discord_client_id,
@@ -150,6 +154,7 @@ async fn main() -> std::io::Result<()> {
         oauth_client,
         jwt_secret,
         frontend_url,
+        background_refresh_interval,
     };
 
     // Spawn the background refresh task

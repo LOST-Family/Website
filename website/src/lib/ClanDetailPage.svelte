@@ -7,6 +7,7 @@
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
     export let clanTag: string;
+    export let backPath: string = '/coc/clans';
 
     const dispatch = createEventDispatcher<{
         navigate: string;
@@ -78,7 +79,13 @@
     let playerDetailsLoading = false;
     let playerOtherAccounts: any[] = [];
 
-    $: viewerIsCoLeader = $user && members.some(m => ($user.linked_players || []).includes(m.tag) && (m.role === 'coLeader' || m.role === 'leader'));
+    $: viewerIsCoLeader =
+        $user &&
+        members.some(
+            (m) =>
+                ($user.linked_players || []).includes(m.tag) &&
+                (m.role === 'coLeader' || m.role === 'leader')
+        );
     $: hasPrivilegedAccess = $user?.is_admin || viewerIsCoLeader;
 
     const roleOrder: Record<string, number> = {
@@ -282,7 +289,13 @@
             <header class="clan-hero">
                 <button
                     class="back-btn"
-                    on:click={() => dispatch('navigate', 'coc/clans')}
+                    on:click={() =>
+                        dispatch(
+                            'navigate',
+                            backPath.startsWith('/')
+                                ? backPath.substring(1)
+                                : backPath
+                        )}
                 >
                     <svg
                         viewBox="0 0 24 24"
@@ -292,7 +305,13 @@
                     >
                         <path d="M19 12H5M12 19l-7-7 7-7" />
                     </svg>
-                    Alle Clans
+                    {#if backPath === '/my-clans'}
+                        Deine Clans
+                    {:else if backPath === '/admin/clans'}
+                        Clan Admin
+                    {:else}
+                        Alle Clans
+                    {/if}
                 </button>
                 <div
                     class="hero-bg"
@@ -382,7 +401,8 @@
                                                     >{player.name}</span
                                                 >
                                                 <span class="rank-val"
-                                                    >{player.warStars || 0}</span
+                                                    >{player.warStars ||
+                                                        0}</span
                                                 >
                                             </button>
                                         {/each}
@@ -689,10 +709,14 @@
             <div
                 class="player-modal coc-modal"
                 class:light={theme === 'light'}
-                transition:scale={{ duration: 300, start: 0.95, easing: quintOut }}
+                transition:scale={{
+                    duration: 300,
+                    start: 0.95,
+                    easing: quintOut,
+                }}
             >
-                <button 
-                    class="close-modal" 
+                <button
+                    class="close-modal"
                     on:click={closePlayerDetails}
                     aria-label="Schließen"
                 >
@@ -723,10 +747,14 @@
                                 <div class="player-avatar-large">
                                     {#if selectedPlayer?.leagueTier || selectedPlayer?.league}
                                         <img
-                                            src={selectedPlayer?.leagueTier?.iconUrls.large ||
-                                                selectedPlayer?.league?.iconUrls.large ||
-                                                selectedPlayer?.league?.iconUrls.medium}
-                                            alt={selectedPlayer?.leagueTier?.name ||
+                                            src={selectedPlayer?.leagueTier
+                                                ?.iconUrls.large ||
+                                                selectedPlayer?.league?.iconUrls
+                                                    .large ||
+                                                selectedPlayer?.league?.iconUrls
+                                                    .medium}
+                                            alt={selectedPlayer?.leagueTier
+                                                ?.name ||
                                                 selectedPlayer?.league?.name}
                                             class="p-league-img"
                                         />
@@ -734,18 +762,33 @@
                                 </div>
                                 <div class="player-main-info">
                                     <h2>{selectedPlayer?.name}</h2>
-                                    <p class="player-tag">{selectedPlayer?.tag}</p>
+                                    <p class="player-tag">
+                                        {selectedPlayer?.tag}
+                                    </p>
                                     <div class="p-header-actions">
                                         <div class="p-role-badge">
-                                            {getRoleDisplay(selectedPlayer?.role || '')}
+                                            {getRoleDisplay(
+                                                selectedPlayer?.role || ''
+                                            )}
                                         </div>
                                         {#if selectedPlayer?.userId && $user?.is_admin}
                                             <button
                                                 class="view-profile-btn header-btn"
-                                                on:click={() => dispatch('navigate', `profile/${selectedPlayer?.userId}`)}
+                                                on:click={() =>
+                                                    dispatch(
+                                                        'navigate',
+                                                        `profile/${selectedPlayer?.userId}`
+                                                    )}
                                             >
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                                                <svg
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2.5"
+                                                >
+                                                    <path
+                                                        d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"
+                                                    />
                                                 </svg>
                                                 Profil
                                             </button>
@@ -759,25 +802,35 @@
                             <div class="stats-grid">
                                 <div class="stat-card">
                                     <span class="stat-label">Rathaus</span>
-                                    <span class="stat-value">Level {selectedPlayer?.townHallLevel}</span>
+                                    <span class="stat-value"
+                                        >Level {selectedPlayer?.townHallLevel}</span
+                                    >
                                 </div>
                                 <div class="stat-card">
                                     <span class="stat-label">Erfahrung</span>
-                                    <span class="stat-value">Lvl {selectedPlayer?.expLevel}</span>
+                                    <span class="stat-value"
+                                        >Lvl {selectedPlayer?.expLevel}</span
+                                    >
                                 </div>
                                 <div class="stat-card">
                                     <span class="stat-label">Trophäen</span>
-                                    <span class="stat-value">{selectedPlayer?.trophies}</span>
+                                    <span class="stat-value"
+                                        >{selectedPlayer?.trophies}</span
+                                    >
                                 </div>
                                 <div class="stat-card">
                                     <span class="stat-label">Kriegssterne</span>
-                                    <span class="stat-value">{selectedPlayer?.warStars || 0}</span>
+                                    <span class="stat-value"
+                                        >{selectedPlayer?.warStars || 0}</span
+                                    >
                                 </div>
                             </div>
 
                             <div class="donations-section">
                                 <span class="stat-label">Spenden</span>
-                                <div class="stat-value">▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}</div>
+                                <div class="stat-value">
+                                    ▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}
+                                </div>
                             </div>
 
                             {#if selectedPlayer?.userId || selectedPlayer?.isLinked}
@@ -786,18 +839,33 @@
                                     <div class="discord-info">
                                         <div class="d-avatar-box">
                                             {#if selectedPlayer?.avatar}
-                                                <img src={selectedPlayer.avatar} alt="Discord Avatar" class="discord-avatar" />
+                                                <img
+                                                    src={selectedPlayer.avatar}
+                                                    alt="Discord Avatar"
+                                                    class="discord-avatar"
+                                                />
                                             {:else}
                                                 <div class="d-placeholder">
-                                                    {(selectedPlayer?.nickname || selectedPlayer?.name || 'U').charAt(0).toUpperCase()}
+                                                    {(
+                                                        selectedPlayer?.nickname ||
+                                                        selectedPlayer?.name ||
+                                                        'U'
+                                                    )
+                                                        .charAt(0)
+                                                        .toUpperCase()}
                                                 </div>
                                             {/if}
                                         </div>
                                         <div class="d-info">
                                             <div class="discord-name">
-                                                {selectedPlayer?.nickname || selectedPlayer?.global_name || selectedPlayer?.username || 'Unbekannt'}
+                                                {selectedPlayer?.nickname ||
+                                                    selectedPlayer?.global_name ||
+                                                    selectedPlayer?.username ||
+                                                    'Unbekannt'}
                                             </div>
-                                            <div class="d-status">Verknüpft</div>
+                                            <div class="d-status">
+                                                Verknüpft
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -808,12 +876,28 @@
                                     <h4>Kickpunkte</h4>
                                     <div class="kp-summary-card">
                                         <div class="kp-stat">
-                                            <span class="stat-label">Aktuell</span>
-                                            <span class="stat-value">{selectedPlayer?.activeKickpointsSum ?? (selectedPlayer?.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)}</span>
+                                            <span class="stat-label"
+                                                >Aktuell</span
+                                            >
+                                            <span class="stat-value"
+                                                >{selectedPlayer?.activeKickpointsSum ??
+                                                    (
+                                                        selectedPlayer?.activeKickpoints ||
+                                                        []
+                                                    ).reduce(
+                                                        (a, b) =>
+                                                            a + (b.amount || 0),
+                                                        0
+                                                    )}</span
+                                            >
                                         </div>
                                         <div class="kp-stat">
-                                            <span class="stat-label">Gesamt</span>
-                                            <span class="stat-value">{selectedPlayer?.totalKickpoints}</span>
+                                            <span class="stat-label"
+                                                >Gesamt</span
+                                            >
+                                            <span class="stat-value"
+                                                >{selectedPlayer?.totalKickpoints}</span
+                                            >
                                         </div>
                                     </div>
 
@@ -821,17 +905,29 @@
                                         <div class="kp-details-list">
                                             {#each selectedPlayer.activeKickpoints as kp}
                                                 <div class="kp-detail-item">
-                                                    <div class="kp-detail-header">
-                                                        <span class="kp-amount">+{kp.amount}</span>
+                                                    <div
+                                                        class="kp-detail-header"
+                                                    >
+                                                        <span class="kp-amount"
+                                                            >+{kp.amount}</span
+                                                        >
                                                         <span class="kp-date">
-                                                            {new Date(kp.date).toLocaleDateString('de-DE')}
+                                                            {new Date(
+                                                                kp.date
+                                                            ).toLocaleDateString(
+                                                                'de-DE'
+                                                            )}
                                                         </span>
                                                     </div>
                                                     {#if kp.reason}
-                                                        <div class="kp-reason">{kp.reason}</div>
+                                                        <div class="kp-reason">
+                                                            {kp.reason}
+                                                        </div>
                                                     {/if}
                                                     {#if kp.description}
-                                                        <div class="kp-desc">{kp.description}</div>
+                                                        <div class="kp-desc">
+                                                            {kp.description}
+                                                        </div>
                                                     {/if}
                                                 </div>
                                             {/each}
@@ -842,23 +938,34 @@
 
                             {#if playerOtherAccounts.length > 0}
                                 <div class="modal-section accounts-section">
-                                    <h4>Weitere Accounts ({playerOtherAccounts.length})</h4>
+                                    <h4>
+                                        Weitere Accounts ({playerOtherAccounts.length})
+                                    </h4>
                                     <div class="other-accounts">
                                         {#each playerOtherAccounts as acc}
                                             <button
                                                 class="acc-mini-card"
-                                                on:click={() => selectPlayer(acc)}
+                                                on:click={() =>
+                                                    selectPlayer(acc)}
                                             >
                                                 <img
-                                                    src={acc.clan?.badgeUrls?.small || ''}
+                                                    src={acc.clan?.badgeUrls
+                                                        ?.small || ''}
                                                     alt=""
                                                     class="acc-badge"
                                                 />
                                                 <div class="acc-info">
-                                                    <div class="acc-name">{acc.nameDB}</div>
-                                                    <div class="acc-clan">{acc.clan?.name || 'Kein Clan'}</div>
+                                                    <div class="acc-name">
+                                                        {acc.nameDB}
+                                                    </div>
+                                                    <div class="acc-clan">
+                                                        {acc.clan?.name ||
+                                                            'Kein Clan'}
+                                                    </div>
                                                 </div>
-                                                <div class="acc-tag">{acc.tag}</div>
+                                                <div class="acc-tag">
+                                                    {acc.tag}
+                                                </div>
                                             </button>
                                         {/each}
                                     </div>

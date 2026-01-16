@@ -19,6 +19,7 @@ pub struct AppState {
     pub oauth_client: BasicClient,
     pub jwt_secret: String,
     pub frontend_url: String,
+    pub background_refresh_interval: u64,
 }
 
 #[derive(Serialize, Deserialize)]

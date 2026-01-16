@@ -106,6 +106,26 @@
         'MITGLIED 8': 47,
         'MITGLIED GP': 48,
         'MITGLIED ANTHRAZIT': 49,
+        'ANFÜHRER CR': 60,
+        'ANFÜHRER CR 2': 61,
+        'ANFÜHRER CR 3': 62,
+        'ANFÜHRER CR 4': 63,
+        'ANFÜHRER CR 5': 64,
+        'VIZE CR 1': 70,
+        'VIZE CR 2': 71,
+        'VIZE CR 3': 72,
+        'VIZE CR 4': 73,
+        'VIZE CR 5': 74,
+        'ÄLTESTER CR 1': 80,
+        'ÄLTESTER CR 2': 81,
+        'ÄLTESTER CR 3': 82,
+        'ÄLTESTER CR 4': 83,
+        'ÄLTESTER CR 5': 84,
+        'MITGLIED CR': 90,
+        'MITGLIED CR 2': 91,
+        'MITGLIED CR 3': 92,
+        'MITGLIED CR 4': 93,
+        'MITGLIED CR 5': 94,
     };
 
     const roleColors: Record<string, string> = {
@@ -149,6 +169,26 @@
         'MITGLIED 8': '#ff88ee',
         'MITGLIED GP': '#f38ac5',
         'MITGLIED ANTHRAZIT': '#546e7a',
+        'ANFÜHRER CR': '#227e3f',
+        'ANFÜHRER CR 2': '#227e3f',
+        'ANFÜHRER CR 3': '#227e3f',
+        'ANFÜHRER CR 4': '#227e3f',
+        'ANFÜHRER CR 5': '#227e3f',
+        'VIZE CR 1': '#289c4d',
+        'VIZE CR 2': '#289c4d',
+        'VIZE CR 3': '#289c4d',
+        'VIZE CR 4': '#289c4d',
+        'VIZE CR 5': '#289c4d',
+        'ÄLTESTER CR 1': '#00ff9e',
+        'ÄLTESTER CR 2': '#93d128',
+        'ÄLTESTER CR 3': '#992d22',
+        'ÄLTESTER CR 4': '#13598b',
+        'ÄLTESTER CR 5': '#ce9201',
+        'MITGLIED CR': '#42ffb7',
+        'MITGLIED CR 2': '#a4cc60',
+        'MITGLIED CR 3': '#be4d40',
+        'MITGLIED CR 4': '#2183c9',
+        'MITGLIED CR 5': '#fabf05',
     };
 
     function getDisplayRole(role: string): string {
@@ -248,69 +288,102 @@
                                         .includes(upperRole);
 
                                     if (isCoCStandard || isCRStandard) {
-                                        const clanIndex = index + 1;
+                                        const clanIndex = clan.index;
                                         const clanNameUpper = (
                                             clan.nameDB || ''
                                         ).toUpperCase();
-                                        const isGP =
-                                            clanNameUpper.includes('GP');
-                                        const isAnthrazit =
-                                            clanNameUpper.includes('ANTHRAZIT');
 
-                                        if (isGP) {
-                                            if (upperRole === 'LEADER')
-                                                computedRole = 'ANFÜHRER GP';
-                                            else if (
-                                                upperRole === 'COLEADER' ||
-                                                upperRole === 'CO-LEADER'
-                                            )
-                                                computedRole = 'VIZE GP';
-                                            else if (
-                                                upperRole === 'ELDER' ||
-                                                upperRole === 'ADMIN'
-                                            )
-                                                computedRole = 'ÄLTESTER GP';
-                                            else if (upperRole === 'MEMBER')
-                                                computedRole = 'MITGLIED GP';
-                                        } else if (isAnthrazit) {
-                                            if (upperRole === 'LEADER')
-                                                computedRole =
-                                                    'ANFÜHRER ANTHRAZIT';
-                                            else if (
-                                                upperRole === 'COLEADER' ||
-                                                upperRole === 'CO-LEADER'
-                                            )
-                                                computedRole = 'VIZE ANTHRAZIT';
-                                            else if (
-                                                upperRole === 'ELDER' ||
-                                                upperRole === 'ADMIN'
-                                            )
-                                                computedRole =
-                                                    'ÄLTESTER ANTHRAZIT';
-                                            else if (upperRole === 'MEMBER')
-                                                computedRole =
-                                                    'MITGLIED ANTHRAZIT';
-                                        } else {
+                                        if (gameType === 'cr') {
                                             if (upperRole === 'LEADER') {
                                                 computedRole =
                                                     clanIndex === 1
-                                                        ? 'ANFÜHRER'
-                                                        : `ANFÜHRER ${clanIndex}`;
+                                                        ? 'ANFÜHRER CR'
+                                                        : `ANFÜHRER CR ${clanIndex}`;
                                             } else if (
                                                 upperRole === 'COLEADER' ||
                                                 upperRole === 'CO-LEADER'
                                             ) {
-                                                computedRole = `VIZE ${clanIndex}`;
+                                                computedRole = `VIZE CR ${clanIndex}`;
                                             } else if (
                                                 upperRole === 'ELDER' ||
                                                 upperRole === 'ADMIN'
                                             ) {
-                                                computedRole = `ÄLTESTER ${clanIndex}`;
+                                                computedRole = `ÄLTESTER CR ${clanIndex}`;
                                             } else if (upperRole === 'MEMBER') {
                                                 computedRole =
                                                     clanIndex === 1
-                                                        ? 'MITGLIED'
-                                                        : `MITGLIED ${clanIndex}`;
+                                                        ? 'MITGLIED CR'
+                                                        : `MITGLIED CR ${clanIndex}`;
+                                            }
+                                        } else {
+                                            const isGP =
+                                                clanNameUpper.includes('GP');
+                                            const isAnthrazit =
+                                                clanNameUpper.includes(
+                                                    'ANTHRAZIT'
+                                                );
+
+                                            if (isGP) {
+                                                if (upperRole === 'LEADER')
+                                                    computedRole =
+                                                        'ANFÜHRER GP';
+                                                else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                )
+                                                    computedRole = 'VIZE GP';
+                                                else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                )
+                                                    computedRole =
+                                                        'ÄLTESTER GP';
+                                                else if (upperRole === 'MEMBER')
+                                                    computedRole =
+                                                        'MITGLIED GP';
+                                            } else if (isAnthrazit) {
+                                                if (upperRole === 'LEADER')
+                                                    computedRole =
+                                                        'ANFÜHRER ANTHRAZIT';
+                                                else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                )
+                                                    computedRole =
+                                                        'VIZE ANTHRAZIT';
+                                                else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                )
+                                                    computedRole =
+                                                        'ÄLTESTER ANTHRAZIT';
+                                                else if (upperRole === 'MEMBER')
+                                                    computedRole =
+                                                        'MITGLIED ANTHRAZIT';
+                                            } else {
+                                                if (upperRole === 'LEADER') {
+                                                    computedRole =
+                                                        clanIndex === 1
+                                                            ? 'ANFÜHRER'
+                                                            : `ANFÜHRER ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                ) {
+                                                    computedRole = `VIZE ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                ) {
+                                                    computedRole = `ÄLTESTER ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'MEMBER'
+                                                ) {
+                                                    computedRole =
+                                                        clanIndex === 1
+                                                            ? 'MITGLIED'
+                                                            : `MITGLIED ${clanIndex}`;
+                                                }
                                             }
                                         }
                                     }

@@ -7,6 +7,7 @@
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
     export let clanTag: string;
+    export let backPath: string = '/cr/clans';
 
     const dispatch = createEventDispatcher<{
         navigate: string;
@@ -215,7 +216,13 @@
             <header class="clan-hero">
                 <button
                     class="back-btn"
-                    on:click={() => dispatch('navigate', 'cr/clans')}
+                    on:click={() =>
+                        dispatch(
+                            'navigate',
+                            backPath.startsWith('/')
+                                ? backPath.substring(1)
+                                : backPath
+                        )}
                 >
                     <svg
                         viewBox="0 0 24 24"
@@ -225,7 +232,13 @@
                     >
                         <path d="M19 12H5M12 19l-7-7 7-7" />
                     </svg>
-                    Alle Clans
+                    {#if backPath === '/my-clans'}
+                        Deine Clans
+                    {:else if backPath === '/admin/clans'}
+                        Clan Admin
+                    {:else}
+                        Alle Clans
+                    {/if}
                 </button>
                 <div
                     class="hero-bg"
@@ -1875,7 +1888,7 @@
         border-color: rgba(217, 119, 6, 0.2);
         color: #d97706;
     }
-    
+
     .clan-detail-page.light .rank-val,
     .clan-detail-page.light .rank-num {
         color: #1e293b;

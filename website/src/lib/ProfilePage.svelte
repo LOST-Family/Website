@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
-    import { user, loading } from './auth';
+    import { user, loading, fetchUser } from './auth';
     import type { GameType } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -63,6 +63,11 @@
                     // Fallback for old format (array = CoC accounts)
                     cocPlayerAccounts = Array.isArray(data) ? data : [];
                     crPlayerAccounts = [];
+                }
+
+                // If viewing own accounts, refresh global user state to get updated linked_players
+                if (!viewUserId) {
+                    fetchUser();
                 }
             } else {
                 accountsError = 'Fehler beim Laden der Accounts';
