@@ -85,8 +85,8 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             for clan in clans {
                 if let Some(obj) = clan.as_object_mut() {
                     // Fix badgeUrl mismatch (singular vs plural) - Always apply
-                    if !obj.contains_key("badgeUrls") {
-                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                    if !obj.contains_key("badgeUrls")
+                        && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
                             obj.insert(
                                 "badgeUrls".to_string(),
                                 serde_json::json!({
@@ -97,7 +97,6 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
                             );
                             modified = true;
                         }
-                    }
 
                     if filter_fields {
                         for field in &fields_to_remove {
@@ -109,8 +108,8 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             }
         } else if let Some(obj) = value.as_object_mut() {
             // Fix badgeUrl mismatch (singular vs plural)
-            if !obj.contains_key("badgeUrls") {
-                if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+            if !obj.contains_key("badgeUrls")
+                && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
                     obj.insert(
                         "badgeUrls".to_string(),
                         serde_json::json!({
@@ -120,7 +119,6 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
                         }),
                     );
                 }
-            }
 
             if filter_fields {
                 for field in &fields_to_remove {
@@ -130,11 +128,10 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             }
         }
 
-        if modified {
-            if let Ok(filtered) = serde_json::to_vec(&value) {
+        if modified
+            && let Ok(filtered) = serde_json::to_vec(&value) {
                 return Bytes::from(filtered);
             }
-        }
     }
     body
 }
@@ -218,11 +215,10 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                if let Some(obj) = member.as_object_mut() {
-                    if process_obj(obj, &tag) {
+                if let Some(obj) = member.as_object_mut()
+                    && process_obj(obj, &tag) {
                         modified = true;
                     }
-                }
             }
         } else if let Some(obj) = value.as_object_mut() {
             let tag = obj
@@ -235,11 +231,10 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             }
         }
 
-        if modified {
-            if let Ok(filtered) = serde_json::to_vec(&value) {
+        if modified
+            && let Ok(filtered) = serde_json::to_vec(&value) {
                 return Bytes::from(filtered);
             }
-        }
     }
     body
 }
@@ -320,11 +315,10 @@ pub async fn get_cached_or_update_supercell_cache(
             .fetch_optional(&data.db_pool)
             .await;
 
-    if let Ok(Some((body, updated_at))) = &cached_result {
-        if now - updated_at < ttl_seconds {
+    if let Ok(Some((body, updated_at))) = &cached_result
+        && now - updated_at < ttl_seconds {
             return Ok(Bytes::from(body.clone()));
         }
-    }
 
     match update_supercell_cache(data, game, url_path).await {
         Ok(body) => Ok(body),
@@ -358,11 +352,10 @@ pub async fn get_cached_or_update_upstream_cache(
             .fetch_optional(&data.db_pool)
             .await;
 
-    if let Ok(Some((body, updated_at))) = &cached_result {
-        if now - updated_at < ttl_seconds {
+    if let Ok(Some((body, updated_at))) = &cached_result
+        && now - updated_at < ttl_seconds {
             return Ok(Bytes::from(body.clone()));
         }
-    }
 
     match update_upstream_cache(data, game, url_path).await {
         Ok(body) => Ok(body),

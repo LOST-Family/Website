@@ -322,9 +322,9 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
         .fetch_optional(&data.db_pool)
         .await;
 
-    if let Ok(Some((up_body,))) = up_res {
-        if let Ok(up_json) = serde_json::from_slice::<serde_json::Value>(&up_body) {
-            if let (Some(sc_obj), Some(up_obj)) = (clan_json.as_object_mut(), up_json.as_object()) {
+    if let Ok(Some((up_body,))) = up_res
+        && let Ok(up_json) = serde_json::from_slice::<serde_json::Value>(&up_body)
+            && let (Some(sc_obj), Some(up_obj)) = (clan_json.as_object_mut(), up_json.as_object()) {
                 // Fields to merge from upstream (override or add)
                 let fields_to_merge = [
                     "nameDB",
@@ -342,13 +342,11 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
                     }
                 }
             }
-        }
-    }
 
     // Fix badgeUrl mismatch (singular vs plural)
-    if let Some(obj) = clan_json.as_object_mut() {
-        if !obj.contains_key("badgeUrls") {
-            if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+    if let Some(obj) = clan_json.as_object_mut()
+        && !obj.contains_key("badgeUrls")
+            && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
                 obj.insert(
                     "badgeUrls".to_string(),
                     serde_json::json!({
@@ -358,8 +356,6 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
                     }),
                 );
             }
-        }
-    }
 
     HttpResponse::Ok().json(clan_json)
 }
@@ -485,7 +481,7 @@ async fn get_clan_members_impl(
         .filter_map(|m| {
             m.get("tag")
                 .and_then(|t| t.as_str())
-                .map(|s| normalize_tag(s))
+                .map(&normalize_tag)
         })
         .collect();
 
@@ -503,7 +499,7 @@ async fn get_clan_members_impl(
             if let Some(u_member) = upstream_members.iter().find(|m| {
                 m.get("tag")
                     .and_then(|t| t.as_str())
-                    .map(|s| normalize_tag(s))
+                    .map(&normalize_tag)
                     == Some(norm_tag.clone())
             }) {
                 if let (Some(s_obj), Some(u_obj)) = (s_member.as_object_mut(), u_member.as_object())
@@ -579,9 +575,9 @@ async fn get_clan_members_impl(
                         .fetch_optional(&data.db_pool)
                         .await;
 
-                if let Ok(Some((p_body,))) = player_res {
-                    if let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body) {
-                        if let (Some(s_obj), Some(p_obj)) =
+                if let Ok(Some((p_body,))) = player_res
+                    && let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body)
+                        && let (Some(s_obj), Some(p_obj)) =
                             (s_member.as_object_mut(), p_json.as_object())
                         {
                             if let Some(stars) = p_obj.get("warStars") {
@@ -594,8 +590,6 @@ async fn get_clan_members_impl(
                                 s_obj.insert("league".to_string(), league.clone());
                             }
                         }
-                    }
-                }
             }
         }
     }
@@ -603,8 +597,8 @@ async fn get_clan_members_impl(
     // Add members that are only in upstream (Left members)
     let mut final_members = supercell_members;
     for u_member in upstream_members {
-        if let Some(u_tag) = u_member.get("tag").and_then(|t| t.as_str()) {
-            if !supercell_tags.contains(&normalize_tag(u_tag)) {
+        if let Some(u_tag) = u_member.get("tag").and_then(|t| t.as_str())
+            && !supercell_tags.contains(&normalize_tag(u_tag)) {
                 let mut mixed_member = u_member.clone();
                 if let Some(obj) = mixed_member.as_object_mut() {
                     obj.insert("in_supercell".to_string(), serde_json::Value::Bool(false));
@@ -623,17 +617,15 @@ async fn get_clan_members_impl(
                             .fetch_optional(&data.db_pool)
                             .await;
 
-                    if let Ok(Some((p_body,))) = player_res {
-                        if let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body) {
-                            if let Some(p_obj) = p_json.as_object() {
+                    if let Ok(Some((p_body,))) = player_res
+                        && let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body)
+                            && let Some(p_obj) = p_json.as_object() {
                                 for (pk, pv) in p_obj {
                                     if !obj.contains_key(pk) {
                                         obj.insert(pk.clone(), pv.clone());
                                     }
                                 }
                             }
-                        }
-                    }
 
                     // Map upstream data to standard fields if still missing
                     if !obj.contains_key("name") {
@@ -659,7 +651,6 @@ async fn get_clan_members_impl(
                 }
                 final_members.push(mixed_member);
             }
-        }
     }
 
     HttpResponse::Ok().json(final_members)
@@ -758,10 +749,10 @@ async fn get_player_impl(
         .unwrap_or("");
     let is_exempt = exempt_tags.iter().any(|et| et == tag_str);
 
-    if has_required_role(user_role, "MEMBER") || is_exempt {
-        if let Ok(u_body) = upstream_res {
-            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body) {
-                if let Some(obj) = player_json.as_object_mut() {
+    if (has_required_role(user_role, "MEMBER") || is_exempt)
+        && let Ok(u_body) = upstream_res
+            && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
+                && let Some(obj) = player_json.as_object_mut() {
                     // Only merge kickpoint summaries, NOT identity
                     if let Some(akp) = u_json.get("activeKickpoints").and_then(|v| v.as_array()) {
                         let sum: i64 = akp
@@ -778,9 +769,6 @@ async fn get_player_impl(
                         obj.insert("totalKickpoints".to_string(), total.clone());
                     }
                 }
-            }
-        }
-    }
 
     HttpResponse::Ok().json(player_json)
 }
@@ -1134,11 +1122,10 @@ pub async fn get_user(
                 );
 
                 // Nickname: prefer CoC but if null take CR
-                if coc_obj.get("nickname").map_or(true, |v| v.is_null()) {
-                    if let Some(cr_nick) = cr_obj.get("nickname") {
+                if coc_obj.get("nickname").is_none_or(|v| v.is_null())
+                    && let Some(cr_nick) = cr_obj.get("nickname") {
                         coc_obj.insert("nickname".to_string(), cr_nick.clone());
                     }
-                }
             }
             HttpResponse::Ok().json(coc)
         }
@@ -1177,17 +1164,16 @@ async fn fetch_aggregated_player_accounts(
             )
             .await;
 
-            if let Ok(supercell_body) = supercell_res {
-                if let Ok(mut player_json) =
+            if let Ok(supercell_body) = supercell_res
+                && let Ok(mut player_json) =
                     serde_json::from_slice::<serde_json::Value>(&supercell_body)
                 {
                     if let Some(player_obj) = player_json.as_object_mut() {
                         player_obj.insert("gameType".to_string(), serde_json::json!("coc"));
 
-                        if let Ok(u_body) = upstream_res {
-                            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
-                            {
-                                if let Some(u_obj) = u_json.as_object() {
+                        if let Ok(u_body) = upstream_res
+                            && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
+                                && let Some(u_obj) = u_json.as_object() {
                                     for (k, v) in u_obj {
                                         if !player_obj.contains_key(k) {
                                             player_obj.insert(k.clone(), v.clone());
@@ -1215,12 +1201,9 @@ async fn fetch_aggregated_player_accounts(
                                         );
                                     }
                                 }
-                            }
-                        }
                     }
                     return Some(player_json);
                 }
-            }
             None
         });
     }
@@ -1248,17 +1231,16 @@ async fn fetch_aggregated_player_accounts(
             )
             .await;
 
-            if let Ok(supercell_body) = supercell_res {
-                if let Ok(mut player_json) =
+            if let Ok(supercell_body) = supercell_res
+                && let Ok(mut player_json) =
                     serde_json::from_slice::<serde_json::Value>(&supercell_body)
                 {
                     if let Some(player_obj) = player_json.as_object_mut() {
                         player_obj.insert("gameType".to_string(), serde_json::json!("cr"));
 
-                        if let Ok(u_body) = upstream_res {
-                            if let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
-                            {
-                                if let Some(u_obj) = u_json.as_object() {
+                        if let Ok(u_body) = upstream_res
+                            && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
+                                && let Some(u_obj) = u_json.as_object() {
                                     for (k, v) in u_obj {
                                         if !player_obj.contains_key(k) {
                                             player_obj.insert(k.clone(), v.clone());
@@ -1286,12 +1268,9 @@ async fn fetch_aggregated_player_accounts(
                                         );
                                     }
                                 }
-                            }
-                        }
                     }
                     return Some(player_json);
                 }
-            }
             None
         });
     }
@@ -1336,8 +1315,8 @@ async fn sync_user_accounts(
     let mut bot_a_cr = Vec::new();
     let mut bot_a_success = false;
 
-    if let Ok(body) = coc_bot_res {
-        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+    if let Ok(body) = coc_bot_res
+        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
             bot_a_coc = json
                 .get("linkedPlayers")
                 .and_then(|v| v.as_array())
@@ -1358,13 +1337,12 @@ async fn sync_user_accounts(
                 .unwrap_or_default();
             bot_a_success = true;
         }
-    }
 
     let mut bot_b_cr = Vec::new();
     let mut bot_b_success = false;
 
-    if let Ok(body) = cr_bot_res {
-        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+    if let Ok(body) = cr_bot_res
+        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
             // CR bot: both fields are typically CR players
             let mut tags = Vec::new();
             if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
@@ -1378,15 +1356,13 @@ async fn sync_user_accounts(
             bot_b_cr = tags;
             bot_b_success = true;
         }
-    }
 
     // 2. Reconcile CoC (Authority is Bot A)
-    if bot_a_success {
-        if coc_players != bot_a_coc {
+    if bot_a_success
+        && coc_players != bot_a_coc {
             coc_players = bot_a_coc;
             modified = true;
         }
-    }
 
     // 3. Reconcile CR (Authority is Union of Bot A and Bot B if both present)
     if bot_a_success && bot_b_success {
@@ -1521,8 +1497,8 @@ pub async fn get_guild_info(
             let json: serde_json::Value =
                 serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
 
-            if !has_required_role(user_role, "ADMIN") {
-                if let Some(obj) = json.as_object() {
+            if !has_required_role(user_role, "ADMIN")
+                && let Some(obj) = json.as_object() {
                     let mut summary = serde_json::Map::new();
                     if let Some(count) = obj.get("membercount") {
                         summary.insert("membercount".to_string(), count.clone());
@@ -1535,7 +1511,6 @@ pub async fn get_guild_info(
                     }
                     return HttpResponse::Ok().json(summary);
                 }
-            }
 
             let status = actix_web::http::StatusCode::from_u16(status as u16)
                 .unwrap_or(actix_web::http::StatusCode::OK);

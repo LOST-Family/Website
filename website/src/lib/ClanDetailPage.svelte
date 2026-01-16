@@ -75,6 +75,7 @@
         is_new?: boolean;
         is_left?: boolean;
         is_dirty?: boolean;
+        isHidden?: boolean;
         upstream_name?: string;
         upstream_role?: string;
         upstream_expLevel?: number;
@@ -1007,21 +1008,6 @@
         filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.6));
     }
 
-    .level-badge {
-        position: absolute;
-        bottom: -5px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: var(--accent-color);
-        padding: 6px 16px;
-        border-radius: 30px;
-        font-weight: 800;
-        font-size: 0.95rem;
-        box-shadow: 0 8px 20px rgba(88, 101, 242, 0.4);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        white-space: nowrap;
-    }
-
     .clan-info-main {
         flex: 1;
     }
@@ -1794,36 +1780,8 @@
         opacity: 0.7;
     }
 
-    .row-left {
-        background: rgba(75, 85, 99, 0.1);
-    }
-
-    .row-new {
-        background: rgba(16, 185, 129, 0.1);
-    }
-
     .row-diff {
         background: rgba(245, 158, 11, 0.05);
-    }
-
-    .diff-label {
-        font-size: 0.7rem;
-        font-weight: 950;
-        padding: 4px 10px;
-        border-radius: 6px;
-        text-transform: uppercase;
-        margin-right: 12px;
-        display: inline-block;
-        vertical-align: middle;
-    }
-
-    .diff-label.left {
-        background: #4b5563;
-        color: white;
-    }
-    .diff-label.new {
-        background: #10b981;
-        color: white;
     }
 
     /* New Diff Grid Layout */

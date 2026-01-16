@@ -39,6 +39,12 @@
         mobileMenuOpen = !mobileMenuOpen;
     }
 
+    function handleBackdropKeydown(event: KeyboardEvent) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            toggleMobileMenu();
+        }
+    }
+
     $: if (typeof document !== 'undefined' && document.body) {
         if (mobileMenuOpen) {
             document.body.classList.add('no-scroll');
@@ -500,9 +506,13 @@
 
 <!-- Mobile Navigation Drawer -->
 <div
+    role="button"
+    tabindex="0"
     class="mobile-backdrop"
     class:visible={mobileMenuOpen}
     on:click={toggleMobileMenu}
+    on:keydown={handleBackdropKeydown}
+    aria-label="Menü schließen"
 ></div>
 
 <aside
@@ -515,7 +525,11 @@
             <img src={logo} alt="LOST Family" class="logo-icon" />
             <span class="logo-text-drawer">LOST Family</span>
         </button>
-        <button class="drawer-close" on:click={toggleMobileMenu}>
+        <button
+            class="drawer-close"
+            on:click={toggleMobileMenu}
+            aria-label="Menü schließen"
+        >
             <svg
                 viewBox="0 0 24 24"
                 fill="none"

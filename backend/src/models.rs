@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
+pub type DiscordOAuthClient = oauth2::Client<
+    oauth2::StandardErrorResponse<oauth2::basic::BasicErrorResponseType>,
+    oauth2::basic::BasicTokenResponse,
+    oauth2::basic::BasicTokenIntrospectionResponse,
+    oauth2::StandardRevocableToken,
+    oauth2::StandardErrorResponse<oauth2::RevocationErrorResponseType>,
+    oauth2::EndpointSet,
+    oauth2::EndpointNotSet,
+    oauth2::EndpointNotSet,
+    oauth2::EndpointNotSet,
+    oauth2::EndpointSet,
+>;
+
 #[derive(Clone)]
 pub struct AppState {
     pub client: oauth2::reqwest::Client,
@@ -14,18 +27,7 @@ pub struct AppState {
     pub clash_of_clans_api_token: String,
     pub clash_royale_api_token: String,
     pub db_pool: PgPool,
-    pub oauth_client: oauth2::Client<
-        oauth2::StandardErrorResponse<oauth2::basic::BasicErrorResponseType>,
-        oauth2::basic::BasicTokenResponse,
-        oauth2::basic::BasicTokenIntrospectionResponse,
-        oauth2::StandardRevocableToken,
-        oauth2::StandardErrorResponse<oauth2::RevocationErrorResponseType>,
-        oauth2::EndpointSet,
-        oauth2::EndpointNotSet,
-        oauth2::EndpointNotSet,
-        oauth2::EndpointNotSet,
-        oauth2::EndpointSet,
-    >,
+    pub oauth_client: DiscordOAuthClient,
     pub jwt_secret: String,
     pub frontend_url: String,
     pub background_refresh_interval: u64,

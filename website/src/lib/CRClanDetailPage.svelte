@@ -65,6 +65,7 @@
         is_new?: boolean;
         is_left?: boolean;
         is_dirty?: boolean;
+        isHidden?: boolean;
         upstream_name?: string;
         upstream_role?: string;
         upstream_expLevel?: number;
@@ -1783,21 +1784,6 @@
         font-size: 0.75rem;
         font-family: 'JetBrains Mono', monospace;
         opacity: 0.5;
-    }
-
-    .diff-label {
-        font-size: 0.65rem;
-        font-weight: 900;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-    .diff-label.new {
-        background: #10b981;
-        color: white;
-    }
-    .diff-label.left {
-        background: #4b5563;
-        color: white;
     }
 
     .diff-table-container {
