@@ -10,6 +10,7 @@
     export let onClose: () => void;
     export let otherAccounts: any[] = [];
     export let hasPrivilegedAccess: boolean = false;
+    export let isAdmin: boolean = false;
     export let onNavigateToProfile: ((userId: string) => void) | null = null;
     export let onSelectOtherAccount: ((acc: any) => void) | null = null;
 
@@ -48,7 +49,7 @@
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="2.5"
+                    stroke-width="3"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 >
@@ -81,7 +82,7 @@
                                 <h2>
                                     {player.nameDB || player.name}
                                 </h2>
-                                {#if player.userId && onNavigateToProfile}
+                                {#if player.userId && onNavigateToProfile && isAdmin}
                                     <button
                                         class="view-profile-btn"
                                         on:click={() =>
@@ -332,11 +333,6 @@
                                             src={badge.iconUrls?.large}
                                             alt={badge.name}
                                         />
-                                        {#if badge.level}
-                                            <span class="badge-level-cr"
-                                                >Lvl {badge.level}</span
-                                            >
-                                        {/if}
                                     </div>
                                 {/each}
                             </div>
@@ -498,15 +494,15 @@
         position: absolute;
         top: 1.5rem;
         right: 1.5rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.6);
-        width: 40px;
-        height: 40px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        width: 44px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 12px;
+        border-radius: 14px;
         cursor: pointer;
         transition: all 0.2s ease;
         z-index: 100;
@@ -515,14 +511,22 @@
     .light .close-modal {
         background: rgba(0, 0, 0, 0.05);
         border-color: rgba(0, 0, 0, 0.1);
-        color: rgba(0, 0, 0, 0.6);
+        color: #1a1a1a;
     }
 
     .close-modal:hover {
-        background: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
-        border-color: rgba(239, 68, 68, 0.3);
+        background: #ef4444;
+        color: #ffffff;
+        border-color: #ef4444;
         transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .close-modal svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+        stroke-width: 3px;
     }
 
     .modal-header {

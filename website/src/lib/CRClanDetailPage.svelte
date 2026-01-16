@@ -2,7 +2,7 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import { fade, slide, scale } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
-    import { user } from './auth';
+    import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -58,6 +58,16 @@
         activeKickpointsCount?: number;
         activeKickpointsSum?: number;
         activeKickpoints?: any[];
+        // Mixed API Data
+        in_supercell?: boolean;
+        in_upstream?: boolean;
+        is_diff?: boolean;
+        is_new?: boolean;
+        is_left?: boolean;
+        is_dirty?: boolean;
+        upstream_name?: string;
+        upstream_role?: string;
+        upstream_expLevel?: number;
     }
 
     let clan: Clan | null = null;
@@ -67,6 +77,20 @@
     let searchQuery = '';
     let selectedPlayer: Player | null = null;
     let playerDetailsLoading = false;
+
+    $: viewerIsCoLeader = !!(
+        $user &&
+        members.some(
+            (m) =>
+                ($user.linked_cr_players || []).includes(m.tag) &&
+                (m.role === 'coLeader' || m.role === 'leader')
+        )
+    );
+    $: hasPrivilegedAccess = !!(
+        $user?.is_admin ||
+        viewerIsCoLeader ||
+        ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
+    );
 
     const roleOrder: Record<string, number> = {
         leader: 1,
@@ -169,13 +193,27 @@
         .sort((a, b) => (b.trophies || 0) - (a.trophies || 0))
         .slice(0, 3);
 
-    $: filteredMembers = members.filter((m) => {
-        const nameMatch =
-            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        const tagMatch =
-            m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        return nameMatch || tagMatch;
-    });
+    $: filteredMembers = members
+        .filter(
+            (m) => m.in_supercell && !m.is_new && !m.is_dirty && !m.isHidden
+        ) // Hide diff & hidden members from main list
+        .filter((m) => {
+            const nameMatch =
+                m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            const tagMatch =
+                m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            return nameMatch || tagMatch;
+        });
+
+    $: newMembers = members.filter((m) => m.is_new && !m.isHidden);
+    $: leftMembers = members.filter((m) => m.is_left && !m.isHidden);
+    $: changedMembers = members.filter((m) => m.is_dirty && !m.isHidden);
+    $: hasDifferences =
+        newMembers.length > 0 ||
+        leftMembers.length > 0 ||
+        changedMembers.length > 0;
 </script>
 
 <div
@@ -544,7 +582,7 @@
                                         </div>
                                     </div>
                                     <div class="m-points-info">
-                                        {#if member.activeKickpointsSum !== undefined && member.activeKickpointsSum > 0}
+                                        {#if hasPrivilegedAccess && member.activeKickpointsSum !== undefined && member.activeKickpointsSum > 0}
                                             <div
                                                 class="m-kp-badge"
                                                 title="Aktive Kickpoints"
@@ -620,6 +658,157 @@
                             </div>
                         {/each}
                     </div>
+
+                    {#if hasDifferences}
+                        <div class="diff-section" transition:slide>
+                            <div class="section-header-row">
+                                <div class="title-group">
+                                    <h3>Memberstatus</h3>
+                                </div>
+                            </div>
+
+                            <div class="diff-grid-layout">
+                                {#if leftMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot left"
+                                            ></span>
+                                            Mitglied, ingame nicht im Clan ({leftMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each leftMembers as m}
+                                                <div
+                                                    class="mini-diff-card left"
+                                                >
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name ||
+                                                                'Unbekannt'}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                {#if newMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot new"
+                                            ></span>
+                                            Kein Mitglied, ingame im Clan ({newMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each newMembers as m}
+                                                <div class="mini-diff-card new">
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            {#if changedMembers.length > 0}
+                                <div class="diff-table-container">
+                                    <div class="table-header">
+                                        <h4>
+                                            Im Clan, falsche Rolle / Daten ({changedMembers.length})
+                                        </h4>
+                                    </div>
+                                    <table class="diff-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Spieler</th>
+                                                <th>Feld</th>
+                                                <th>Ingame</th>
+                                                <th>Datenbank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {#each changedMembers as m}
+                                                {#if m.name !== m.upstream_name && m.upstream_name}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Name</td>
+                                                        <td class="val-sc"
+                                                            >{m.name}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_name}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Rolle</td>
+                                                        <td class="val-sc"
+                                                            >{getRoleDisplay(
+                                                                m.role
+                                                            )}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{getRoleDisplay(
+                                                                m.upstream_role
+                                                            )}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Level</td>
+                                                        <td class="val-sc"
+                                                            >{m.expLevel}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_expLevel}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                            {/each}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
                 </main>
             </div>
         </div>
@@ -631,7 +820,8 @@
         gameType="cr"
         {theme}
         onClose={closePlayerDetails}
-        hasPrivilegedAccess={$user?.is_admin}
+        hasPrivilegedAccess={hasPrivilegedAccess}
+        isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
     />
@@ -1498,6 +1688,154 @@
     .clan-detail-page.light .rank-val,
     .clan-detail-page.light .rank-num {
         color: #1e293b;
+    }
+
+    /* Diff Section Styles */
+    .diff-section {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .diff-section .section-header-row {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 1.5rem;
+    }
+
+    .diff-section .title-group h3 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    .light .diff-section {
+        border-top-color: rgba(0, 0, 0, 0.08);
+    }
+
+    .diff-grid-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+
+    .diff-category h4 {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        opacity: 0.8;
+    }
+
+    .indicator-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    .indicator-dot.new {
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+    }
+    .indicator-dot.left {
+        background: #4b5563;
+    }
+
+    .diff-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .mini-diff-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        transition: all 0.2s;
+    }
+
+    .mini-diff-card.new {
+        border-left: 4px solid #10b981;
+    }
+    .mini-diff-card.left {
+        border-left: 4px solid #4b5563;
+        opacity: 0.7;
+    }
+
+    .mini-diff-card .m-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mini-diff-card .m-name {
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .mini-diff-card .m-tag {
+        font-size: 0.75rem;
+        font-family: 'JetBrains Mono', monospace;
+        opacity: 0.5;
+    }
+
+    .diff-label {
+        font-size: 0.65rem;
+        font-weight: 900;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    .diff-label.new {
+        background: #10b981;
+        color: white;
+    }
+    .diff-label.left {
+        background: #4b5563;
+        color: white;
+    }
+
+    .diff-table-container {
+        margin-top: 3rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .diff-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .diff-table th {
+        text-align: left;
+        padding: 1rem 1.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .diff-table td {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .val-sc {
+        color: #3b82f6;
+        font-weight: 700;
+    }
+    .val-up {
+        color: #9ca3af;
+        text-decoration: line-through;
+        opacity: 0.6;
     }
 
     @media (max-width: 768px) {

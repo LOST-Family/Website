@@ -476,26 +476,97 @@ async fn get_clan_members_impl(
     let upstream_members: Vec<serde_json::Value> =
         serde_json::from_slice(&filtered_upstream_body).unwrap_or_default();
 
-    // Merge upstream data
+    // Helper to normalize tags for comparison (handle casing and # prefix)
+    let normalize_tag = |t: &str| t.to_uppercase().trim_start_matches('#').to_string();
+
+    // Track tags already processed from supercell
+    let supercell_tags: Vec<String> = supercell_members
+        .iter()
+        .filter_map(|m| {
+            m.get("tag")
+                .and_then(|t| t.as_str())
+                .map(|s| normalize_tag(s))
+        })
+        .collect();
+
+    // Merge upstream data into supercell list
     for s_member in &mut supercell_members {
+        if let Some(obj) = s_member.as_object_mut() {
+            obj.insert("in_supercell".to_string(), serde_json::Value::Bool(true));
+        }
+
         if let Some(tag_ref) = s_member.get("tag").and_then(|t| t.as_str()) {
             let member_tag = tag_ref.to_string();
+            let norm_tag = normalize_tag(&member_tag);
 
-            // Merge Upstream (Identity/Kickpoints)
-            if let Some(u_member) = upstream_members
-                .iter()
-                .find(|m| m.get("tag").and_then(|t| t.as_str()) == Some(&member_tag))
-            {
+            // Find matching upstream member
+            if let Some(u_member) = upstream_members.iter().find(|m| {
+                m.get("tag")
+                    .and_then(|t| t.as_str())
+                    .map(|s| normalize_tag(s))
+                    == Some(norm_tag.clone())
+            }) {
                 if let (Some(s_obj), Some(u_obj)) = (s_member.as_object_mut(), u_member.as_object())
                 {
+                    s_obj.insert("in_upstream".to_string(), serde_json::Value::Bool(true));
+                    let mut is_dirty = false;
                     for (k, v) in u_obj {
                         if !s_obj.contains_key(k) {
                             s_obj.insert(k.clone(), v.clone());
                         } else if k != "tag" {
+                            // Check for differences in common fields
+                            if k == "name" || k == "role" || k == "expLevel" {
+                                let s_val = s_obj.get(k);
+
+                                let is_truly_diff = match (k.as_str(), s_val, Some(v)) {
+                                    ("name", Some(sv), Some(uv)) => sv.as_str() != uv.as_str(),
+                                    ("role", Some(sv), Some(uv)) => {
+                                        let s_role = sv.as_str().unwrap_or("").to_lowercase();
+                                        let u_role = uv.as_str().unwrap_or("").to_lowercase();
+                                        // Normalize roles: leader, coleader, admin/elder, member
+                                        let norm_s = if s_role == "admin" || s_role == "elder" {
+                                            "admin"
+                                        } else {
+                                            &s_role
+                                        };
+                                        let norm_u = if u_role == "admin" || u_role == "elder" {
+                                            "admin"
+                                        } else {
+                                            &u_role
+                                        };
+                                        norm_s != norm_u
+                                    }
+                                    ("expLevel", Some(sv), Some(uv)) => {
+                                        // Compare numeric values regardless of JSON type (string vs number)
+                                        let s_num = sv
+                                            .as_i64()
+                                            .or_else(|| sv.as_str().and_then(|s| s.parse().ok()));
+                                        let u_num = uv
+                                            .as_i64()
+                                            .or_else(|| uv.as_str().and_then(|s| s.parse().ok()));
+                                        s_num != u_num
+                                    }
+                                    _ => false,
+                                };
+
+                                if is_truly_diff {
+                                    is_dirty = true;
+                                }
+                            }
                             s_obj.insert(format!("upstream_{}", k), v.clone());
                         }
                     }
+                    s_obj.insert("is_dirty".to_string(), serde_json::Value::Bool(is_dirty));
+                    s_obj.insert("is_diff".to_string(), serde_json::Value::Bool(is_dirty));
+                    s_obj.insert("is_new".to_string(), serde_json::Value::Bool(false));
+                    s_obj.insert("is_left".to_string(), serde_json::Value::Bool(false));
                 }
+            } else if let Some(obj) = s_member.as_object_mut() {
+                obj.insert("in_upstream".to_string(), serde_json::Value::Bool(false));
+                obj.insert("is_dirty".to_string(), serde_json::Value::Bool(false));
+                obj.insert("is_diff".to_string(), serde_json::Value::Bool(true));
+                obj.insert("is_new".to_string(), serde_json::Value::Bool(true));
+                obj.insert("is_left".to_string(), serde_json::Value::Bool(false));
             }
 
             // For CoC: Try to get additional data from player cache
@@ -529,7 +600,69 @@ async fn get_clan_members_impl(
         }
     }
 
-    HttpResponse::Ok().json(supercell_members)
+    // Add members that are only in upstream (Left members)
+    let mut final_members = supercell_members;
+    for u_member in upstream_members {
+        if let Some(u_tag) = u_member.get("tag").and_then(|t| t.as_str()) {
+            if !supercell_tags.contains(&normalize_tag(u_tag)) {
+                let mut mixed_member = u_member.clone();
+                if let Some(obj) = mixed_member.as_object_mut() {
+                    obj.insert("in_supercell".to_string(), serde_json::Value::Bool(false));
+                    obj.insert("in_upstream".to_string(), serde_json::Value::Bool(true));
+                    obj.insert("is_dirty".to_string(), serde_json::Value::Bool(false));
+                    obj.insert("is_diff".to_string(), serde_json::Value::Bool(true));
+                    obj.insert("is_new".to_string(), serde_json::Value::Bool(false));
+                    obj.insert("is_left".to_string(), serde_json::Value::Bool(true));
+
+                    // Cache check for left members to get their name/TH if bot is missing it
+                    let player_cache_key =
+                        format!("{}:supercell:/players/{}", prefix, encode_tag(u_tag));
+                    let player_res =
+                        sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+                            .bind(&player_cache_key)
+                            .fetch_optional(&data.db_pool)
+                            .await;
+
+                    if let Ok(Some((p_body,))) = player_res {
+                        if let Ok(p_json) = serde_json::from_slice::<serde_json::Value>(&p_body) {
+                            if let Some(p_obj) = p_json.as_object() {
+                                for (pk, pv) in p_obj {
+                                    if !obj.contains_key(pk) {
+                                        obj.insert(pk.clone(), pv.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Map upstream data to standard fields if still missing
+                    if !obj.contains_key("name") {
+                        if let Some(un) = obj.get("upstream_name").or_else(|| obj.get("nickname")) {
+                            obj.insert("name".to_string(), un.clone());
+                        } else {
+                            obj.insert(
+                                "name".to_string(),
+                                serde_json::Value::String(u_tag.to_string()),
+                            );
+                        }
+                    }
+                    if !obj.contains_key("role") {
+                        if let Some(ur) = obj.get("upstream_role") {
+                            obj.insert("role".to_string(), ur.clone());
+                        } else {
+                            obj.insert(
+                                "role".to_string(),
+                                serde_json::Value::String("member".to_string()),
+                            );
+                        }
+                    }
+                }
+                final_members.push(mixed_member);
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(final_members)
 }
 
 async fn get_clan_members_lite_impl(

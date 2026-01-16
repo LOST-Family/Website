@@ -203,6 +203,15 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
         };
 
         if let Some(members) = value.as_array_mut() {
+            let is_coleader = has_required_role(user_role, "COLEADER");
+
+            members.retain(|m| {
+                if is_coleader {
+                    return true;
+                }
+                !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+            });
+
             for member in members {
                 let tag = member
                     .get("tag")

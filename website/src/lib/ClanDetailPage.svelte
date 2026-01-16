@@ -2,7 +2,7 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import { fade, slide, scale } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
-    import { user } from './auth';
+    import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -68,6 +68,16 @@
         activeKickpointsSum?: number;
         activeKickpoints?: any[];
         linked_players?: string[]; // If we fetch full user profile
+        // Mixed API Data
+        in_supercell?: boolean;
+        in_upstream?: boolean;
+        is_diff?: boolean;
+        is_new?: boolean;
+        is_left?: boolean;
+        is_dirty?: boolean;
+        upstream_name?: string;
+        upstream_role?: string;
+        upstream_expLevel?: number;
     }
 
     let clan: Clan | null = null;
@@ -88,7 +98,11 @@
                 (m.role === 'coLeader' || m.role === 'leader')
         )
     );
-    $: hasPrivilegedAccess = !!($user?.is_admin || viewerIsCoLeader);
+    $: hasPrivilegedAccess = !!(
+        $user?.is_admin ||
+        viewerIsCoLeader ||
+        ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
+    );
 
     const roleOrder: Record<string, number> = {
         leader: 1,
@@ -143,8 +157,12 @@
             const membersData = await membersRes.json();
             members = Array.isArray(membersData) ? membersData : [];
 
-            // Sort members by role, then trophies
+            // Sort members by presence, then role, then trophies
             members.sort((a, b) => {
+                // SC members first, then upstream-only
+                if (a.in_supercell !== b.in_supercell) {
+                    return a.in_supercell ? -1 : 1;
+                }
                 const rA = roleOrder[a.role] || 99;
                 const rB = roleOrder[b.role] || 99;
                 if (rA !== rB) return rA - rB;
@@ -243,13 +261,27 @@
         .sort((a, b) => (b.warStars || 0) - (a.warStars || 0))
         .slice(0, 3);
 
-    $: filteredMembers = members.filter((m) => {
-        const nameMatch =
-            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        const tagMatch =
-            m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        return nameMatch || tagMatch;
-    });
+    $: filteredMembers = members
+        .filter(
+            (m) => m.in_supercell && !m.is_new && !m.is_dirty && !m.isHidden
+        ) // Hide diff & hidden members from main list
+        .filter((m) => {
+            const nameMatch =
+                m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            const tagMatch =
+                m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            return nameMatch || tagMatch;
+        });
+
+    $: newMembers = members.filter((m) => m.is_new && !m.isHidden);
+    $: leftMembers = members.filter((m) => m.is_left && !m.isHidden);
+    $: changedMembers = members.filter((m) => m.is_dirty && !m.isHidden);
+    $: hasDifferences =
+        newMembers.length > 0 ||
+        leftMembers.length > 0 ||
+        changedMembers.length > 0;
 </script>
 
 <div
@@ -327,9 +359,6 @@
                             alt={clan.name}
                             class="clan-badge"
                         />
-                        <div class="level-badge" transition:scale>
-                            LVL {clan.clanLevel}
-                        </div>
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">
@@ -544,6 +573,11 @@
                             <div
                                 class="member-card"
                                 class:is-linked={member.userId}
+                                class:only-upstream={member.in_upstream &&
+                                    !member.in_supercell}
+                                class:only-supercell={!member.in_upstream &&
+                                    member.in_supercell}
+                                class:has-diff={member.is_diff}
                                 on:click={() => selectPlayer(member)}
                                 on:keydown={(e) =>
                                     e.key === 'Enter' && selectPlayer(member)}
@@ -575,7 +609,17 @@
                                         {/if}
                                     </div>
                                     <div class="m-main-info">
-                                        <h4 class="m-name">{member.name}</h4>
+                                        <h4 class="m-name">
+                                            {member.name}
+                                            {#if member.is_diff && member.upstream_name && member.upstream_name !== member.name}
+                                                <span
+                                                    class="old-name"
+                                                    title="Upstream Name: {member.upstream_name}"
+                                                >
+                                                    ({member.upstream_name})
+                                                </span>
+                                            {/if}
+                                        </h4>
                                         <div class="m-sub-info">
                                             <span class="m-role-label">
                                                 {getRoleDisplay(member.role)}
@@ -658,24 +702,7 @@
                                     </div>
                                 </div>
 
-                                {#if member.userId || member.isLinked}
-                                    <div
-                                        class="linked-indicator"
-                                        title="Verknüpft: {member.nickname ||
-                                            member.tag}"
-                                    >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                        >
-                                            <path
-                                                d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"
-                                            />
-                                        </svg>
-                                    </div>
-                                {/if}
-
-                                {#if member.activeKickpointsCount && member.activeKickpointsCount > 0}
+                                {#if hasPrivilegedAccess && member.activeKickpointsCount && member.activeKickpointsCount > 0}
                                     <div
                                         class="kickpoint-indicator {member.activeKickpointsSum &&
                                         member.activeKickpointsSum >= 10
@@ -693,6 +720,157 @@
                             </div>
                         {/each}
                     </div>
+
+                    {#if hasDifferences}
+                        <div class="diff-section" transition:slide>
+                            <div class="section-header-row">
+                                <div class="title-group">
+                                    <h3>Memberstatus</h3>
+                                </div>
+                            </div>
+
+                            <div class="diff-grid-layout">
+                                {#if leftMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot left"
+                                            ></span>
+                                            Mitglied, ingame nicht im Clan ({leftMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each leftMembers as m}
+                                                <div
+                                                    class="mini-diff-card left"
+                                                >
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name ||
+                                                                'Unbekannt'}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                {#if newMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot new"
+                                            ></span>
+                                            Kein Mitglied, ingame im Clan ({newMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each newMembers as m}
+                                                <div class="mini-diff-card new">
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            {#if changedMembers.length > 0}
+                                <div class="diff-table-container">
+                                    <div class="table-header">
+                                        <h4>
+                                            Im Clan, falsche Rolle / Daten ({changedMembers.length})
+                                        </h4>
+                                    </div>
+                                    <table class="diff-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Spieler</th>
+                                                <th>Feld</th>
+                                                <th>Ingame</th>
+                                                <th>Datenbank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {#each changedMembers as m}
+                                                {#if m.name !== m.upstream_name && m.upstream_name}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Name</td>
+                                                        <td class="val-sc"
+                                                            >{m.name}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_name}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Rolle</td>
+                                                        <td class="val-sc"
+                                                            >{getRoleDisplay(
+                                                                m.role
+                                                            )}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{getRoleDisplay(
+                                                                m.upstream_role
+                                                            )}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Level</td>
+                                                        <td class="val-sc"
+                                                            >{m.expLevel}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_expLevel}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                            {/each}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
                 </main>
             </div>
         </div>
@@ -707,6 +885,7 @@
         onClose={closePlayerDetails}
         otherAccounts={playerOtherAccounts}
         {hasPrivilegedAccess}
+        isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
         onSelectOtherAccount={selectPlayer}
@@ -1511,16 +1690,234 @@
         color: var(--text-dim-light);
     }
 
-    .linked-indicator {
-        position: absolute;
-        top: 1rem;
-        right: 1.5rem;
-        color: var(--accent-color);
-        opacity: 0.6;
+    .old-name {
+        font-size: 0.8rem;
+        font-weight: 500;
+        opacity: 0.5;
+        font-style: italic;
+        margin-left: 4px;
+        display: block;
     }
 
-    .linked-indicator svg {
-        width: 18px;
+    .only-upstream {
+        opacity: 0.6;
+        filter: grayscale(0.7);
+    }
+
+    .has-diff {
+        border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .has-diff:hover {
+        border-color: #f59e0b;
+    }
+
+    /* Diff Section */
+    .diff-section {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-dark);
+    }
+
+    .diff-section .section-header-row {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 1.5rem;
+    }
+
+    .diff-section .title-group h3 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    .light .diff-section {
+        border-top-color: var(--border-light);
+    }
+
+    .diff-table-container {
+        margin-top: 2rem;
+        background: var(--bg-card-dark);
+        border: 1px solid var(--border-dark);
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+
+    .light .diff-table-container {
+        background: var(--bg-card-light);
+        border-color: var(--border-light);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .diff-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+    }
+
+    .diff-table th {
+        text-align: left;
+        padding: 1.25rem 1.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        font-weight: 800;
+        color: var(--text-dim);
+        border-bottom: 1px solid var(--border-dark);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+    }
+
+    .light .diff-table th {
+        background: rgba(0, 0, 0, 0.03);
+    }
+
+    .diff-table td {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-dark);
+    }
+
+    .light .diff-table td {
+        border-bottom-color: var(--border-light);
+    }
+
+    .val-sc {
+        color: #3b82f6;
+        font-weight: 800;
+    }
+
+    .val-up {
+        color: #9ca3af;
+        font-weight: 600;
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+
+    .row-left {
+        background: rgba(75, 85, 99, 0.1);
+    }
+
+    .row-new {
+        background: rgba(16, 185, 129, 0.1);
+    }
+
+    .row-diff {
+        background: rgba(245, 158, 11, 0.05);
+    }
+
+    .diff-label {
+        font-size: 0.7rem;
+        font-weight: 950;
+        padding: 4px 10px;
+        border-radius: 6px;
+        text-transform: uppercase;
+        margin-right: 12px;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .diff-label.left {
+        background: #4b5563;
+        color: white;
+    }
+    .diff-label.new {
+        background: #10b981;
+        color: white;
+    }
+
+    /* New Diff Grid Layout */
+    .diff-grid-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+
+    .diff-category h4 {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        opacity: 0.8;
+    }
+
+    .indicator-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    .indicator-dot.new {
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+    }
+    .indicator-dot.left {
+        background: #4b5563;
+    }
+
+    .diff-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .mini-diff-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-dark);
+        border-radius: 12px;
+        transition: all 0.2s;
+    }
+
+    .light .mini-diff-card {
+        background: white;
+        border-color: var(--border-light);
+    }
+
+    .mini-diff-card.new {
+        border-left: 4px solid #10b981;
+    }
+    .mini-diff-card.left {
+        border-left: 4px solid #4b5563;
+        opacity: 0.7;
+    }
+
+    .mini-diff-card .m-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mini-diff-card .m-name {
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .mini-diff-card .m-tag {
+        font-size: 0.75rem;
+        font-family: 'JetBrains Mono', monospace;
+        opacity: 0.5;
+    }
+
+    .table-header {
+        margin-top: 3rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .table-header h4 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        opacity: 0.8;
+    }
+
+    @media (max-width: 1100px) {
+        .diff-grid-layout {
+            grid-template-columns: 1fr;
+        }
     }
 
     /* Modal / Overlay Styles */

@@ -1,6 +1,13 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { user, loading, login, fetchUser } from './lib/auth';
+    import {
+        user,
+        realUser,
+        loading,
+        login,
+        fetchUser,
+        userOverride,
+    } from './lib/auth';
     import type { GameType } from './lib/auth';
 
     // Components
@@ -48,15 +55,37 @@
     onMount(() => {
         mounted = true;
         fetchUser();
+        checkOverrides();
 
         // Simple SPA routing
         const handlePopState = () => {
             currentPath = window.location.pathname;
+            checkOverrides();
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     });
+
+    function checkOverrides() {
+        const params = new URLSearchParams(window.location.search);
+        const viewAsRole = params.get('view_as_role');
+        const viewAsAdmin = params.get('view_as_admin');
+
+        if (viewAsRole !== null || viewAsAdmin !== null) {
+            userOverride.set({
+                highest_role: viewAsRole,
+                is_admin:
+                    viewAsAdmin === 'false'
+                        ? false
+                        : viewAsAdmin === 'true'
+                          ? true
+                          : undefined,
+            });
+        } else {
+            userOverride.set(null);
+        }
+    }
 
     function handleThemeToggle(
         event: CustomEvent<{ theme: 'dark' | 'light' }>
@@ -78,7 +107,8 @@
         }
 
         if (currentPath !== newPath) {
-            window.history.pushState({}, '', newPath);
+            const fullPath = newPath + window.location.search;
+            window.history.pushState({}, '', fullPath);
             currentPath = newPath;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -92,6 +122,23 @@
         on:themeToggle={handleThemeToggle}
         on:navigate={handleNavigate}
     />
+
+    {#if $realUser?.is_admin && $userOverride}
+        <div class="override-banner">
+            <span>
+                <strong>Admin Override:</strong> Viewing as {$user?.highest_role ||
+                    'Member'} — Admin Status: {$user?.is_admin ? 'ON' : 'OFF'}
+            </span>
+            <button
+                on:click={() => {
+                    window.location.search = '';
+                    window.location.reload();
+                }}
+            >
+                Reset
+            </button>
+        </div>
+    {/if}
 
     <main>
         {#if currentPath === '/' || currentPath === ''}
@@ -427,5 +474,34 @@
         to {
             transform: rotate(360deg);
         }
+    }
+
+    .override-banner {
+        background-color: #ff9800;
+        color: black;
+        text-align: center;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 15px;
+        z-index: 10001;
+        position: relative;
+    }
+
+    .override-banner button {
+        background: black;
+        color: white;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .override-banner button:hover {
+        background: #333;
     }
 </style>
