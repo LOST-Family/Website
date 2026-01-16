@@ -44,17 +44,18 @@
                 class="close-modal"
                 on:click={onClose}
                 aria-label="Schließen"
+                title="Schließen"
             >
                 <svg
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="3"
+                    stroke-width="3.5"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                 >
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <path d="M18 6L6 18" />
+                    <path d="M6 6l12 12" />
                 </svg>
             </button>
 
@@ -491,42 +492,58 @@
     }
 
     .close-modal {
+        --btn-size: 40px;
         position: absolute;
-        top: 1.5rem;
-        right: 1.5rem;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-        width: 44px;
-        height: 44px;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: var(--btn-size);
+        height: var(--btn-size);
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 14px;
+        padding: 0.2rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        color: rgba(255, 255, 255, 0.6);
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 100;
+        backdrop-filter: blur(12px);
     }
 
     .light .close-modal {
-        background: rgba(0, 0, 0, 0.05);
-        border-color: rgba(0, 0, 0, 0.1);
-        color: #1a1a1a;
+        background: rgba(0, 0, 0, 0.04);
+        border-color: rgba(0, 0, 0, 0.08);
+        color: rgba(0, 0, 0, 0.5);
     }
 
     .close-modal:hover {
-        background: #ef4444;
-        color: #ffffff;
-        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #ef4444;
         transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        border-radius: 50%;
+    }
+
+    .close-modal:active {
+        transform: scale(0.92);
+    }
+
+    .light .close-modal:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #ef4444;
     }
 
     .close-modal svg {
-        width: 24px;
-        height: 24px;
-        display: block;
-        stroke-width: 3px;
+        width: 54px;
+        height: 54px;
+        transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .close-modal:hover svg {
+        transform: rotate(90deg);
     }
 
     .modal-header {
