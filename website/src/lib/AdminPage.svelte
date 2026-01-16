@@ -59,17 +59,17 @@
     }
 
     onMount(() => {
-        if ($user?.is_admin) {
+        if (!$authLoading && $user?.is_admin) {
             fetchData();
         }
     });
 
-    $: if ($user?.is_admin && !statusData && !error && !loading) {
+    $: if (!$authLoading && $user?.is_admin && !statusData && !error && !loading) {
         fetchData();
     }
 
-    $: if ($user && !$user.is_admin && !$authLoading) {
-        error = 'Zugriff verweigert: Administrator-Rechte erforderlich.';
+    $: if (!$authLoading && !$user?.is_admin) {
+        error = 'Administrator-Zutritt verweigert.';
     }
 
     function getStatusColor(status: string | undefined) {
@@ -186,13 +186,34 @@
         </header>
 
         {#if error}
-            <div class="error-container">
-                <div class="error-icon">⚠️</div>
-                <p>{error}</p>
-                {#if $user?.is_admin}
-                    <button on:click={fetchData} class="retry-btn"
-                        >Erneut versuchen</button
-                    >
+            <div class="error-container" in:fade>
+                {#if error.includes('Zutritt verweigert')}
+                    <div class="access-denied-container">
+                        <div class="lock-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                        </div>
+                        <h3>Zutritt verweigert</h3>
+                        <p>Du benötigst Administrator-Rechte, um auf diese Seite zuzugreifen.</p>
+                        <div class="deny-actions">
+                            <button class="action-btn secondary" on:click={() => window.history.back()}>
+                                Zurück
+                            </button>
+                            <button class="action-btn" on:click={() => (window.location.href = '/')}>
+                                Zur Startseite
+                            </button>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="error-icon">⚠️</div>
+                    <p>{error}</p>
+                    {#if $user?.is_admin}
+                        <button on:click={fetchData} class="retry-btn">
+                            Erneut versuchen
+                        </button>
+                    {/if}
                 {/if}
             </div>
         {:else if loading || $authLoading}
@@ -376,6 +397,7 @@
                         <div
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
+                            role="presentation"
                         >
                             {#if upstreamCocData.length > 1}
                                 <svg
@@ -387,6 +409,8 @@
                                             upstreamCocData,
                                             'upstream_coc'
                                         )}
+                                    role="img"
+                                    aria-label="Upstream CoC API Latency Chart"
                                 >
                                     <path
                                         d={generatePath(
@@ -455,6 +479,7 @@
                         <div
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
+                            role="presentation"
                         >
                             {#if supercellCocData.length > 1}
                                 <svg
@@ -466,6 +491,8 @@
                                             supercellCocData,
                                             'supercell_coc'
                                         )}
+                                    role="img"
+                                    aria-label="Supercell CoC API Latency Chart"
                                 >
                                     <path
                                         d={generatePath(
@@ -538,6 +565,7 @@
                         <div
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
+                            role="presentation"
                         >
                             {#if upstreamCrData.length > 1}
                                 <svg
@@ -549,6 +577,8 @@
                                             upstreamCrData,
                                             'upstream_cr'
                                         )}
+                                    role="img"
+                                    aria-label="Upstream CR API Latency Chart"
                                 >
                                     <path
                                         d={generatePath(
@@ -617,6 +647,7 @@
                         <div
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
+                            role="presentation"
                         >
                             {#if supercellCrData.length > 1}
                                 <svg
@@ -628,6 +659,8 @@
                                             supercellCrData,
                                             'supercell_cr'
                                         )}
+                                    role="img"
+                                    aria-label="Supercell CR API Latency Chart"
                                 >
                                     <path
                                         d={generatePath(
@@ -700,6 +733,7 @@
                         <div
                             class="svg-container"
                             on:mouseleave={() => (hoveredPoint = null)}
+                            role="presentation"
                         >
                             {#if websiteData.length > 1}
                                 <svg
@@ -711,6 +745,8 @@
                                             websiteData,
                                             'website'
                                         )}
+                                    role="img"
+                                    aria-label="Website Latency Chart"
                                 >
                                     <path
                                         d={generatePath(websiteData, 400, 100)}
@@ -802,22 +838,15 @@
         margin: 0;
         background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
     .light .admin-header h1 {
         background: linear-gradient(135deg, #1a1a2e 0%, #4f46e5 100%);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
-    }
-
-    .subtitle {
-        color: rgba(255, 255, 255, 0.6);
-        margin: 0.5rem 0 0 0;
-    }
-
-    .light .subtitle {
-        color: rgba(0, 0, 0, 0.6);
     }
 
     .status-grid {
@@ -1035,12 +1064,114 @@
     }
 
     .error-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 6rem 2rem;
+        color: #b9bbbe;
         text-align: center;
-        padding: 4rem;
-        background: rgba(239, 68, 68, 0.05);
-        border: 1px dashed rgba(239, 68, 68, 0.2);
+        gap: 1.5rem;
+    }
+
+    .access-denied-container {
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 3rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+
+    .light .access-denied-container {
+        background: white;
+        border-color: #e2e8f0;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .lock-icon {
+        width: 80px;
+        height: 80px;
+        background: rgba(239, 68, 68, 0.1);
         color: #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 20px;
+        margin-bottom: 0.5rem;
+    }
+
+    .lock-icon svg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .access-denied-container h3 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0;
+        color: white;
+    }
+
+    .light .access-denied-container h3 {
+        color: #1e293b;
+    }
+
+    .access-denied-container p {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1.1rem;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .light .access-denied-container p {
+        color: #64748b;
+    }
+
+    .deny-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .action-btn {
+        padding: 0.8rem 1.75rem;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+        background: #5865f2;
+        color: white;
+    }
+
+    .action-btn:hover {
+        background: #4752c4;
+        transform: translateY(-2px);
+    }
+
+    .action-btn.secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .light .action-btn.secondary {
+        background: #f1f5f9;
+        border-color: #e2e8f0;
+        color: #475569;
+    }
+
+    .action-btn.secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .light .action-btn.secondary:hover {
+        background: #e2e8f0;
     }
 
     .error-icon {

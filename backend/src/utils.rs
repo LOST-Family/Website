@@ -203,6 +203,15 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
         };
 
         if let Some(members) = value.as_array_mut() {
+            let is_coleader = has_required_role(user_role, "COLEADER");
+
+            members.retain(|m| {
+                if is_coleader {
+                    return true;
+                }
+                !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+            });
+
             for member in members {
                 let tag = member
                     .get("tag")
@@ -279,16 +288,91 @@ pub async fn update_upstream_cache(
                 .bind(timestamp)
                 .execute(&data.db_pool)
                 .await;
-            } else {
-                eprintln!(
-                    "Background Refresh: Upstream {} returned status {}",
-                    full_url, status
-                );
-            }
 
-            Ok(body)
+                Ok(body)
+            } else {
+                let err_msg = format!("Upstream {} returned status {}", full_url, status);
+                eprintln!("Background Refresh: {}", err_msg);
+                Err(err_msg)
+            }
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+pub async fn get_cached_or_update_supercell_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+    ttl_seconds: i64,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let cache_key = format!("{}:supercell:{}", prefix, url_path);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let cached_result =
+        sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+            .bind(&cache_key)
+            .fetch_optional(&data.db_pool)
+            .await;
+
+    if let Ok(Some((body, updated_at))) = &cached_result {
+        if now - updated_at < ttl_seconds {
+            return Ok(Bytes::from(body.clone()));
+        }
+    }
+
+    match update_supercell_cache(data, game, url_path).await {
+        Ok(body) => Ok(body),
+        Err(e) => {
+            // Fallback to expired cache on error
+            if let Ok(Some((body, _))) = cached_result {
+                return Ok(Bytes::from(body));
+            }
+            Err(e)
+        }
+    }
+}
+
+pub async fn get_cached_or_update_upstream_cache(
+    data: &AppState,
+    game: GameType,
+    url_path: &str,
+    ttl_seconds: i64,
+) -> Result<Bytes, String> {
+    let prefix = get_cache_prefix(game);
+    let cache_key = format!("{}:upstream:{}", prefix, url_path);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let cached_result =
+        sqlx::query_as::<_, (Vec<u8>, i64)>("SELECT body, updated_at FROM cache WHERE key = $1")
+            .bind(&cache_key)
+            .fetch_optional(&data.db_pool)
+            .await;
+
+    if let Ok(Some((body, updated_at))) = &cached_result {
+        if now - updated_at < ttl_seconds {
+            return Ok(Bytes::from(body.clone()));
+        }
+    }
+
+    match update_upstream_cache(data, game, url_path).await {
+        Ok(body) => Ok(body),
+        Err(e) => {
+            // Fallback to expired cache on error
+            if let Ok(Some((body, _))) = cached_result {
+                return Ok(Bytes::from(body));
+            }
+            Err(e)
+        }
     }
 }
 
@@ -403,14 +487,13 @@ pub async fn update_supercell_cache(
                 .bind(timestamp)
                 .execute(&data.db_pool)
                 .await;
-            } else {
-                eprintln!(
-                    "Background Refresh: Supercell {} returned status {}",
-                    full_url, status
-                );
-            }
 
-            Ok(body)
+                Ok(body)
+            } else {
+                let err_msg = format!("Supercell {} returned status {}", full_url, status);
+                eprintln!("Background Refresh: {}", err_msg);
+                Err(err_msg)
+            }
         }
         Err(e) => Err(e.to_string()),
     }

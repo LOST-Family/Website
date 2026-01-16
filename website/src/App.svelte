@@ -1,6 +1,13 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { user, loading, login, fetchUser } from './lib/auth';
+    import {
+        user,
+        realUser,
+        loading,
+        login,
+        fetchUser,
+        userOverride,
+    } from './lib/auth';
     import type { GameType } from './lib/auth';
 
     // Components
@@ -31,6 +38,14 @@
     let theme: 'dark' | 'light' = 'dark';
     let mounted = false;
     let currentPath = window.location.pathname;
+    let lastClansPath =
+        currentPath === '/my-clans'
+            ? '/my-clans'
+            : currentPath === '/cr/clans'
+              ? '/cr/clans'
+              : currentPath === '/admin/clans'
+                ? '/admin/clans'
+                : '/coc/clans';
 
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
@@ -40,15 +55,37 @@
     onMount(() => {
         mounted = true;
         fetchUser();
+        checkOverrides();
 
         // Simple SPA routing
         const handlePopState = () => {
             currentPath = window.location.pathname;
+            checkOverrides();
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     });
+
+    function checkOverrides() {
+        const params = new URLSearchParams(window.location.search);
+        const viewAsRole = params.get('view_as_role');
+        const viewAsAdmin = params.get('view_as_admin');
+
+        if (viewAsRole !== null || viewAsAdmin !== null) {
+            userOverride.set({
+                highest_role: viewAsRole,
+                is_admin:
+                    viewAsAdmin === 'false'
+                        ? false
+                        : viewAsAdmin === 'true'
+                          ? true
+                          : undefined,
+            });
+        } else {
+            userOverride.set(null);
+        }
+    }
 
     function handleThemeToggle(
         event: CustomEvent<{ theme: 'dark' | 'light' }>
@@ -58,8 +95,20 @@
 
     function handleNavigate(event: CustomEvent<string>) {
         const newPath = event.detail === 'home' ? '/' : `/${event.detail}`;
+
+        // Track the last clans list page visited
+        if (
+            newPath === '/coc/clans' ||
+            newPath === '/cr/clans' ||
+            newPath === '/my-clans' ||
+            newPath === '/admin/clans'
+        ) {
+            lastClansPath = newPath;
+        }
+
         if (currentPath !== newPath) {
-            window.history.pushState({}, '', newPath);
+            const fullPath = newPath + window.location.search;
+            window.history.pushState({}, '', fullPath);
             currentPath = newPath;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -74,11 +123,28 @@
         on:navigate={handleNavigate}
     />
 
+    {#if $realUser?.is_admin && $userOverride}
+        <div class="override-banner">
+            <span>
+                <strong>Admin Override:</strong> Viewing as {$user?.highest_role ||
+                    'Member'} — Admin Status: {$user?.is_admin ? 'ON' : 'OFF'}
+            </span>
+            <button
+                on:click={() => {
+                    window.location.search = '';
+                    window.location.reload();
+                }}
+            >
+                Reset
+            </button>
+        </div>
+    {/if}
+
     <main>
         {#if currentPath === '/' || currentPath === ''}
             <Hero banner={lostBanner} {theme} {mounted} />
 
-            <DiscordSection theme="dark" fallbackIcon={lostLogo} />
+            <DiscordSection {theme} fallbackIcon={lostLogo} />
 
             <ClansSection
                 {theme}
@@ -165,6 +231,7 @@
                     {apiBaseUrl}
                     gameType="coc"
                     clanTag={'#' + currentPath.split('/')[3]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}
@@ -198,6 +265,7 @@
                     {apiBaseUrl}
                     gameType="cr"
                     clanTag={'#' + currentPath.split('/')[3]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}
@@ -232,6 +300,7 @@
                     {apiBaseUrl}
                     gameType="coc"
                     clanTag={'#' + currentPath.split('/')[2]}
+                    backPath={lastClansPath}
                     on:navigate={handleNavigate}
                 />
             {/if}
@@ -405,5 +474,34 @@
         to {
             transform: rotate(360deg);
         }
+    }
+
+    .override-banner {
+        background-color: #ff9800;
+        color: black;
+        text-align: center;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 15px;
+        z-index: 10001;
+        position: relative;
+    }
+
+    .override-banner button {
+        background: black;
+        color: white;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .override-banner button:hover {
+        background: #333;
     }
 </style>

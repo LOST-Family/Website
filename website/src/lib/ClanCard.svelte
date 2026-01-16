@@ -106,6 +106,26 @@
         'MITGLIED 8': 47,
         'MITGLIED GP': 48,
         'MITGLIED ANTHRAZIT': 49,
+        'ANFÜHRER CR': 60,
+        'ANFÜHRER CR 2': 61,
+        'ANFÜHRER CR 3': 62,
+        'ANFÜHRER CR 4': 63,
+        'ANFÜHRER CR 5': 64,
+        'VIZE CR 1': 70,
+        'VIZE CR 2': 71,
+        'VIZE CR 3': 72,
+        'VIZE CR 4': 73,
+        'VIZE CR 5': 74,
+        'ÄLTESTER CR 1': 80,
+        'ÄLTESTER CR 2': 81,
+        'ÄLTESTER CR 3': 82,
+        'ÄLTESTER CR 4': 83,
+        'ÄLTESTER CR 5': 84,
+        'MITGLIED CR': 90,
+        'MITGLIED CR 2': 91,
+        'MITGLIED CR 3': 92,
+        'MITGLIED CR 4': 93,
+        'MITGLIED CR 5': 94,
     };
 
     const roleColors: Record<string, string> = {
@@ -149,6 +169,26 @@
         'MITGLIED 8': '#ff88ee',
         'MITGLIED GP': '#f38ac5',
         'MITGLIED ANTHRAZIT': '#546e7a',
+        'ANFÜHRER CR': '#227e3f',
+        'ANFÜHRER CR 2': '#227e3f',
+        'ANFÜHRER CR 3': '#227e3f',
+        'ANFÜHRER CR 4': '#227e3f',
+        'ANFÜHRER CR 5': '#227e3f',
+        'VIZE CR 1': '#289c4d',
+        'VIZE CR 2': '#289c4d',
+        'VIZE CR 3': '#289c4d',
+        'VIZE CR 4': '#289c4d',
+        'VIZE CR 5': '#289c4d',
+        'ÄLTESTER CR 1': '#00ff9e',
+        'ÄLTESTER CR 2': '#93d128',
+        'ÄLTESTER CR 3': '#992d22',
+        'ÄLTESTER CR 4': '#13598b',
+        'ÄLTESTER CR 5': '#ce9201',
+        'MITGLIED CR': '#42ffb7',
+        'MITGLIED CR 2': '#a4cc60',
+        'MITGLIED CR 3': '#be4d40',
+        'MITGLIED CR 4': '#2183c9',
+        'MITGLIED CR 5': '#fabf05',
     };
 
     function getDisplayRole(role: string): string {
@@ -248,69 +288,102 @@
                                         .includes(upperRole);
 
                                     if (isCoCStandard || isCRStandard) {
-                                        const clanIndex = index + 1;
+                                        const clanIndex = clan.index;
                                         const clanNameUpper = (
                                             clan.nameDB || ''
                                         ).toUpperCase();
-                                        const isGP =
-                                            clanNameUpper.includes('GP');
-                                        const isAnthrazit =
-                                            clanNameUpper.includes('ANTHRAZIT');
 
-                                        if (isGP) {
-                                            if (upperRole === 'LEADER')
-                                                computedRole = 'ANFÜHRER GP';
-                                            else if (
-                                                upperRole === 'COLEADER' ||
-                                                upperRole === 'CO-LEADER'
-                                            )
-                                                computedRole = 'VIZE GP';
-                                            else if (
-                                                upperRole === 'ELDER' ||
-                                                upperRole === 'ADMIN'
-                                            )
-                                                computedRole = 'ÄLTESTER GP';
-                                            else if (upperRole === 'MEMBER')
-                                                computedRole = 'MITGLIED GP';
-                                        } else if (isAnthrazit) {
-                                            if (upperRole === 'LEADER')
-                                                computedRole =
-                                                    'ANFÜHRER ANTHRAZIT';
-                                            else if (
-                                                upperRole === 'COLEADER' ||
-                                                upperRole === 'CO-LEADER'
-                                            )
-                                                computedRole = 'VIZE ANTHRAZIT';
-                                            else if (
-                                                upperRole === 'ELDER' ||
-                                                upperRole === 'ADMIN'
-                                            )
-                                                computedRole =
-                                                    'ÄLTESTER ANTHRAZIT';
-                                            else if (upperRole === 'MEMBER')
-                                                computedRole =
-                                                    'MITGLIED ANTHRAZIT';
-                                        } else {
+                                        if (gameType === 'cr') {
                                             if (upperRole === 'LEADER') {
                                                 computedRole =
                                                     clanIndex === 1
-                                                        ? 'ANFÜHRER'
-                                                        : `ANFÜHRER ${clanIndex}`;
+                                                        ? 'ANFÜHRER CR'
+                                                        : `ANFÜHRER CR ${clanIndex}`;
                                             } else if (
                                                 upperRole === 'COLEADER' ||
                                                 upperRole === 'CO-LEADER'
                                             ) {
-                                                computedRole = `VIZE ${clanIndex}`;
+                                                computedRole = `VIZE CR ${clanIndex}`;
                                             } else if (
                                                 upperRole === 'ELDER' ||
                                                 upperRole === 'ADMIN'
                                             ) {
-                                                computedRole = `ÄLTESTER ${clanIndex}`;
+                                                computedRole = `ÄLTESTER CR ${clanIndex}`;
                                             } else if (upperRole === 'MEMBER') {
                                                 computedRole =
                                                     clanIndex === 1
-                                                        ? 'MITGLIED'
-                                                        : `MITGLIED ${clanIndex}`;
+                                                        ? 'MITGLIED CR'
+                                                        : `MITGLIED CR ${clanIndex}`;
+                                            }
+                                        } else {
+                                            const isGP =
+                                                clanNameUpper.includes('GP');
+                                            const isAnthrazit =
+                                                clanNameUpper.includes(
+                                                    'ANTHRAZIT'
+                                                );
+
+                                            if (isGP) {
+                                                if (upperRole === 'LEADER')
+                                                    computedRole =
+                                                        'ANFÜHRER GP';
+                                                else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                )
+                                                    computedRole = 'VIZE GP';
+                                                else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                )
+                                                    computedRole =
+                                                        'ÄLTESTER GP';
+                                                else if (upperRole === 'MEMBER')
+                                                    computedRole =
+                                                        'MITGLIED GP';
+                                            } else if (isAnthrazit) {
+                                                if (upperRole === 'LEADER')
+                                                    computedRole =
+                                                        'ANFÜHRER ANTHRAZIT';
+                                                else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                )
+                                                    computedRole =
+                                                        'VIZE ANTHRAZIT';
+                                                else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                )
+                                                    computedRole =
+                                                        'ÄLTESTER ANTHRAZIT';
+                                                else if (upperRole === 'MEMBER')
+                                                    computedRole =
+                                                        'MITGLIED ANTHRAZIT';
+                                            } else {
+                                                if (upperRole === 'LEADER') {
+                                                    computedRole =
+                                                        clanIndex === 1
+                                                            ? 'ANFÜHRER'
+                                                            : `ANFÜHRER ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'COLEADER' ||
+                                                    upperRole === 'CO-LEADER'
+                                                ) {
+                                                    computedRole = `VIZE ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'ELDER' ||
+                                                    upperRole === 'ADMIN'
+                                                ) {
+                                                    computedRole = `ÄLTESTER ${clanIndex}`;
+                                                } else if (
+                                                    upperRole === 'MEMBER'
+                                                ) {
+                                                    computedRole =
+                                                        clanIndex === 1
+                                                            ? 'MITGLIED'
+                                                            : `MITGLIED ${clanIndex}`;
+                                                }
                                             }
                                         }
                                     }
@@ -370,22 +443,22 @@
         // Clash Royale clans use their own banners
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2')) return bannerCR2;
-            if (name.includes('3')) return bannerCR3;
-            if (name.includes('4')) return bannerCR4;
-            if (name.includes('5')) return bannerCR5;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('4') || name.includes('IV')) return bannerCR4;
+            if (name.includes('5') || name.includes('V')) return bannerCR5;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3')) return banner3;
-        if (name.includes('4')) return banner4;
-        if (name.includes('5')) return banner5;
-        if (name.includes('6')) return banner6;
-        if (name.includes('7')) return banner7;
-        if (name.includes('8')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('4') || name.includes('IV')) return banner4;
+        if (name.includes('5') || name.includes('V')) return banner5;
+        if (name.includes('6') || name.includes('VI')) return banner6;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }
@@ -517,26 +590,17 @@
                                                         transition:fade
                                                     >
                                                         <div
-                                                            class="member-avatar"
-                                                            style="border-color: {roleColors[
+                                                            class="member-status-line"
+                                                            style="background-color: {roleColors[
                                                                 role
-                                                            ] ||
-                                                                (theme ===
-                                                                'light'
-                                                                    ? '#eee'
-                                                                    : '#444')}"
-                                                        >
-                                                            {getPlayerName(
-                                                                player
-                                                            )
-                                                                .charAt(0)
-                                                                .toUpperCase()}
-                                                        </div>
+                                                            ] || 'transparent'}"
+                                                        ></div>
                                                         <span
                                                             class="member-name"
-                                                            style="color: {roleColors[
-                                                                role
-                                                            ] || 'inherit'}"
+                                                            style="color: {theme ===
+                                                            'light'
+                                                                ? '#2e3338'
+                                                                : '#dcddde'}"
                                                             title={getPlayerName(
                                                                 player
                                                             )}
@@ -816,31 +880,30 @@
     }
 
     .role-section {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 8px;
-        padding: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 12px;
+        padding: 16px;
         transition: all 0.3s ease;
-        border: 1px solid rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .role-section:hover {
-        background: rgba(0, 0, 0, 0.25);
-        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.1);
     }
 
     .card-container.light .role-section {
-        background: rgba(88, 101, 242, 0.05);
-        border: 1px solid rgba(88, 101, 242, 0.1);
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     .role-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
+        gap: 12px;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        transition: border-color 0.4s ease;
     }
 
     .card-container.light .role-header {
@@ -848,9 +911,9 @@
     }
 
     .role-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
         flex-shrink: 0;
     }
 
@@ -885,55 +948,51 @@
     .members-list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 8px;
+        gap: 6px;
     }
 
     .member-item {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 4px 8px;
-        background: rgba(180, 180, 180, 0.1);
-        border-radius: 6px;
-        transition: all 0.2s ease;
+        gap: 10px;
+        padding: 10px 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        margin: 1px 0;
     }
 
     .card-container.light .member-item {
-        background: rgba(0, 0, 0, 0.04);
+        background: rgba(0, 0, 0, 0.015);
+        border: 1px solid rgba(0, 0, 0, 0.03);
     }
 
     .member-item:hover {
-        background: #40444b;
+        background: rgba(255, 255, 255, 0.06);
         transform: translateX(4px);
+        border-color: rgba(255, 255, 255, 0.1);
     }
 
     .card-container.light .member-item:hover {
-        background: #e3e5e8;
+        background: #f8fafc;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
-    .member-avatar {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: #202225;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #b9bbbe;
-        font-weight: 600;
-        font-size: 0.7rem;
-        flex-shrink: 0;
-        border: 2px solid;
-        transition: background 0.4s ease;
-    }
-
-    .card-container.light .member-avatar {
-        background: #ffffff;
-        color: #4f5660;
+    .member-status-line {
+        position: absolute;
+        left: 0;
+        top: 4px;
+        bottom: 4px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+        opacity: 0.9;
+        box-shadow: 1px 0 4px rgba(0, 0, 0, 0.2);
     }
 
     .member-name {
-        color: #dcddde;
         font-size: 0.85rem;
         font-weight: 600;
         white-space: nowrap;
@@ -941,12 +1000,14 @@
         text-overflow: ellipsis;
         flex: 1;
         transition: color 0.4s ease;
-        text-shadow: 0.3px 0.3px 0.3px rgba(0, 0, 0, 0.8);
+    }
+
+    .member-name {
+        color: #dcddde;
     }
 
     .card-container.light .member-name {
         color: #2e3338;
-        text-shadow: 0.5px 0.5px 0px rgba(255, 255, 255, 0.8);
     }
 
     .spinner,

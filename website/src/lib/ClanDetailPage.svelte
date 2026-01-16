@@ -2,11 +2,13 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import { fade, slide, scale } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
-    import { user } from './auth';
+    import { user, userOverride, hasRequiredRole } from './auth';
+    import PlayerDetailModal from './PlayerDetailModal.svelte';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
     export let clanTag: string;
+    export let backPath: string = '/coc/clans';
 
     const dispatch = createEventDispatcher<{
         navigate: string;
@@ -66,6 +68,16 @@
         activeKickpointsSum?: number;
         activeKickpoints?: any[];
         linked_players?: string[]; // If we fetch full user profile
+        // Mixed API Data
+        in_supercell?: boolean;
+        in_upstream?: boolean;
+        is_diff?: boolean;
+        is_new?: boolean;
+        is_left?: boolean;
+        is_dirty?: boolean;
+        upstream_name?: string;
+        upstream_role?: string;
+        upstream_expLevel?: number;
     }
 
     let clan: Clan | null = null;
@@ -78,8 +90,19 @@
     let playerDetailsLoading = false;
     let playerOtherAccounts: any[] = [];
 
-    $: viewerIsCoLeader = $user && members.some(m => ($user.linked_players || []).includes(m.tag) && (m.role === 'coLeader' || m.role === 'leader'));
-    $: hasPrivilegedAccess = $user?.is_admin || viewerIsCoLeader;
+    $: viewerIsCoLeader = !!(
+        $user &&
+        members.some(
+            (m) =>
+                ($user.linked_players || []).includes(m.tag) &&
+                (m.role === 'coLeader' || m.role === 'leader')
+        )
+    );
+    $: hasPrivilegedAccess = !!(
+        $user?.is_admin ||
+        viewerIsCoLeader ||
+        ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
+    );
 
     const roleOrder: Record<string, number> = {
         leader: 1,
@@ -134,8 +157,12 @@
             const membersData = await membersRes.json();
             members = Array.isArray(membersData) ? membersData : [];
 
-            // Sort members by role, then trophies
+            // Sort members by presence, then role, then trophies
             members.sort((a, b) => {
+                // SC members first, then upstream-only
+                if (a.in_supercell !== b.in_supercell) {
+                    return a.in_supercell ? -1 : 1;
+                }
                 const rA = roleOrder[a.role] || 99;
                 const rB = roleOrder[b.role] || 99;
                 if (rA !== rB) return rA - rB;
@@ -234,13 +261,27 @@
         .sort((a, b) => (b.warStars || 0) - (a.warStars || 0))
         .slice(0, 3);
 
-    $: filteredMembers = members.filter((m) => {
-        const nameMatch =
-            m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        const tagMatch =
-            m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
-        return nameMatch || tagMatch;
-    });
+    $: filteredMembers = members
+        .filter(
+            (m) => m.in_supercell && !m.is_new && !m.is_dirty && !m.isHidden
+        ) // Hide diff & hidden members from main list
+        .filter((m) => {
+            const nameMatch =
+                m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            const tagMatch =
+                m.tag?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+                false;
+            return nameMatch || tagMatch;
+        });
+
+    $: newMembers = members.filter((m) => m.is_new && !m.isHidden);
+    $: leftMembers = members.filter((m) => m.is_left && !m.isHidden);
+    $: changedMembers = members.filter((m) => m.is_dirty && !m.isHidden);
+    $: hasDifferences =
+        newMembers.length > 0 ||
+        leftMembers.length > 0 ||
+        changedMembers.length > 0;
 </script>
 
 <div
@@ -282,7 +323,13 @@
             <header class="clan-hero">
                 <button
                     class="back-btn"
-                    on:click={() => dispatch('navigate', 'coc/clans')}
+                    on:click={() =>
+                        dispatch(
+                            'navigate',
+                            backPath.startsWith('/')
+                                ? backPath.substring(1)
+                                : backPath
+                        )}
                 >
                     <svg
                         viewBox="0 0 24 24"
@@ -292,7 +339,13 @@
                     >
                         <path d="M19 12H5M12 19l-7-7 7-7" />
                     </svg>
-                    Alle Clans
+                    {#if backPath === '/my-clans'}
+                        Deine Clans
+                    {:else if backPath === '/admin/clans'}
+                        Clan Admin
+                    {:else}
+                        Alle Clans
+                    {/if}
                 </button>
                 <div
                     class="hero-bg"
@@ -306,9 +359,6 @@
                             alt={clan.name}
                             class="clan-badge"
                         />
-                        <div class="level-badge" transition:scale>
-                            LVL {clan.clanLevel}
-                        </div>
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">
@@ -382,7 +432,8 @@
                                                     >{player.name}</span
                                                 >
                                                 <span class="rank-val"
-                                                    >{player.warStars || 0}</span
+                                                    >{player.warStars ||
+                                                        0}</span
                                                 >
                                             </button>
                                         {/each}
@@ -522,6 +573,11 @@
                             <div
                                 class="member-card"
                                 class:is-linked={member.userId}
+                                class:only-upstream={member.in_upstream &&
+                                    !member.in_supercell}
+                                class:only-supercell={!member.in_upstream &&
+                                    member.in_supercell}
+                                class:has-diff={member.is_diff}
                                 on:click={() => selectPlayer(member)}
                                 on:keydown={(e) =>
                                     e.key === 'Enter' && selectPlayer(member)}
@@ -553,7 +609,17 @@
                                         {/if}
                                     </div>
                                     <div class="m-main-info">
-                                        <h4 class="m-name">{member.name}</h4>
+                                        <h4 class="m-name">
+                                            {member.name}
+                                            {#if member.is_diff && member.upstream_name && member.upstream_name !== member.name}
+                                                <span
+                                                    class="old-name"
+                                                    title="Upstream Name: {member.upstream_name}"
+                                                >
+                                                    ({member.upstream_name})
+                                                </span>
+                                            {/if}
+                                        </h4>
                                         <div class="m-sub-info">
                                             <span class="m-role-label">
                                                 {getRoleDisplay(member.role)}
@@ -636,24 +702,7 @@
                                     </div>
                                 </div>
 
-                                {#if member.userId || member.isLinked}
-                                    <div
-                                        class="linked-indicator"
-                                        title="Verknüpft: {member.nickname ||
-                                            member.tag}"
-                                    >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                        >
-                                            <path
-                                                d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"
-                                            />
-                                        </svg>
-                                    </div>
-                                {/if}
-
-                                {#if member.activeKickpointsCount && member.activeKickpointsCount > 0}
+                                {#if hasPrivilegedAccess && member.activeKickpointsCount && member.activeKickpointsCount > 0}
                                     <div
                                         class="kickpoint-indicator {member.activeKickpointsSum &&
                                         member.activeKickpointsSum >= 10
@@ -671,208 +720,205 @@
                             </div>
                         {/each}
                     </div>
+
+                    {#if hasDifferences}
+                        <div class="diff-section" transition:slide>
+                            <div class="section-header-row">
+                                <div class="title-group">
+                                    <h3>Memberstatus</h3>
+                                </div>
+                            </div>
+
+                            <div class="diff-grid-layout">
+                                {#if leftMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot left"
+                                            ></span>
+                                            Mitglied, ingame nicht im Clan ({leftMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each leftMembers as m}
+                                                <div
+                                                    class="mini-diff-card left"
+                                                >
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name ||
+                                                                'Unbekannt'}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                {#if newMembers.length > 0}
+                                    <div class="diff-category">
+                                        <h4>
+                                            <span class="indicator-dot new"
+                                            ></span>
+                                            Kein Mitglied, ingame im Clan ({newMembers.length})
+                                        </h4>
+                                        <div class="diff-cards">
+                                            {#each newMembers as m}
+                                                <div class="mini-diff-card new">
+                                                    <div class="m-info">
+                                                        <span class="m-name"
+                                                            >{m.name}</span
+                                                        >
+                                                        <span class="m-tag"
+                                                            >{m.tag}</span
+                                                        >
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            {#if changedMembers.length > 0}
+                                <div class="diff-table-container">
+                                    <div class="table-header">
+                                        <h4>
+                                            Im Clan, falsche Rolle / Daten ({changedMembers.length})
+                                        </h4>
+                                    </div>
+                                    <table class="diff-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Spieler</th>
+                                                <th>Feld</th>
+                                                <th>Ingame</th>
+                                                <th>Datenbank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {#each changedMembers as m}
+                                                {#if m.name !== m.upstream_name && m.upstream_name}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Name</td>
+                                                        <td class="val-sc"
+                                                            >{m.name}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_name}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Rolle</td>
+                                                        <td class="val-sc"
+                                                            >{getRoleDisplay(
+                                                                m.role
+                                                            )}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{getRoleDisplay(
+                                                                m.upstream_role
+                                                            )}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                                {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
+                                                    <tr class="row-diff">
+                                                        <td
+                                                            ><strong
+                                                                >{m.name}</strong
+                                                            >
+                                                            <span
+                                                                class="tag-small"
+                                                                >({m.tag})</span
+                                                            ></td
+                                                        >
+                                                        <td>Level</td>
+                                                        <td class="val-sc"
+                                                            >{m.expLevel}</td
+                                                        >
+                                                        <td class="val-up"
+                                                            >{m.upstream_expLevel}</td
+                                                        >
+                                                    </tr>
+                                                {/if}
+                                            {/each}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
                 </main>
             </div>
         </div>
     {/if}
 
     <!-- Player Details Overlay -->
-    {#if selectedPlayer}
-        <div
-            class="modal-backdrop"
-            on:click|self={closePlayerDetails}
-            on:keydown={(e) => e.key === 'Escape' && closePlayerDetails()}
-            role="button"
-            tabindex="-1"
-            transition:fade={{ duration: 200 }}
-        >
-            <div
-                class="player-modal coc-modal"
-                class:light={theme === 'light'}
-                transition:scale={{ duration: 300, start: 0.95, easing: quintOut }}
-            >
-                <button 
-                    class="close-modal" 
-                    on:click={closePlayerDetails}
-                    aria-label="Schließen"
-                >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                    >
-                        <line x1="18" y1="6" x2="6" y2="18" /><line
-                            x1="6"
-                            y1="6"
-                            x2="18"
-                            y2="18"
-                        />
-                    </svg>
-                </button>
+    <PlayerDetailModal
+        isOpen={!!selectedPlayer && !playerDetailsLoading}
+        player={selectedPlayer}
+        gameType="coc"
+        {theme}
+        onClose={closePlayerDetails}
+        otherAccounts={playerOtherAccounts}
+        {hasPrivilegedAccess}
+        isAdmin={$user?.is_admin}
+        onNavigateToProfile={(userId) =>
+            dispatch('navigate', `profile/${userId}`)}
+        onSelectOtherAccount={selectPlayer}
+    />
 
-                {#if playerDetailsLoading}
-                    <div class="modal-loading">
-                        <div class="spinner"></div>
-                        <p>Lade Spielerdetails...</p>
-                    </div>
-                {:else}
-                    <div class="modal-scroll-area">
-                        <div class="modal-header">
-                            <div class="player-header-info">
-                                <div class="player-avatar-large">
-                                    {#if selectedPlayer?.leagueTier || selectedPlayer?.league}
-                                        <img
-                                            src={selectedPlayer?.leagueTier?.iconUrls.large ||
-                                                selectedPlayer?.league?.iconUrls.large ||
-                                                selectedPlayer?.league?.iconUrls.medium}
-                                            alt={selectedPlayer?.leagueTier?.name ||
-                                                selectedPlayer?.league?.name}
-                                            class="p-league-img"
-                                        />
-                                    {/if}
-                                </div>
-                                <div class="player-main-info">
-                                    <h2>{selectedPlayer?.name}</h2>
-                                    <p class="player-tag">{selectedPlayer?.tag}</p>
-                                    <div class="p-header-actions">
-                                        <div class="p-role-badge">
-                                            {getRoleDisplay(selectedPlayer?.role || '')}
-                                        </div>
-                                        {#if selectedPlayer?.userId && $user?.is_admin}
-                                            <button
-                                                class="view-profile-btn header-btn"
-                                                on:click={() => dispatch('navigate', `profile/${selectedPlayer?.userId}`)}
-                                            >
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                                                </svg>
-                                                Profil
-                                            </button>
-                                        {/if}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="modal-body">
-                            <div class="stats-grid">
-                                <div class="stat-card">
-                                    <span class="stat-label">Rathaus</span>
-                                    <span class="stat-value">Level {selectedPlayer?.townHallLevel}</span>
-                                </div>
-                                <div class="stat-card">
-                                    <span class="stat-label">Erfahrung</span>
-                                    <span class="stat-value">Lvl {selectedPlayer?.expLevel}</span>
-                                </div>
-                                <div class="stat-card">
-                                    <span class="stat-label">Trophäen</span>
-                                    <span class="stat-value">{selectedPlayer?.trophies}</span>
-                                </div>
-                                <div class="stat-card">
-                                    <span class="stat-label">Kriegssterne</span>
-                                    <span class="stat-value">{selectedPlayer?.warStars || 0}</span>
-                                </div>
-                            </div>
-
-                            <div class="donations-section">
-                                <span class="stat-label">Spenden</span>
-                                <div class="stat-value">▲ {selectedPlayer?.donations} / ▼ {selectedPlayer?.donationsReceived}</div>
-                            </div>
-
-                            {#if selectedPlayer?.userId || selectedPlayer?.isLinked}
-                                <div class="modal-section discord-section">
-                                    <h4>Discord</h4>
-                                    <div class="discord-info">
-                                        <div class="d-avatar-box">
-                                            {#if selectedPlayer?.avatar}
-                                                <img src={selectedPlayer.avatar} alt="Discord Avatar" class="discord-avatar" />
-                                            {:else}
-                                                <div class="d-placeholder">
-                                                    {(selectedPlayer?.nickname || selectedPlayer?.name || 'U').charAt(0).toUpperCase()}
-                                                </div>
-                                            {/if}
-                                        </div>
-                                        <div class="d-info">
-                                            <div class="discord-name">
-                                                {selectedPlayer?.nickname || selectedPlayer?.global_name || selectedPlayer?.username || 'Unbekannt'}
-                                            </div>
-                                            <div class="d-status">Verknüpft</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {/if}
-
-                            {#if selectedPlayer?.totalKickpoints !== undefined}
-                                <div class="modal-section kickpoints-section">
-                                    <h4>Kickpunkte</h4>
-                                    <div class="kp-summary-card">
-                                        <div class="kp-stat">
-                                            <span class="stat-label">Aktuell</span>
-                                            <span class="stat-value">{selectedPlayer?.activeKickpointsSum ?? (selectedPlayer?.activeKickpoints || []).reduce((a, b) => a + (b.amount || 0), 0)}</span>
-                                        </div>
-                                        <div class="kp-stat">
-                                            <span class="stat-label">Gesamt</span>
-                                            <span class="stat-value">{selectedPlayer?.totalKickpoints}</span>
-                                        </div>
-                                    </div>
-
-                                    {#if hasPrivilegedAccess && selectedPlayer?.activeKickpoints && selectedPlayer?.activeKickpoints.length > 0}
-                                        <div class="kp-details-list">
-                                            {#each selectedPlayer.activeKickpoints as kp}
-                                                <div class="kp-detail-item">
-                                                    <div class="kp-detail-header">
-                                                        <span class="kp-amount">+{kp.amount}</span>
-                                                        <span class="kp-date">
-                                                            {new Date(kp.date).toLocaleDateString('de-DE')}
-                                                        </span>
-                                                    </div>
-                                                    {#if kp.reason}
-                                                        <div class="kp-reason">{kp.reason}</div>
-                                                    {/if}
-                                                    {#if kp.description}
-                                                        <div class="kp-desc">{kp.description}</div>
-                                                    {/if}
-                                                </div>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                </div>
-                            {/if}
-
-                            {#if playerOtherAccounts.length > 0}
-                                <div class="modal-section accounts-section">
-                                    <h4>Weitere Accounts ({playerOtherAccounts.length})</h4>
-                                    <div class="other-accounts">
-                                        {#each playerOtherAccounts as acc}
-                                            <button
-                                                class="acc-mini-card"
-                                                on:click={() => selectPlayer(acc)}
-                                            >
-                                                <img
-                                                    src={acc.clan?.badgeUrls?.small || ''}
-                                                    alt=""
-                                                    class="acc-badge"
-                                                />
-                                                <div class="acc-info">
-                                                    <div class="acc-name">{acc.nameDB}</div>
-                                                    <div class="acc-clan">{acc.clan?.name || 'Kein Clan'}</div>
-                                                </div>
-                                                <div class="acc-tag">{acc.tag}</div>
-                                            </button>
-                                        {/each}
-                                    </div>
-                                </div>
-                            {/if}
-                        </div>
-                    </div>
-                {/if}
+    {#if selectedPlayer && playerDetailsLoading}
+        <div class="modal-backdrop" transition:fade={{ duration: 200 }}>
+            <div class="modal-loading-minimal">
+                <div class="spinner"></div>
+                <p>Spielerdetails laden...</p>
             </div>
         </div>
     {/if}
 </div>
 
 <style>
+    .modal-loading-minimal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 2100;
+        color: white;
+        gap: 1.5rem;
+    }
+
     :root {
         --accent-color: #5865f2;
         --accent-hover: #4752c4;
@@ -1149,9 +1195,6 @@
     .t-icon {
         width: 20px;
         height: 20px;
-    }
-    .trophies {
-        color: #ffcc00;
     }
     .stars {
         color: #ff9900;
@@ -1492,21 +1535,6 @@
         padding: 0.75rem 0.25rem 0;
     }
 
-    .m-trophies-mini {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--text-dim);
-    }
-
-    .m-trophies-mini svg {
-        width: 12px;
-        color: #ffcc00;
-        opacity: 0.8;
-    }
-
     .donation-stats-mini {
         font-size: 0.8rem;
         font-weight: 700;
@@ -1564,7 +1592,7 @@
         color: white;
         width: 22px;
         height: 22px;
-        border-radius: 50%;
+        border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1662,16 +1690,234 @@
         color: var(--text-dim-light);
     }
 
-    .linked-indicator {
-        position: absolute;
-        top: 1rem;
-        right: 1.5rem;
-        color: var(--accent-color);
-        opacity: 0.6;
+    .old-name {
+        font-size: 0.8rem;
+        font-weight: 500;
+        opacity: 0.5;
+        font-style: italic;
+        margin-left: 4px;
+        display: block;
     }
 
-    .linked-indicator svg {
-        width: 18px;
+    .only-upstream {
+        opacity: 0.6;
+        filter: grayscale(0.7);
+    }
+
+    .has-diff {
+        border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .has-diff:hover {
+        border-color: #f59e0b;
+    }
+
+    /* Diff Section */
+    .diff-section {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-dark);
+    }
+
+    .diff-section .section-header-row {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 1.5rem;
+    }
+
+    .diff-section .title-group h3 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    .light .diff-section {
+        border-top-color: var(--border-light);
+    }
+
+    .diff-table-container {
+        margin-top: 2rem;
+        background: var(--bg-card-dark);
+        border: 1px solid var(--border-dark);
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+
+    .light .diff-table-container {
+        background: var(--bg-card-light);
+        border-color: var(--border-light);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .diff-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+    }
+
+    .diff-table th {
+        text-align: left;
+        padding: 1.25rem 1.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        font-weight: 800;
+        color: var(--text-dim);
+        border-bottom: 1px solid var(--border-dark);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+    }
+
+    .light .diff-table th {
+        background: rgba(0, 0, 0, 0.03);
+    }
+
+    .diff-table td {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-dark);
+    }
+
+    .light .diff-table td {
+        border-bottom-color: var(--border-light);
+    }
+
+    .val-sc {
+        color: #3b82f6;
+        font-weight: 800;
+    }
+
+    .val-up {
+        color: #9ca3af;
+        font-weight: 600;
+        text-decoration: line-through;
+        opacity: 0.7;
+    }
+
+    .row-left {
+        background: rgba(75, 85, 99, 0.1);
+    }
+
+    .row-new {
+        background: rgba(16, 185, 129, 0.1);
+    }
+
+    .row-diff {
+        background: rgba(245, 158, 11, 0.05);
+    }
+
+    .diff-label {
+        font-size: 0.7rem;
+        font-weight: 950;
+        padding: 4px 10px;
+        border-radius: 6px;
+        text-transform: uppercase;
+        margin-right: 12px;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    .diff-label.left {
+        background: #4b5563;
+        color: white;
+    }
+    .diff-label.new {
+        background: #10b981;
+        color: white;
+    }
+
+    /* New Diff Grid Layout */
+    .diff-grid-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+
+    .diff-category h4 {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        opacity: 0.8;
+    }
+
+    .indicator-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    .indicator-dot.new {
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+    }
+    .indicator-dot.left {
+        background: #4b5563;
+    }
+
+    .diff-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .mini-diff-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-dark);
+        border-radius: 12px;
+        transition: all 0.2s;
+    }
+
+    .light .mini-diff-card {
+        background: white;
+        border-color: var(--border-light);
+    }
+
+    .mini-diff-card.new {
+        border-left: 4px solid #10b981;
+    }
+    .mini-diff-card.left {
+        border-left: 4px solid #4b5563;
+        opacity: 0.7;
+    }
+
+    .mini-diff-card .m-info {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mini-diff-card .m-name {
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .mini-diff-card .m-tag {
+        font-size: 0.75rem;
+        font-family: 'JetBrains Mono', monospace;
+        opacity: 0.5;
+    }
+
+    .table-header {
+        margin-top: 3rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .table-header h4 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        opacity: 0.8;
+    }
+
+    @media (max-width: 1100px) {
+        .diff-grid-layout {
+            grid-template-columns: 1fr;
+        }
     }
 
     /* Modal / Overlay Styles */
@@ -1686,496 +1932,6 @@
         align-items: center;
         justify-content: center;
         padding: 2rem;
-    }
-
-    .player-modal {
-        width: 100%;
-        max-width: 600px;
-        max-height: 90vh;
-        background: #12121e;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 32px;
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
-    }
-
-    .player-modal.light {
-        background: #ffffff;
-        border-color: rgba(0, 0, 0, 0.1);
-        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
-    }
-
-    .close-modal {
-        position: absolute;
-        top: 1.5rem;
-        right: 1.5rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: none;
-        color: #fff;
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.2s;
-        z-index: 10;
-    }
-
-    .player-modal.light .close-modal {
-        background: rgba(0, 0, 0, 0.05);
-        color: #1a1a2e;
-    }
-
-    .close-modal:hover {
-        background: rgba(255, 255, 255, 0.15);
-        transform: rotate(90deg);
-    }
-
-    .modal-scroll-area {
-        overflow-y: auto;
-        flex: 1;
-        padding: 3rem;
-        scrollbar-width: none;
-    }
-
-    .modal-scroll-area::-webkit-scrollbar {
-        display: none;
-    }
-
-    .modal-header {
-        margin-bottom: 2.5rem;
-    }
-
-    .player-header-info {
-        display: flex;
-        align-items: center;
-        gap: 2rem;
-    }
-
-    .player-avatar-large {
-        width: 100px;
-        height: 100px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.5rem;
-    }
-
-    .player-modal.light .player-avatar-large {
-        background: rgba(0, 0, 0, 0.03);
-    }
-
-    .player-avatar-large img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-
-    .player-main-info h2 {
-        font-size: 2.2rem;
-        font-weight: 900;
-        margin: 0 0 0.25rem 0;
-        letter-spacing: -0.02em;
-    }
-
-    .player-tag {
-        font-family: 'JetBrains Mono', monospace;
-        color: var(--text-dim);
-        font-size: 1.1rem;
-        margin: 0 0 0.75rem 0;
-        opacity: 0.6;
-    }
-
-    .p-header-actions {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .view-profile-btn.header-btn {
-        background: var(--accent-color);
-        color: white;
-        padding: 0.4rem 0.8rem;
-        border-radius: 8px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        border: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        transition: all 0.2s;
-    }
-
-    .view-profile-btn.header-btn:hover {
-        background: var(--accent-hover);
-        transform: translateY(-2px);
-    }
-
-    .p-role-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        background: rgba(88, 101, 242, 0.1);
-        color: #5865f2;
-        border-radius: 8px;
-        font-size: 0.8rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .modal-body {
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-    }
-
-    .stat-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 20px;
-        padding: 1.25rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-
-    .player-modal.light .stat-card {
-        background: #f8fafc;
-        border-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .kp-summary-card {
-        background: rgba(244, 63, 94, 0.08);
-        border: 1px solid rgba(244, 63, 94, 0.15);
-        border-radius: 20px;
-        padding: 1.5rem;
-        display: flex;
-        gap: 3rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .player-modal.light .kp-summary-card {
-        background: rgba(244, 63, 94, 0.05);
-    }
-
-    .kp-stat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-
-    .kp-stat .stat-value {
-        color: #f43f5e;
-        font-size: 1.5rem;
-    }
-
-    .kp-details-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-    }
-
-    .stat-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-dim);
-    }
-
-    .stat-value {
-        font-size: 1.25rem;
-        font-weight: 800;
-    }
-
-    .donations-section {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 20px;
-        padding: 1.25rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .player-modal.light .donations-section {
-        background: #f8fafc;
-    }
-
-    .modal-section h4 {
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-dim);
-        margin: 0 0 1rem 0;
-    }
-
-    .discord-info {
-        background: #5865f2;
-        border-radius: 24px;
-        padding: 1.25rem;
-        display: flex;
-        align-items: center;
-        gap: 1.25rem;
-        color: white;
-    }
-
-    .discord-avatar {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        border: 3px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .discord-name {
-        font-size: 1.2rem;
-        font-weight: 800;
-    }
-
-    .d-status {
-        font-size: 0.8rem;
-        opacity: 0.8;
-        font-weight: 600;
-    }
-
-    /* Player Detail Content */
-    .detail-section {
-        margin-bottom: 3rem;
-    }
-
-    .detail-section h3 {
-        font-size: 0.95rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-dim);
-        margin-bottom: 1.5rem;
-        border-bottom: 1px solid var(--border-dark);
-        padding-bottom: 0.75rem;
-    }
-
-    .stat-list {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-    }
-
-    .s-item {
-        background: rgba(255, 255, 255, 0.03);
-        padding: 1.25rem;
-        border-radius: 18px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-        border: 1px solid var(--border-dark);
-    }
-
-    .light .s-item {
-        background: #fff;
-        border-color: var(--border-light);
-    }
-
-    .s-item.highlighted {
-        background: rgba(88, 101, 242, 0.1);
-        border-color: rgba(88, 101, 242, 0.2);
-    }
-
-    .s-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-dim);
-        text-transform: uppercase;
-    }
-
-    .s-value {
-        font-size: 1.2rem;
-        font-weight: 800;
-    }
-
-    /* Discord Card inside Drawer */
-    .discord-profile {
-        background: #5865f2;
-        border-radius: 24px;
-        padding: 1.5rem;
-        margin-bottom: 3rem;
-        color: white;
-        box-shadow: 0 10px 25px rgba(88, 101, 242, 0.3);
-    }
-
-    .d-header {
-        display: flex;
-        align-items: center;
-        gap: 1.25rem;
-    }
-
-    .d-avatar-box {
-        position: relative;
-        width: 64px;
-        height: 64px;
-        flex-shrink: 0;
-    }
-
-    .d-avatar-box img {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        border: 3px solid rgba(255, 255, 255, 0.2);
-        object-fit: cover;
-    }
-
-    .d-placeholder {
-        width: 100%;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 1.5rem;
-        color: white;
-        border: 2px dashed rgba(255, 255, 255, 0.3);
-    }
-
-    .d-name {
-        font-size: 1.4rem;
-        font-weight: 800;
-    }
-    .d-status {
-        font-size: 0.9rem;
-        opacity: 0.8;
-        font-weight: 600;
-    }
-
-    .view-profile-btn {
-        margin-left: auto;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
-        padding: 0.6rem 1rem;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .view-profile-btn:hover {
-        background: white;
-        color: #5865f2;
-        transform: translateY(-2px);
-    }
-
-    .view-profile-btn svg {
-        width: 16px;
-        height: 16px;
-    }
-
-    /* Other Accounts */
-    .other-accounts {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-    }
-
-    .acc-mini-card {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        padding: 1rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid var(--border-dark);
-        width: 100%;
-        text-align: left;
-        color: inherit;
-        font: inherit;
-    }
-
-    .acc-mini-card:hover {
-        background: rgba(255, 255, 255, 0.08);
-        transform: translateX(8px);
-    }
-
-    .acc-badge {
-        width: 44px;
-        height: 44px;
-    }
-    .acc-info {
-        flex: 1;
-    }
-    .acc-name {
-        font-weight: 800;
-        font-size: 1.1rem;
-    }
-    .acc-clan {
-        font-size: 0.85rem;
-        opacity: 0.6;
-    }
-    .acc-tag {
-        font-family: monospace;
-        font-size: 0.8rem;
-        opacity: 0.4;
-    }
-
-    /* Kickpoint Styling */
-    .kp-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .kp-detail-item {
-        background: rgba(244, 63, 94, 0.05);
-        border-radius: 16px;
-        padding: 1.25rem;
-        border: 1px solid rgba(244, 63, 94, 0.1);
-        border-left: 4px solid #f43f5e;
-    }
-
-    .kp-detail-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-
-    .kp-amount {
-        font-weight: 900;
-        color: #f43f5e;
-        font-size: 1.3rem;
-    }
-    .kp-date {
-        font-size: 0.85rem;
-        font-weight: 600;
-        opacity: 0.5;
-    }
-    .kp-reason {
-        font-weight: 800;
-        font-size: 1.1rem;
-        margin-bottom: 0.25rem;
-    }
-    .kp-desc {
-        font-size: 0.95rem;
-        line-height: 1.5;
-        opacity: 0.8;
     }
 
     /* Loading / Spinner */

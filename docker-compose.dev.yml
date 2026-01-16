@@ -41,6 +41,7 @@ services:
             - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI}
             - JWT_SECRET=${JWT_SECRET}
             - FRONTEND_URL=${FRONTEND_URL}
+            - BACKGROUND_REFRESH_INTERVAL_MINS=${BACKGROUND_REFRESH_INTERVAL_MINS:-10}
         ports:
             - '8888:8888'
 

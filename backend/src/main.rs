@@ -1,7 +1,6 @@
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenv::dotenv;
 use oauth2::{AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl, basic::BasicClient};
-use reqwest::Client;
 use std::env;
 
 mod auth;
@@ -61,14 +60,16 @@ async fn main() -> std::io::Result<()> {
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let frontend_url =
         env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let background_refresh_interval = env::var("BACKGROUND_REFRESH_INTERVAL_MINS")
+        .unwrap_or_else(|_| "10".to_string())
+        .parse::<u64>()
+        .unwrap_or(10);
 
-    let oauth_client = BasicClient::new(
-        discord_client_id,
-        Some(discord_client_secret),
-        auth_url,
-        Some(token_url),
-    )
-    .set_redirect_uri(redirect_url);
+    let oauth_client = BasicClient::new(discord_client_id)
+        .set_client_secret(discord_client_secret)
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(redirect_url);
 
     // Initialize Postgres Database
     let pool = sqlx::postgres::PgPool::connect(&database_url)
@@ -133,7 +134,7 @@ async fn main() -> std::io::Result<()> {
         .execute(&pool)
         .await;
 
-    let client = Client::builder()
+    let client = oauth2::reqwest::Client::builder()
         .timeout(Duration::from_secs(200))
         .build()
         .expect("Failed to build reqwest client");
@@ -150,6 +151,7 @@ async fn main() -> std::io::Result<()> {
         oauth_client,
         jwt_secret,
         frontend_url,
+        background_refresh_interval,
     };
 
     // Spawn the background refresh task
