@@ -45,22 +45,22 @@
 
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2') || name.includes('II')) return bannerCR2;
-            if (name.includes('3') || name.includes('III')) return bannerCR3;
             if (name.includes('4') || name.includes('IV')) return bannerCR4;
             if (name.includes('5') || name.includes('V')) return bannerCR5;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('6') || name.includes('VI')) return banner6;
         if (name.includes('4') || name.includes('IV')) return banner4;
         if (name.includes('5') || name.includes('V')) return banner5;
-        if (name.includes('6') || name.includes('VI')) return banner6;
-        if (name.includes('7') || name.includes('VII')) return banner7;
-        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }
@@ -69,6 +69,16 @@
         const n = (name || '').toUpperCase();
         if (n.includes('GP')) return '#a5025a';
         if (n.includes('ANTHRAZIT')) return '#3d3a3f';
+
+        // Priority to name-based coloring to fix potential index swaps
+        if (n.includes('F2P 2') || n.includes('F2P2')) return '#05762b';
+        if (n.includes('F2P')) return '#c90000';
+        if (n.includes('8') || n.includes('VIII')) return '#d100c7';
+        if (n.includes('7') || n.includes('VII')) return '#007076';
+        if (n.includes('6') || n.includes('VI')) return '#b54800';
+        if (n.includes('4') || n.includes('IV')) return '#691a97';
+        if (n.includes('5') || n.includes('V')) return '#024885';
+        if (n.includes('3') || n.includes('III')) return '#c89e00';
 
         if (index === 1) return '#c90000';
         if (index === 2) return '#05762b';
@@ -79,7 +89,6 @@
         if (index === 7) return '#007076';
         if (index === 8) return '#d100c7';
 
-        if (n.includes('F2P')) return '#3ba55c';
         return '#c90000';
     }
 
