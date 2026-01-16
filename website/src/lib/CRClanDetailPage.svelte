@@ -820,7 +820,7 @@
         gameType="cr"
         {theme}
         onClose={closePlayerDetails}
-        hasPrivilegedAccess={hasPrivilegedAccess}
+        {hasPrivilegedAccess}
         isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}

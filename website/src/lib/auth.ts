@@ -15,27 +15,35 @@ export interface User {
 const internalUser = writable<User | null>(null);
 // Export read-only version of the real user for UI checks
 export const realUser = { subscribe: internalUser.subscribe };
-export const userOverride = writable<{ is_admin?: boolean; highest_role?: string | null } | null>(null);
+export const userOverride = writable<{
+    is_admin?: boolean;
+    highest_role?: string | null;
+} | null>(null);
 
-export const user = derived([internalUser, userOverride], ([$internalUser, $userOverride]) => {
-    if (!$internalUser) return null;
-    // Only allow overrides if the actual user is an admin
-    if (!$internalUser.is_admin) return $internalUser;
-    if (!$userOverride) return $internalUser;
+export const user = derived(
+    [internalUser, userOverride],
+    ([$internalUser, $userOverride]) => {
+        if (!$internalUser) return null;
+        // Only allow overrides if the actual user is an admin
+        if (!$internalUser.is_admin) return $internalUser;
+        if (!$userOverride) return $internalUser;
 
-    return {
-        ...$internalUser,
-        is_admin: $userOverride.is_admin ?? $internalUser.is_admin,
-        highest_role:
-            $userOverride.highest_role !== undefined
-                ? $userOverride.highest_role
-                : $internalUser.highest_role,
-        // If an override is active, we also strip linked players to simulate a "clean" account
-        // unless we want to keep them. For testing "MEMBER" view, we usually want these gone.
-        linked_players: $userOverride ? [] : $internalUser.linked_players,
-        linked_cr_players: $userOverride ? [] : $internalUser.linked_cr_players,
-    };
-});
+        return {
+            ...$internalUser,
+            is_admin: $userOverride.is_admin ?? $internalUser.is_admin,
+            highest_role:
+                $userOverride.highest_role !== undefined
+                    ? $userOverride.highest_role
+                    : $internalUser.highest_role,
+            // If an override is active, we also strip linked players to simulate a "clean" account
+            // unless we want to keep them. For testing "MEMBER" view, we usually want these gone.
+            linked_players: $userOverride ? [] : $internalUser.linked_players,
+            linked_cr_players: $userOverride
+                ? []
+                : $internalUser.linked_cr_players,
+        };
+    }
+);
 
 export function getRolePriority(role: string | null | undefined): number {
     if (!role) return 0;
