@@ -132,7 +132,7 @@
                 {apiBaseUrl}
                 gameType="coc"
                 title="Extra Clans"
-                description="LOST GP ist eine option zwischen einem F2P Clan und einem normalen Clan. Hier sind Goldpässe und Eventpässe erlaubt. Anthrazit dient hauptsächlich für 2. Accounts"
+                description="LOST GP ist eine Option zwischen einem F2P Clan und einem normalen Clan. Hier sind Goldpässe und Eventpässe erlaubt. Anthrazit dient hauptsächlich für 2. Accounts"
                 clansData={extraClans}
             />
         {/if}
