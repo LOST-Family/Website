@@ -1243,8 +1243,9 @@
     .no-league {
         width: 48px;
         height: 48px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px dashed rgba(255, 255, 255, 0.1);
     }
 
     .m-main-info {

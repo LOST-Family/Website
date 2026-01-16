@@ -590,26 +590,17 @@
                                                         transition:fade
                                                     >
                                                         <div
-                                                            class="member-avatar"
-                                                            style="border-color: {roleColors[
+                                                            class="member-status-line"
+                                                            style="background-color: {roleColors[
                                                                 role
-                                                            ] ||
-                                                                (theme ===
-                                                                'light'
-                                                                    ? '#eee'
-                                                                    : '#444')}"
-                                                        >
-                                                            {getPlayerName(
-                                                                player
-                                                            )
-                                                                .charAt(0)
-                                                                .toUpperCase()}
-                                                        </div>
+                                                            ] || 'transparent'}"
+                                                        ></div>
                                                         <span
                                                             class="member-name"
-                                                            style="color: {roleColors[
-                                                                role
-                                                            ] || 'inherit'}"
+                                                            style="color: {theme ===
+                                                            'light'
+                                                                ? '#2e3338'
+                                                                : '#dcddde'}"
                                                             title={getPlayerName(
                                                                 player
                                                             )}
@@ -889,31 +880,30 @@
     }
 
     .role-section {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 8px;
-        padding: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 12px;
+        padding: 16px;
         transition: all 0.3s ease;
-        border: 1px solid rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .role-section:hover {
-        background: rgba(0, 0, 0, 0.25);
-        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.1);
     }
 
     .card-container.light .role-section {
-        background: rgba(88, 101, 242, 0.05);
-        border: 1px solid rgba(88, 101, 242, 0.1);
+        background: rgba(0, 0, 0, 0.02);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     .role-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
+        gap: 12px;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        transition: border-color 0.4s ease;
     }
 
     .card-container.light .role-header {
@@ -921,9 +911,9 @@
     }
 
     .role-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
         flex-shrink: 0;
     }
 
@@ -958,55 +948,51 @@
     .members-list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 8px;
+        gap: 6px;
     }
 
     .member-item {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 4px 8px;
-        background: rgba(180, 180, 180, 0.1);
-        border-radius: 6px;
-        transition: all 0.2s ease;
+        gap: 10px;
+        padding: 10px 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        margin: 1px 0;
     }
 
     .card-container.light .member-item {
-        background: rgba(0, 0, 0, 0.04);
+        background: rgba(0, 0, 0, 0.015);
+        border: 1px solid rgba(0, 0, 0, 0.03);
     }
 
     .member-item:hover {
-        background: #40444b;
+        background: rgba(255, 255, 255, 0.06);
         transform: translateX(4px);
+        border-color: rgba(255, 255, 255, 0.1);
     }
 
     .card-container.light .member-item:hover {
-        background: #e3e5e8;
+        background: #f8fafc;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
-    .member-avatar {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: #202225;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #b9bbbe;
-        font-weight: 600;
-        font-size: 0.7rem;
-        flex-shrink: 0;
-        border: 2px solid;
-        transition: background 0.4s ease;
-    }
-
-    .card-container.light .member-avatar {
-        background: #ffffff;
-        color: #4f5660;
+    .member-status-line {
+        position: absolute;
+        left: 0;
+        top: 4px;
+        bottom: 4px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+        opacity: 0.9;
+        box-shadow: 1px 0 4px rgba(0, 0, 0, 0.2);
     }
 
     .member-name {
-        color: #dcddde;
         font-size: 0.85rem;
         font-weight: 600;
         white-space: nowrap;
@@ -1014,12 +1000,14 @@
         text-overflow: ellipsis;
         flex: 1;
         transition: color 0.4s ease;
-        text-shadow: 0.3px 0.3px 0.3px rgba(0, 0, 0, 0.8);
+    }
+
+    .member-name {
+        color: #dcddde;
     }
 
     .card-container.light .member-name {
         color: #2e3338;
-        text-shadow: 0.5px 0.5px 0px rgba(255, 255, 255, 0.8);
     }
 
     .spinner,

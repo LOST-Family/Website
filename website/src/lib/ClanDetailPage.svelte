@@ -1413,7 +1413,7 @@
         color: white;
         width: 22px;
         height: 22px;
-        border-radius: 50%;
+        border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;

@@ -201,87 +201,6 @@
                         {/if}
                     </div>
 
-                    <!-- Discord Identity -->
-                    {#if player.discordId || player.userId || player.discord_user}
-                        <div
-                            class="detail-section"
-                            in:slide={{ duration: 300, delay: 200 }}
-                        >
-                            <h3>
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    ><path
-                                        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
-                                    /><path
-                                        d="M13.73 21a2 2 0 0 1-3.46 0"
-                                    /></svg
-                                >
-                                Verknüpfter Discord Account
-                            </h3>
-                            <div class="discord-identity">
-                                <div class="discord-avatar">
-                                    {#if player.avatar}
-                                        <img
-                                            src={player.avatar.startsWith(
-                                                'http'
-                                            )
-                                                ? player.avatar
-                                                : `https://cdn.discordapp.com/avatars/${player.discordId}/${player.avatar}.png`}
-                                            alt="Discord Avatar"
-                                        />
-                                    {:else if player.discord_user?.avatar}
-                                        <img
-                                            src="https://cdn.discordapp.com/avatars/{player
-                                                .discord_user.id}/{player
-                                                .discord_user.avatar}.png"
-                                            alt="Discord Avatar"
-                                        />
-                                    {:else}
-                                        <div class="avatar-placeholder">
-                                            {(player.nickname ||
-                                                player.global_name ||
-                                                player.username ||
-                                                player.discord_user?.username ||
-                                                'U')[0]}
-                                        </div>
-                                    {/if}
-                                </div>
-                                <div class="discord-info">
-                                    <span class="discord-name"
-                                        >{player.nickname ||
-                                            player.global_name ||
-                                            player.username ||
-                                            player.discord_user?.global_name ||
-                                            player.discord_user?.username ||
-                                            'Linked User'}</span
-                                    >
-                                    <span class="discord-label"
-                                        >Discord Account</span
-                                    >
-                                </div>
-                                {#if player.discordId || player.userId || (player.discord_user && player.discord_user.id)}
-                                    <a
-                                        href="/profile/{player.discordId ||
-                                            player.userId ||
-                                            player.discord_user.id}"
-                                        class="view-profile-link"
-                                        on:click={onClose}
-                                    >
-                                        Profil ansehen
-                                    </a>
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-
                     <!-- Other Accounts -->
                     {#if player.playerAccounts && player.playerAccounts.length > 1}
                         <div
@@ -338,31 +257,7 @@
                             class="detail-section"
                             in:slide={{ duration: 300, delay: 400 }}
                         >
-                            <h3>
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    ><path d="m12 14 4-4" /><path
-                                        d="m3.34 19 1.4-1.4"
-                                    /><path
-                                        d="M5.8 11.3c.7-.7 1.6-1 2.5-1.1s1.8.2 2.5.9l5.1 5.1c.7.7.9 1.6.9 2.5s-.4 1.8-1.1 2.5c-.7.7-1.6 1-2.5 1.1s-1.8-.2-2.5-.9l-5.1-5.1c-.7-.7-.9-1.6-.9-2.5s.4-1.8 1.1-2.5z"
-                                    /><path d="m11.5 15.5 4 4" /><path
-                                        d="m11.5 15.5 4-4"
-                                    /><path d="m11.5 15.5-4 4" /><path
-                                        d="M11.5 15.5 19 8"
-                                    /><path
-                                        d="M19 8c.7-.7 1-1.6 1.1-2.5s-.2-1.8-.9-2.5c-.7-.7-1.6-1-2.5-1.1s-1.8.2-2.5.9l-1.9 1.9"
-                                    /></svg
-                                >
-                                Kickpunkte
-                            </h3>
+                            <h3>Kickpunkte</h3>
                             <div class="kickpoints-list">
                                 {#each player.kickpoints || player.activeKickpoints || [] as kp}
                                     <div class="kp-item">
@@ -859,9 +754,10 @@
     .discord-avatar {
         width: 48px;
         height: 48px;
-        border-radius: 50%;
+        border-radius: 12px;
         overflow: hidden;
-        background: #5865f2;
+        background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+        box-shadow: 0 4px 15px rgba(88, 101, 242, 0.25);
     }
 
     .discord-avatar img {
@@ -876,9 +772,13 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 800;
-        font-size: 1.25rem;
         color: white;
+    }
+
+    .user-icon-svg {
+        width: 24px;
+        height: 24px;
+        opacity: 0.9;
     }
 
     .discord-info {
