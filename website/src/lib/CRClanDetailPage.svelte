@@ -261,7 +261,7 @@
                             'navigate',
                             backPath.startsWith('/')
                                 ? backPath.substring(1)
-                                : backPath
+                                : backPath,
                         )}
                 >
                     <svg
@@ -573,7 +573,7 @@
                                         <div class="m-sub-info">
                                             <span class="m-role-label"
                                                 >{getRoleDisplay(
-                                                    member.role
+                                                    member.role,
                                                 )}</span
                                             >
                                             <span class="dot">•</span>
@@ -773,12 +773,12 @@
                                                         <td>Rolle</td>
                                                         <td class="val-sc"
                                                             >{getRoleDisplay(
-                                                                m.role
+                                                                m.role,
                                                             )}</td
                                                         >
                                                         <td class="val-up"
                                                             >{getRoleDisplay(
-                                                                m.upstream_role
+                                                                m.upstream_role,
                                                             )}</td
                                                         >
                                                     </tr>
@@ -1784,6 +1784,21 @@
         font-size: 0.75rem;
         font-family: 'JetBrains Mono', monospace;
         opacity: 0.5;
+    }
+
+    .diff-label {
+        font-size: 0.65rem;
+        font-weight: 900;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    .diff-label.new {
+        background: #10b981;
+        color: white;
+    }
+    .diff-label.left {
+        background: #4b5563;
+        color: white;
     }
 
     .diff-table-container {

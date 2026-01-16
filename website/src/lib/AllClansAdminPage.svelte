@@ -203,18 +203,39 @@
                 {#if error === 'Administrator-Zutritt verweigert.'}
                     <div class="access-denied-container">
                         <div class="lock-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <rect
+                                    x="3"
+                                    y="11"
+                                    width="18"
+                                    height="11"
+                                    rx="2"
+                                    ry="2"
+                                />
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                         </div>
                         <h3>Zutritt verweigert</h3>
-                        <p>Du benötigst Administrator-Rechte, um auf diese Seite zuzugreifen.</p>
+                        <p>
+                            Du benötigst Administrator-Rechte, um auf diese
+                            Seite zuzugreifen.
+                        </p>
                         <div class="deny-actions">
-                            <button class="action-btn secondary" on:click={() => dispatch('navigate', 'home')}>
+                            <button
+                                class="action-btn secondary"
+                                on:click={() => dispatch('navigate', 'home')}
+                            >
                                 Zurück zur Startseite
                             </button>
-                            <button class="action-btn" on:click={() => dispatch('navigate', 'clans')}>
+                            <button
+                                class="action-btn"
+                                on:click={() => dispatch('navigate', 'clans')}
+                            >
                                 Zu den Clans
                             </button>
                         </div>
@@ -255,14 +276,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
@@ -324,14 +345,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />

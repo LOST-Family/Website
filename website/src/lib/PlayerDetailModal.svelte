@@ -760,6 +760,86 @@
         background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
     }
 
+    /* Discord & Kickpoints Styles */
+    /* Discord Identity */
+    .discord-identity {
+        background: rgba(88, 101, 242, 0.1);
+        border: 1px solid rgba(88, 101, 242, 0.2);
+        border-radius: 16px;
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .discord-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+        box-shadow: 0 4px 15px rgba(88, 101, 242, 0.25);
+    }
+
+    .discord-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .user-icon-svg {
+        width: 24px;
+        height: 24px;
+        opacity: 0.9;
+    }
+
+    .discord-info {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .discord-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: white;
+    }
+
+    .light .discord-name {
+        color: #1e293b;
+    }
+
+    .discord-label {
+        font-size: 0.8rem;
+        color: #5865f2;
+        font-weight: 600;
+    }
+
+    .view-profile-link {
+        background: #5865f2;
+        color: white;
+        padding: 0.6rem 1rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .view-profile-link:hover {
+        background: #4752c4;
+        transform: translateY(-2px);
+    }
+
     /* Kickpoints History */
     .kickpoints-list {
         display: flex;
@@ -1034,6 +1114,19 @@
         width: 100%;
         height: 100%;
         object-fit: contain;
+    }
+
+    .badge-level-cr {
+        position: absolute;
+        bottom: -5px;
+        right: -5px;
+        background: #febd31;
+        color: #000;
+        font-size: 0.7rem;
+        font-weight: 900;
+        padding: 0.15rem 0.4rem;
+        border-radius: 6px;
+        border: 2px solid #111827;
     }
 
     .labels-list {

@@ -623,7 +623,7 @@
                                                 ></span>
                                                 <span class="role-title"
                                                     >{getDisplayRole(
-                                                        role
+                                                        role,
                                                     )}</span
                                                 >
                                                 <span class="role-count"
@@ -650,11 +650,11 @@
                                                                 ? '#2e3338'
                                                                 : '#dcddde'}"
                                                             title={getPlayerName(
-                                                                player
+                                                                player,
                                                             )}
                                                         >
                                                             {getPlayerName(
-                                                                player
+                                                                player,
                                                             )}
                                                         </span>
                                                     </div>

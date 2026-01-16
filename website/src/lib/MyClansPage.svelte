@@ -258,14 +258,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index,
+                                        clan.index
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType,
+                                                clan.gameType
                                             )}
                                             alt="Banner"
                                         />
@@ -329,14 +329,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index,
+                                        clan.index
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType,
+                                                clan.gameType
                                             )}
                                             alt="Banner"
                                         />
