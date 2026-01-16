@@ -3,6 +3,7 @@
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
     import { user, loading, fetchUser } from './auth';
+    import PlayerDetailModal from './PlayerDetailModal.svelte';
     import type { GameType } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -249,10 +250,23 @@
                     <div class="section-header">
                         <div class="section-title-group">
                             <div class="game-icon coc-icon">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
                                     <path
-                                        d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"
-                                    />
+                                        d="M14.5 17.5 3 6V3h3l11.5 11.5"
+                                    /><path d="m13 19 6-6" /><path
+                                        d="m16 16 4 4"
+                                    /><path d="m19 21 1-1" /><path
+                                        d="M9.5 17.5 21 6V3h-3L6.5 14.5"
+                                    /><path d="m11 19-6-6" /><path
+                                        d="m8 16-4 4"
+                                    /><path d="m5 21-1-1" />
                                 </svg>
                             </div>
                             <h2>Clash of Clans Accounts</h2>
@@ -375,7 +389,7 @@
                                                 >{player.totalKickpoints}</span
                                             >
                                         </div>
-                                        <div class="stat-item">
+                                        <div class="stat-item span-3">
                                             <span class="stat-label">Clan</span>
                                             <span class="stat-value">
                                                 {#if player.clanDB?.badgeUrl}
@@ -383,14 +397,14 @@
                                                         src={player.clanDB
                                                             .badgeUrl}
                                                         alt=""
-                                                        style="width: 25px; height: 25px; vertical-align: middle; margin-right: 4px; display: inline-block;"
+                                                        class="small-badge"
                                                     />
                                                 {/if}
                                                 {player.clanDB?.nameDB ||
                                                     'Kein Clan'}
                                             </span>
                                         </div>
-                                        <div class="stat-item">
+                                        <div class="stat-item span-3">
                                             <span class="stat-label"
                                                 >Aktueller Clan</span
                                             >
@@ -400,7 +414,7 @@
                                                         src={player.clan
                                                             .badgeUrls.large}
                                                         alt=""
-                                                        style="width: 25px; height: 25px; vertical-align: middle; margin-right: 4px; display: inline-block;"
+                                                        class="small-badge"
                                                     />
                                                 {/if}
                                                 {player.clan?.name ||
@@ -442,9 +456,16 @@
                     <div class="section-header">
                         <div class="section-title-group">
                             <div class="game-icon cr-icon">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
                                     <path
-                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
+                                        d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"
                                     />
                                 </svg>
                             </div>
@@ -575,7 +596,7 @@
                                                         src={player.clan
                                                             .badgeUrls.large}
                                                         alt=""
-                                                        style="width: 25px; height: 25px; vertical-align: middle; margin-right: 4px; display: inline-block;"
+                                                        class="small-badge"
                                                     />
                                                 {/if}
                                                 {player.clan?.name ||
@@ -616,282 +637,20 @@
     </div>
 </div>
 
-{#if selectedPlayer}
-    <div
-        class="modal-backdrop"
-        on:click|self={closePlayerModal}
-        on:keydown={(e) => e.key === 'Escape' && closePlayerModal()}
-        class:light={theme === 'light'}
-        role="button"
-        tabindex="-1"
-        transition:fade={{ duration: 250 }}
-    >
-        <div
-            class="modal-content"
-            class:light={theme === 'light'}
-            transition:scale={{
-                duration: 400,
-                delay: 50,
-                opacity: 0,
-                start: 0.95,
-                easing: quintOut,
-            }}
-        >
-            <button
-                class="close-modal"
-                on:click={closePlayerModal}
-                aria-label="Schließen"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-            </button>
-
-            <div class="modal-scroll-area">
-                <div class="modal-header">
-                    <div class="player-info-large">
-                        {#if selectedGameType === 'coc'}
-                            <img
-                                src={selectedPlayer.leagueTier?.iconUrls?.large}
-                                alt={selectedPlayer.leagueTier?.name}
-                                class="league-icon-large"
-                            />
-                        {:else if selectedPlayer.arena}
-                            <div class="arena-icon-container">
-                                <div class="arena-id-label">
-                                    A{selectedPlayer.arena.id
-                                        .toString()
-                                        .slice(-2)}
-                                </div>
-                            </div>
-                        {/if}
-                        <div class="player-titles">
-                            <h2>
-                                {selectedPlayer.nameDB || selectedPlayer.name}
-                            </h2>
-                            <p class="tag">{selectedPlayer.tag}</p>
-                            {#if selectedPlayer.clan}
-                                <div class="clan-info-small">
-                                    <img
-                                        src={selectedPlayer.clan.badgeUrls
-                                            ?.small}
-                                        alt=""
-                                    />
-                                    <span>{selectedPlayer.clan.name}</span>
-                                </div>
-                            {/if}
-                        </div>
-                    </div>
-                    <div class="th-display">
-                        {#if selectedGameType === 'coc'}
-                            <div class="th-level">
-                                TH {selectedPlayer.townHallLevel}
-                            </div>
-                            {#if selectedPlayer.builderHallLevel}
-                                <div class="bh-level">
-                                    BH {selectedPlayer.builderHallLevel}
-                                </div>
-                            {/if}
-                        {:else}
-                            <div class="th-level cr-level">
-                                {selectedPlayer.arena?.name ||
-                                    `Arena ${selectedPlayer.arena?.id || '?'}`}
-                            </div>
-                        {/if}
-                    </div>
-                </div>
-
-                <div class="modal-body">
-                    <div class="stats-grid-large">
-                        <div class="stat-card">
-                            <span class="label">EXP Level</span>
-                            <span class="value">{selectedPlayer.expLevel}</span>
-                        </div>
-                        {#if selectedGameType === 'coc'}
-                            <div class="stat-card">
-                                <span class="label">Kriegssterne</span>
-                                <span class="value"
-                                    >{selectedPlayer.warStars}</span
-                                >
-                            </div>
-                        {:else}
-                            <div class="stat-card">
-                                <span class="label">Trophäen</span>
-                                <span class="value"
-                                    >{selectedPlayer.trophies || 0}</span
-                                >
-                            </div>
-                        {/if}
-                        <div class="stat-card">
-                            <span class="label">Spenden</span>
-                            <span class="value"
-                                >{selectedPlayer.donations || 0}</span
-                            >
-                        </div>
-                        <div class="stat-card">
-                            <span class="label">Erhaltene Spenden</span>
-                            <span class="value"
-                                >{selectedPlayer.donationsReceived || 0}</span
-                            >
-                        </div>
-                    </div>
-
-                    {#if selectedGameType === 'cr' && selectedPlayer.currentDeck}
-                        <div class="detail-section">
-                            <h3>Aktuelles Deck</h3>
-                            <div class="deck-grid">
-                                {#each selectedPlayer.currentDeck as card}
-                                    <div class="card-item" title={card.name}>
-                                        <img
-                                            src={card.iconUrls?.medium}
-                                            alt={card.name}
-                                        />
-                                        <span class="card-level"
-                                            >LVL {card.level +
-                                                (card.rarity === 'legendary'
-                                                    ? 8
-                                                    : card.rarity === 'epic'
-                                                      ? 5
-                                                      : card.rarity === 'rare'
-                                                        ? 2
-                                                        : 0)}</span
-                                        >
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if selectedGameType === 'cr' && selectedPlayer.badges && selectedPlayer.badges.length > 0}
-                        <div class="detail-section">
-                            <h3>Abzeichen</h3>
-                            <div class="badges-grid-cr">
-                                {#each selectedPlayer.badges as badge}
-                                    <div
-                                        class="badge-item-cr"
-                                        title={badge.name}
-                                    >
-                                        <img
-                                            src={badge.iconUrls?.large}
-                                            alt={badge.name}
-                                        />
-                                        {#if badge.level}
-                                            <span class="badge-level-cr"
-                                                >Lvl {badge.level}</span
-                                            >
-                                        {/if}
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if selectedPlayer.heroes && selectedPlayer.heroes.length > 0}
-                        <div class="detail-section">
-                            <h3>Helden</h3>
-                            <div class="items-grid">
-                                {#each selectedPlayer.heroes as hero}
-                                    <div class="item-badge" title={hero.name}>
-                                        <span class="item-name"
-                                            >{hero.name}</span
-                                        >
-                                        <span class="item-level"
-                                            >{hero.level} / {hero.maxLevel}</span
-                                        >
-                                        <div
-                                            class="progress-bar"
-                                            style="width: {(hero.level /
-                                                hero.maxLevel) *
-                                                100}%"
-                                        ></div>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if selectedPlayer.labels && selectedPlayer.labels.length > 0}
-                        <div class="detail-section">
-                            <h3>Labels</h3>
-                            <div class="labels-list">
-                                {#each selectedPlayer.labels as label}
-                                    <div class="label-badge">
-                                        <img
-                                            src={label.iconUrls?.small}
-                                            alt={label.name}
-                                        />
-                                        <span>{label.name}</span>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if selectedPlayer.troops && selectedPlayer.troops.length > 0}
-                        <div class="detail-section">
-                            <h3>Truppen</h3>
-                            <div class="items-grid">
-                                {#each selectedPlayer.troops.filter((t: any) => !t.name.startsWith('Super ') && !['Sneaky Goblin', 'Rocket Balloon', 'Inferno Dragon', 'Ice Hound'].includes(t.name)) as troop}
-                                    <div class="item-badge" title={troop.name}>
-                                        <span class="item-name"
-                                            >{troop.name}</span
-                                        >
-                                        <span class="item-level"
-                                            >{troop.level} / {troop.maxLevel}</span
-                                        >
-                                        <div
-                                            class="progress-bar"
-                                            style="width: {(troop.level /
-                                                troop.maxLevel) *
-                                                100}%"
-                                        ></div>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if selectedPlayer.spells && selectedPlayer.spells.length > 0}
-                        <div class="detail-section">
-                            <h3>Zauber</h3>
-                            <div class="items-grid">
-                                {#each selectedPlayer.spells as spell}
-                                    <div class="item-badge" title={spell.name}>
-                                        <span class="item-name"
-                                            >{spell.name}</span
-                                        >
-                                        <span class="item-level"
-                                            >{spell.level} / {spell.maxLevel}</span
-                                        >
-                                        <div
-                                            class="progress-bar"
-                                            style="width: {(spell.level /
-                                                spell.maxLevel) *
-                                                100}%"
-                                        ></div>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        </div>
-    </div>
-{/if}
+<PlayerDetailModal
+    isOpen={!!selectedPlayer}
+    player={selectedPlayer}
+    gameType={selectedGameType}
+    {theme}
+    onClose={closePlayerModal}
+    hasPrivilegedAccess={!!(
+        $user?.is_admin ||
+        (viewUserId && $user && viewUserId === $user.discord_id)
+    )}
+/>
 
 <style>
     .profile-page {
-        min-height: calc(100vh - 64px);
-        padding: 3rem 1rem;
         color: white;
         position: relative;
         z-index: 1;
@@ -940,9 +699,91 @@
         scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
     }
 
+    .profile-page {
+        min-height: 100vh;
+        background: radial-gradient(
+                circle at top right,
+                rgba(59, 130, 246, 0.05),
+                transparent 400px
+            ),
+            radial-gradient(
+                circle at bottom left,
+                rgba(59, 130, 246, 0.03),
+                transparent 400px
+            );
+        color: white;
+        padding-bottom: 5rem;
+    }
+
+    .profile-page.light {
+        background: #f1f5f9;
+        color: #1e293b;
+    }
+
     .container {
-        max-width: 1000px;
+        max-width: 1200px;
         margin: 0 auto;
+        padding: 0 1.5rem;
+    }
+
+    .profile-content {
+        display: flex;
+        flex-direction: column;
+        gap: 4rem;
+    }
+
+    .accounts-section {
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .section-title-group {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .game-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .game-icon:hover {
+        transform: scale(1.1) rotate(-5deg);
+    }
+
+    .coc-icon {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .cr-icon {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .game-icon svg {
+        width: 28px;
+        height: 28px;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     }
 
     .profile-header {
@@ -1081,30 +922,36 @@
 
     .accounts-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 2rem;
     }
 
     .account-card {
         position: relative;
-        background: rgba(255, 255, 255, 0.02);
+        background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 20px;
-        padding: 1.5rem;
+        border-radius: 24px;
+        padding: 2rem;
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: pointer;
         outline: none;
+        display: flex;
+        flex-direction: column;
     }
 
     .account-card:focus {
         outline: none;
     }
 
-    .account-card:hover {
-        transform: translateY(-5px);
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(255, 255, 255, 0.1);
+    .account-card.coc-card:hover {
+        border-color: rgba(245, 158, 11, 0.3);
+        box-shadow: 0 10px 30px rgba(245, 158, 11, 0.05);
+    }
+
+    .account-card.cr-card:hover {
+        border-color: rgba(59, 130, 246, 0.3);
+        box-shadow: 0 10px 30px rgba(59, 130, 246, 0.05);
     }
 
     .account-card.light {
@@ -1117,31 +964,56 @@
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
     }
 
+    .light .player-name {
+        color: #1e293b;
+    }
+
+    .light .stat-value {
+        color: #334155;
+    }
+
+    .light .small-badge {
+        filter: none;
+    }
+
     .card-glow {
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
-        height: 100px;
-        background: radial-gradient(
-            600px circle at var(--x, 50%) var(--y, 0%),
-            rgba(59, 130, 246, 0.1),
-            transparent 40%
-        );
+        height: 150px;
         pointer-events: none;
+        opacity: 0.5;
+    }
+
+    .coc-glow {
+        background: radial-gradient(
+            circle at 100% 0%,
+            rgba(245, 158, 11, 0.1),
+            transparent 70%
+        );
+    }
+
+    .cr-glow {
+        background: radial-gradient(
+            circle at 100% 0%,
+            rgba(59, 130, 246, 0.1),
+            transparent 70%
+        );
     }
 
     .player-header {
         display: flex;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        gap: 1.25rem;
+        margin-bottom: 2rem;
+        position: relative;
     }
 
     .league-icon {
-        width: 48px;
-        height: 48px;
-        filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
+        width: 56px;
+        height: 56px;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
     }
 
     .player-main {
@@ -1150,8 +1022,10 @@
 
     .player-name {
         margin: 0;
-        font-size: 1.25rem;
-        font-weight: 700;
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: white;
+        letter-spacing: -0.01em;
     }
 
     .player-tag {
@@ -1167,12 +1041,13 @@
 
     .player-stats {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.5rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 1.25rem;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1.5rem 0.5rem;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        border-radius: 20px;
+        padding: 1.5rem 1rem;
+        margin-bottom: 2rem;
     }
 
     .light .player-stats {
@@ -1184,14 +1059,21 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
+        grid-column: span 2;
+    }
+
+    .stat-item.span-3 {
+        grid-column: span 3;
     }
 
     .stat-label {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         text-transform: uppercase;
         color: rgba(255, 255, 255, 0.3);
-        letter-spacing: 0.05em;
-        margin-bottom: 0.25rem;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+        white-space: nowrap;
     }
 
     .light .stat-label {
@@ -1199,29 +1081,53 @@
     }
 
     .stat-value {
-        font-size: 0.95rem;
-        font-weight: 700;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .small-badge {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
     }
 
     .stat-value.danger {
-        color: #ef4444;
+        color: #f87171;
     }
 
     .role-badge-small {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.5rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 6px;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.3);
+        font-weight: 600;
         text-transform: uppercase;
-        font-weight: 700;
+        letter-spacing: 0.05em;
     }
 
-    .light .role-badge-small {
-        background: rgba(0, 0, 0, 0.03);
-        border-color: rgba(0, 0, 0, 0.08);
-        color: rgba(0, 0, 0, 0.5);
+    .cr-card .role-badge-small {
+        color: #60a5fa;
+    }
+
+    .arena-badge,
+    .level-badge {
+        background: #2563eb;
+        color: white;
+        padding: 0.3rem 0.75rem;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+    }
+
+    .light .arena-badge,
+    .light .level-badge {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563eb;
     }
 
     .kickpoints-details {
@@ -1316,11 +1222,56 @@
         }
     }
 
-    .loading-state,
-    .error-state,
-    .empty-state {
-        text-align: center;
-        padding: 5rem 2rem;
+    .error-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 3rem;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 20px;
+        color: #fca5a5;
+    }
+
+    .error-message svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    .retry-btn {
+        padding: 0.6rem 1.5rem;
+        background: #ef4444;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .retry-btn:hover {
+        background: #dc2626;
+        transform: scale(1.05);
+    }
+
+    .empty-state p {
+        margin: 0.5rem 0;
+        font-size: 1.1rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .empty-state .sub-text {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.3);
+    }
+
+    .light .empty-state p {
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    .light .empty-state .sub-text {
+        color: rgba(0, 0, 0, 0.4);
     }
 
     .admin-view-banner {
@@ -1370,520 +1321,6 @@
 
         .accounts-grid {
             grid-template-columns: 1fr;
-        }
-    }
-
-    /* Modal Styles */
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        padding: 1rem;
-    }
-
-    .modal-content {
-        background: #1e293b;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 24px;
-        width: 100%;
-        max-width: 800px;
-        max-height: 90vh;
-        position: relative;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .modal-content.light {
-        background: white;
-        border-color: rgba(0, 0, 0, 0.1);
-        color: #1e293b;
-    }
-
-    .modal-scroll-area {
-        overflow-y: auto;
-        flex-grow: 1;
-    }
-
-    .close-modal {
-        position: absolute;
-        top: 1.25rem;
-        right: 1.25rem;
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.4);
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        z-index: 10;
-        padding: 0;
-    }
-
-    .light .close-modal {
-        color: rgba(0, 0, 0, 0.4);
-    }
-
-    .close-modal:hover {
-        color: white;
-        transform: scale(1.1);
-    }
-
-    .light .close-modal:hover {
-        color: black;
-    }
-
-    .close-modal svg {
-        width: 100%;
-        height: 100%;
-    }
-
-    .modal-header {
-        padding: 2.5rem;
-        background: linear-gradient(
-            to bottom,
-            rgba(59, 130, 246, 0.1),
-            transparent
-        );
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
-
-    .player-info-large {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .league-icon-large {
-        width: 80px;
-        height: 80px;
-        filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.3));
-    }
-
-    .player-titles h2 {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: 800;
-    }
-
-    .player-titles .tag {
-        margin: 0.25rem 0 0;
-        font-family: 'JetBrains Mono', monospace;
-        color: rgba(255, 255, 255, 0.4);
-    }
-
-    .light .player-titles .tag {
-        color: rgba(0, 0, 0, 0.4);
-    }
-
-    .clan-info-small {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.7);
-    }
-
-    .light .clan-info-small {
-        color: rgba(0, 0, 0, 0.7);
-    }
-
-    .clan-info-small img {
-        width: 20px;
-        height: 20px;
-    }
-
-    .th-display {
-        text-align: right;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .th-level,
-    .bh-level {
-        background: #3b82f6;
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 12px;
-        font-weight: 800;
-        font-size: 0.9rem;
-    }
-
-    .cr-level {
-        background: linear-gradient(135deg, #5865f2, #7289da);
-    }
-
-    .arena-icon-container {
-        width: 80px;
-        height: 80px;
-        background: rgba(88, 101, 242, 0.1);
-        border: 2px solid rgba(88, 101, 242, 0.3);
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-    }
-
-    .arena-id-label {
-        font-size: 1.2rem;
-        font-weight: 900;
-        color: #5865f2;
-        text-shadow: 0 0 15px rgba(88, 101, 242, 0.4);
-    }
-
-    .deck-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-top: 1rem;
-    }
-
-    .card-item {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        padding: 0.5rem;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-        transition: transform 0.2s;
-    }
-
-    .card-item:hover {
-        transform: translateY(-5px);
-        background: rgba(255, 255, 255, 0.05);
-    }
-
-    .card-item img {
-        width: 100%;
-        height: auto;
-        border-radius: 8px;
-    }
-
-    .card-level {
-        font-size: 0.75rem;
-        font-weight: 800;
-        color: #fff;
-        background: #5865f2;
-        padding: 0.2rem 0.5rem;
-        border-radius: 6px;
-    }
-
-    .badges-grid-cr {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-        gap: 1rem;
-        margin-top: 1rem;
-    }
-
-    .badge-item-cr {
-        position: relative;
-        aspect-ratio: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .badge-item-cr img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-    }
-
-    .badge-level-cr {
-        position: absolute;
-        bottom: -5px;
-        right: -5px;
-        background: #febd31;
-        color: #000;
-        font-size: 0.65rem;
-        font-weight: 900;
-        padding: 0.1rem 0.3rem;
-        border-radius: 4px;
-        border: 2px solid #202225;
-    }
-
-    .bh-level {
-        background: #8b5cf6;
-    }
-
-    .modal-body {
-        padding: 0 2.5rem 2.5rem;
-    }
-
-    .stats-grid-large {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2.5rem;
-    }
-
-    .stat-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        padding: 1.25rem;
-        border-radius: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .light .stat-card {
-        background: #f8fafc;
-        border-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .stat-card .label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.4);
-        font-weight: 600;
-        letter-spacing: 0.05em;
-    }
-
-    .light .stat-card .label {
-        color: rgba(0, 0, 0, 0.4);
-    }
-
-    .stat-card .value {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #3b82f6;
-    }
-
-    .detail-section {
-        margin-top: 2rem;
-    }
-
-    .detail-section h3 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin-bottom: 1.25rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .detail-section h3::after {
-        content: '';
-        flex-grow: 1;
-        height: 1px;
-        background: rgba(255, 255, 255, 0.1);
-    }
-
-    .light .detail-section h3::after {
-        background: rgba(0, 0, 0, 0.1);
-    }
-
-    .items-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 1rem;
-    }
-
-    .item-badge {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        padding: 1rem;
-        border-radius: 12px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .light .item-badge {
-        background: white;
-        border-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .item-name {
-        display: block;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-    }
-
-    .item-level {
-        font-size: 0.8rem;
-        color: rgba(255, 255, 255, 0.5);
-    }
-
-    .light .item-level {
-        color: rgba(0, 0, 0, 0.5);
-    }
-
-    .progress-bar {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        height: 3px;
-        background: #3b82f6;
-        opacity: 0.5;
-    }
-
-    .labels-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-    }
-
-    .label-badge {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-    .light .label-badge {
-        background: #f1f5f9;
-    }
-
-    .label-badge img {
-        width: 20px;
-        height: 20px;
-    }
-
-    /* Game-specific styles */
-    .section-title-group {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .game-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .game-icon svg {
-        width: 20px;
-        height: 20px;
-    }
-
-    .coc-icon {
-        background: rgba(59, 165, 92, 0.15);
-        color: #3ba55c;
-    }
-
-    .cr-icon {
-        background: rgba(88, 101, 242, 0.15);
-        color: #5865f2;
-    }
-
-    .coc-count {
-        background: rgba(59, 165, 92, 0.1);
-        color: #3ba55c;
-    }
-
-    .cr-count {
-        background: rgba(88, 101, 242, 0.1);
-        color: #5865f2;
-    }
-
-    .coc-card:hover {
-        border-color: rgba(59, 165, 92, 0.3);
-    }
-
-    .cr-card:hover {
-        border-color: rgba(88, 101, 242, 0.3);
-    }
-
-    .coc-glow {
-        background: radial-gradient(
-            600px circle at var(--x, 50%) var(--y, 0%),
-            rgba(59, 165, 92, 0.1),
-            transparent 40%
-        );
-    }
-
-    .cr-glow {
-        background: radial-gradient(
-            600px circle at var(--x, 50%) var(--y, 0%),
-            rgba(88, 101, 242, 0.1),
-            transparent 40%
-        );
-    }
-
-    .cr-section {
-        margin-top: 2.5rem;
-        padding-top: 2.5rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .light .cr-section {
-        border-top-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .arena-badge,
-    .level-badge {
-        padding: 0.5rem 0.75rem;
-        background: linear-gradient(135deg, #5865f2, #7289da);
-        border-radius: 10px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #fff;
-        min-width: 48px;
-        text-align: center;
-    }
-
-    .cr-role {
-        background: rgba(88, 101, 242, 0.15);
-        color: #5865f2;
-        border-color: rgba(88, 101, 242, 0.3);
-    }
-
-    @media (max-width: 640px) {
-        .modal-header {
-            flex-direction: column;
-            gap: 1.5rem;
-            padding: 2rem;
-        }
-
-        .th-display {
-            text-align: left;
-            flex-direction: row;
-        }
-
-        .modal-body {
-            padding: 0 2rem 2rem;
-        }
-
-        .player-info-large {
-            gap: 1rem;
-        }
-
-        .league-icon-large {
-            width: 60px;
-            height: 60px;
-        }
-
-        .player-titles h2 {
-            font-size: 1.5rem;
         }
     }
 </style>
