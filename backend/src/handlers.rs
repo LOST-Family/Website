@@ -198,7 +198,70 @@ pub async fn get_cr_clans(
         .user
         .as_ref()
         .and_then(|u| u.claims.role.as_deref());
-    forward_request_with_filter(&data, GameType::ClashRoyale, "/api/clans", user_role, &[]).await
+
+    // 1. Fetch from Upstream cache
+    let prefix = "cr";
+    let upstream_cache_key = format!("{}:upstream:/api/clans", prefix);
+    let upstream_res = sqlx::query_as::<_, (Vec<u8>, i32)>("SELECT body, status FROM cache WHERE key = $1")
+        .bind(&upstream_cache_key)
+        .fetch_optional(&data.db_pool)
+        .await;
+
+    let (mut body, status) = match upstream_res {
+        Ok(Some((body, status))) => (body, status),
+        _ => return HttpResponse::ServiceUnavailable().json(serde_json::json!({ "error": "Upstream data not found" })),
+    };
+
+    // 2. Try to merge badge data from Supercell cache for each clan
+    if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
+        if let Some(clans) = value.as_array_mut() {
+            for clan in clans {
+                if let Some(obj) = clan.as_object_mut() {
+                    let tag = obj.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+                    if !tag.is_empty() {
+                        let encoded_tag = crate::utils::encode_tag(tag);
+                        let sc_cache_key = format!("{}:supercell:/clans/{}", prefix, encoded_tag);
+                        let sc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+                            .bind(&sc_cache_key)
+                            .fetch_optional(&data.db_pool)
+                            .await;
+
+                        if let Ok(Some((sc_body,))) = sc_res {
+                            if let Ok(sc_json) = serde_json::from_slice::<serde_json::Value>(&sc_body) {
+                                if let Some(badge_id) = sc_json.get("badgeId") {
+                                    obj.insert("badgeId".to_string(), badge_id.clone());
+                                }
+                                // Also merge members count if available
+                                if let Some(members) = sc_json.get("members") {
+                                     obj.insert("membersCount".to_string(), members.clone());
+                                }
+                                // Supercell's name might be more accurate/formatted
+                                if let Some(name) = sc_json.get("name") {
+                                     obj.insert("name".to_string(), name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Re-serialize modified list
+            if let Ok(modified_body) = serde_json::to_vec(&value) {
+                body = modified_body;
+            }
+        }
+    }
+
+    // 3. Filter and return
+    let filtered_body = crate::utils::filter_clan_data(
+        bytes::Bytes::from(body),
+        GameType::ClashRoyale,
+        !crate::auth::has_required_role(user_role, "MEMBER"),
+    );
+
+    HttpResponse::build(actix_web::http::StatusCode::from_u16(status as u16).unwrap_or(actix_web::http::StatusCode::OK))
+        .content_type("application/json")
+        .body(filtered_body)
 }
 
 // 2. Get CR Clan Info
@@ -457,7 +520,15 @@ async fn get_clan_members_impl(
         Ok(Some((body,))) => {
             let json: serde_json::Value =
                 serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
-            json["memberList"].as_array().cloned().unwrap_or_default()
+            let members_key = if game == GameType::ClashRoyale {
+                "items"
+            } else {
+                "memberList"
+            };
+            json[members_key]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
         }
         _ => vec![],
     };
@@ -468,7 +539,7 @@ async fn get_clan_members_impl(
     };
 
     // Filter upstream members first (privacy logic)
-    let filtered_upstream_body = filter_member_data(upstream_body, exempt_tags, user_role);
+    let filtered_upstream_body = filter_member_data(upstream_body, game, exempt_tags, user_role);
     let upstream_members: Vec<serde_json::Value> =
         serde_json::from_slice(&filtered_upstream_body).unwrap_or_default();
 

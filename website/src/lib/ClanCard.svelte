@@ -2,6 +2,8 @@
     import { onMount } from 'svelte';
     import { fade, slide } from 'svelte/transition';
     import type { GameType } from './auth';
+    import { user } from './auth';
+    import PlayerDetailModal from './PlayerDetailModal.svelte';
 
     // Import banners
     import banner3 from '../assets/Clans/Clash of Clans/Lost-X-3.png';
@@ -60,6 +62,38 @@
     let clans: ClanWithMembers[] = [];
     let mainLoading = true;
     let mainError: string | null = null;
+    let selectedPlayer: any = null;
+    let isModalOpen = false;
+
+    async function selectPlayer(player: Player) {
+        selectedPlayer = player;
+        isModalOpen = true;
+
+        try {
+            const encodedTag = encodeURIComponent(player.tag);
+            const detailRes = await fetch(
+                `${apiBaseUrl}${apiPrefix}/players/${encodedTag}`,
+                { credentials: 'include' }
+            );
+            const identityRes = await fetch(
+                `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
+                { credentials: 'include' }
+            );
+
+            const detail = detailRes.ok ? await detailRes.json() : {};
+            const identity = identityRes.ok ? await identityRes.json() : {};
+
+            if (selectedPlayer?.tag === player.tag) {
+                selectedPlayer = {
+                    ...selectedPlayer,
+                    ...detail,
+                    ...identity,
+                };
+            }
+        } catch (e) {
+            console.error('Failed to fetch player details:', e);
+        }
+    }
 
     // Update exported counts reactively
     $: clanCount = clans.length;
@@ -352,12 +386,8 @@
                                                 upperRole === 'CO-LEADER'
                                             ) {
                                                 computedRole = `VIZE CR ${clanIndex}`;
-                                            } else if (
-                                                upperRole === 'ELDER' ||
-                                                upperRole === 'ADMIN'
-                                            ) {
-                                                computedRole = `ÄLTESTER CR ${clanIndex}`;
-                                            } else if (upperRole === 'MEMBER') {
+                                            } else {
+                                                // In CR, map both ELDER/ADMIN and MEMBER to "MITGLIED" as requested
                                                 computedRole =
                                                     clanIndex === 1
                                                         ? 'MITGLIED CR'
@@ -636,6 +666,15 @@
                                                     <div
                                                         class="member-item"
                                                         transition:fade
+                                                        on:click={() =>
+                                                            selectPlayer(player)}
+                                                        on:keydown={(e) =>
+                                                            e.key === 'Enter' &&
+                                                            selectPlayer(
+                                                                player
+                                                            )}
+                                                        role="button"
+                                                        tabindex="0"
                                                     >
                                                         <div
                                                             class="member-status-line"
@@ -671,6 +710,17 @@
         </div>
     {/if}
 </div>
+
+<PlayerDetailModal
+    player={selectedPlayer}
+    {gameType}
+    {theme}
+    isOpen={isModalOpen}
+    onClose={() => (isModalOpen = false)}
+    isAdmin={$user?.is_admin}
+    otherAccounts={selectedPlayer?.otherAccounts || []}
+    onSelectOtherAccount={selectPlayer}
+/>
 
 <style>
     .card-container {
@@ -1011,6 +1061,7 @@
         overflow: hidden;
         border: 1px solid rgba(255, 255, 255, 0.04);
         margin: 1px 0;
+        cursor: pointer;
     }
 
     .card-container.light .member-item {

@@ -109,6 +109,7 @@
             case 'elder':
                 return 'Ältester';
             case 'member':
+            case 'admin':
                 return 'Mitglied';
             default:
                 return role;
@@ -680,6 +681,12 @@
                                             {#each leftMembers as m}
                                                 <div
                                                     class="mini-diff-card left"
+                                                    on:click={() => selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
                                                 >
                                                     <div class="m-info">
                                                         <span class="m-name"
@@ -705,7 +712,15 @@
                                         </h4>
                                         <div class="diff-cards">
                                             {#each newMembers as m}
-                                                <div class="mini-diff-card new">
+                                                <div
+                                                    class="mini-diff-card new"
+                                                    on:click={() => selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
+                                                >
                                                     <div class="m-info">
                                                         <span class="m-name"
                                                             >{m.name}</span
@@ -740,7 +755,16 @@
                                         <tbody>
                                             {#each changedMembers as m}
                                                 {#if m.name !== m.upstream_name && m.upstream_name}
-                                                    <tr class="row-diff">
+                                                    <tr
+                                                        class="row-diff"
+                                                        on:click={() =>
+                                                            selectPlayer(m)}
+                                                        on:keydown={(e) =>
+                                                            e.key === 'Enter' &&
+                                                            selectPlayer(m)}
+                                                        role="button"
+                                                        tabindex="0"
+                                                    >
                                                         <td
                                                             ><strong
                                                                 >{m.name}</strong
@@ -759,8 +783,17 @@
                                                         >
                                                     </tr>
                                                 {/if}
-                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
-                                                    <tr class="row-diff">
+                                                {#if m.upstream_role && m.role !== m.upstream_role}
+                                                    <tr
+                                                        class="row-diff"
+                                                        on:click={() =>
+                                                            selectPlayer(m)}
+                                                        on:keydown={(e) =>
+                                                            e.key === 'Enter' &&
+                                                            selectPlayer(m)}
+                                                        role="button"
+                                                        tabindex="0"
+                                                    >
                                                         <td
                                                             ><strong
                                                                 >{m.name}</strong
@@ -784,7 +817,16 @@
                                                     </tr>
                                                 {/if}
                                                 {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
-                                                    <tr class="row-diff">
+                                                    <tr
+                                                        class="row-diff"
+                                                        on:click={() =>
+                                                            selectPlayer(m)}
+                                                        on:keydown={(e) =>
+                                                            e.key === 'Enter' &&
+                                                            selectPlayer(m)}
+                                                        role="button"
+                                                        tabindex="0"
+                                                    >
                                                         <td
                                                             ><strong
                                                                 >{m.name}</strong
@@ -1760,11 +1802,18 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
         transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .mini-diff-card:hover {
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateY(-2px);
     }
 
     .mini-diff-card.new {
         border-left: 4px solid #10b981;
     }
+
     .mini-diff-card.left {
         border-left: 4px solid #4b5563;
         opacity: 0.7;
@@ -1812,6 +1861,15 @@
     .diff-table td {
         padding: 1rem 1.5rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .row-diff {
+        transition: background 0.2s;
+        cursor: pointer;
+    }
+
+    .row-diff:hover {
+        background: rgba(255, 255, 255, 0.05);
     }
 
     .val-sc {

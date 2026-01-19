@@ -84,19 +84,88 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
 
             for clan in clans {
                 if let Some(obj) = clan.as_object_mut() {
-                    // Fix badgeUrl mismatch (singular vs plural) - Always apply
-                    if !obj.contains_key("badgeUrls")
-                        && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                            obj.insert(
-                                "badgeUrls".to_string(),
-                                serde_json::json!({
-                                    "small": url,
-                                    "medium": url,
-                                    "large": url
-                                }),
-                            );
-                            modified = true;
+                    // Fix badgeUrl mismatch (singular vs plural) or badgeId (CR) - Always apply
+                    let has_valid_urls = obj.get("badgeUrls")
+                        .and_then(|u| u.get("large"))
+                        .and_then(|l| l.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
+
+                    if !has_valid_urls {
+                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                            if !url.is_empty() {
+                                obj.insert(
+                                    "badgeUrls".to_string(),
+                                    serde_json::json!({
+                                        "small": url,
+                                        "medium": url,
+                                        "large": url
+                                    }),
+                                );
+                                modified = true;
+                            }
                         }
+                    }
+
+                    // Re-check after possible badgeUrl-to-badgeUrls migration
+                    let has_valid_urls = obj.get("badgeUrls")
+                        .and_then(|u| u.get("large"))
+                        .and_then(|l| l.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
+
+                    if !has_valid_urls {
+                        if let Some(badge_id) = obj.get("badgeId") {
+                            let id_str = if let Some(s) = badge_id.as_str() {
+                                s.to_string()
+                            } else if let Some(n) = badge_id.as_i64() {
+                                n.to_string()
+                            } else {
+                                badge_id.to_string()
+                            };
+
+                            if !id_str.is_empty() {
+                                let url = if game == GameType::ClashRoyale {
+                                    format!(
+                                        "https://raw.githubusercontent.com/RoyaleAPI/cr-api-assets/master/badges/{}.png",
+                                        id_str
+                                    )
+                                } else {
+                                    format!(
+                                        "https://api-assets.clashofclans.com/badges/512/{}.png",
+                                        id_str
+                                    )
+                                };
+                                obj.insert(
+                                    "badgeUrls".to_string(),
+                                    serde_json::json!({
+                                        "small": url,
+                                        "medium": url,
+                                        "large": url
+                                    }),
+                                );
+                                modified = true;
+                            }
+                        }
+                    }
+
+                    // Ensure singular badgeUrl exists for frontend compatibility
+                    let has_valid_badge_url = obj.get("badgeUrl")
+                        .and_then(|v| v.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
+
+                    if !has_valid_badge_url {
+                        if let Some(urls) = obj.get("badgeUrls").and_then(|u| u.as_object()) {
+                            if let Some(large) = urls.get("large").and_then(|l| l.as_str()) {
+                                obj.insert(
+                                    "badgeUrl".to_string(),
+                                    serde_json::Value::String(large.to_string()),
+                                );
+                                modified = true;
+                            }
+                        }
+                    }
 
                     if filter_fields {
                         for field in &fields_to_remove {
@@ -107,18 +176,88 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
-            // Fix badgeUrl mismatch (singular vs plural)
-            if !obj.contains_key("badgeUrls")
-                && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                    obj.insert(
-                        "badgeUrls".to_string(),
-                        serde_json::json!({
-                            "small": url,
-                            "medium": url,
-                            "large": url
-                        }),
-                    );
+            // Fix badgeUrl mismatch (singular vs plural) or badgeId (CR)
+            let has_valid_urls = obj.get("badgeUrls")
+                .and_then(|u| u.get("large"))
+                .and_then(|l| l.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+
+            if !has_valid_urls {
+                if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
+                    if !url.is_empty() {
+                        obj.insert(
+                            "badgeUrls".to_string(),
+                            serde_json::json!({
+                                "small": url,
+                                "medium": url,
+                                "large": url
+                            }),
+                        );
+                        modified = true;
+                    }
                 }
+            }
+
+            // Re-check after possible badgeUrl-to-badgeUrls migration
+            let has_valid_urls = obj.get("badgeUrls")
+                .and_then(|u| u.get("large"))
+                .and_then(|l| l.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+
+            if !has_valid_urls {
+                if let Some(badge_id) = obj.get("badgeId") {
+                    let id_str = if let Some(s) = badge_id.as_str() {
+                        s.to_string()
+                    } else if let Some(n) = badge_id.as_i64() {
+                        n.to_string()
+                    } else {
+                        badge_id.to_string()
+                    };
+
+                    if !id_str.is_empty() {
+                        let url = if game == GameType::ClashRoyale {
+                            format!(
+                                "https://raw.githubusercontent.com/RoyaleAPI/cr-api-assets/master/badges/{}.png",
+                                id_str
+                            )
+                        } else {
+                            format!(
+                                "https://api-assets.clashofclans.com/badges/512/{}.png",
+                                id_str
+                            )
+                        };
+                        obj.insert(
+                            "badgeUrls".to_string(),
+                            serde_json::json!({
+                                "small": url,
+                                "medium": url,
+                                "large": url
+                            }),
+                        );
+                        modified = true;
+                    }
+                }
+            }
+
+            // Ensure singular badgeUrl exists for frontend compatibility
+            let has_valid_badge_url = obj.get("badgeUrl")
+                .and_then(|v| v.as_str())
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+
+            if !has_valid_badge_url {
+                if let Some(urls) = obj.get("badgeUrls").and_then(|u| u.as_object()) {
+                    if let Some(large) = urls.get("large").and_then(|l| l.as_str()) {
+                        obj.insert(
+                            "badgeUrl".to_string(),
+                            serde_json::Value::String(large.to_string()),
+                        );
+                        modified = true;
+                    }
+                }
+            }
 
             if filter_fields {
                 for field in &fields_to_remove {
@@ -137,17 +276,21 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
 }
 
 // Function to filter out specific fields from member data
-pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option<&str>) -> Bytes {
+pub fn filter_member_data(
+    body: Bytes,
+    game: GameType,
+    exempt_tags: &[String],
+    user_role: Option<&str>,
+) -> Bytes {
     use crate::auth::has_required_role;
 
-    // Coleaders and higher see everything
-    if has_required_role(user_role, "COLEADER") {
-        return body;
-    }
+    // Coleaders and higher see everything - BUT still need badge synthesis for CR!
+    // So we can't just return early if we want to fix badges for admins too.
 
     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
         let mut modified = false;
         let is_member = has_required_role(user_role, "MEMBER");
+        let is_coleader = has_required_role(user_role, "COLEADER");
 
         let fields_to_remove_not_member = [
             "totalKickpoints",
@@ -159,8 +302,64 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
         ];
 
         let process_obj = |obj: &mut serde_json::Map<String, serde_json::Value>, tag: &str| {
+            let mut inner_modified = false;
+
+            // Synthesis for clan badge if nested in player object
+            if game == GameType::ClashRoyale {
+                if let Some(clan_obj) = obj.get_mut("clan").and_then(|c| c.as_object_mut()) {
+                    let has_valid_urls = clan_obj.get("badgeUrls")
+                        .and_then(|u| u.get("large"))
+                        .and_then(|l| l.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
+
+                    if !has_valid_urls {
+                        if let Some(badge_id) = clan_obj.get("badgeId") {
+                            let id_str = if let Some(s) = badge_id.as_str() {
+                                s.to_string()
+                            } else if let Some(n) = badge_id.as_i64() {
+                                n.to_string()
+                            } else {
+                                badge_id.to_string()
+                            };
+
+                            if !id_str.is_empty() {
+                                let url = if game == GameType::ClashRoyale {
+                                    format!(
+                                        "https://raw.githubusercontent.com/RoyaleAPI/cr-api-assets/master/badges/{}.png",
+                                        id_str
+                                    )
+                                } else {
+                                    format!(
+                                        "https://api-assets.clashofclans.com/badges/512/{}.png",
+                                        id_str
+                                    )
+                                };
+                                clan_obj.insert(
+                                    "badgeUrls".to_string(),
+                                    serde_json::json!({
+                                        "small": url,
+                                        "medium": url,
+                                        "large": url
+                                    }),
+                                );
+                                clan_obj.insert(
+                                    "badgeUrl".to_string(),
+                                    serde_json::Value::String(url),
+                                );
+                                inner_modified = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if is_coleader {
+                 return inner_modified;
+            }
+
             if exempt_tags.iter().any(|et| et == tag) {
-                return false;
+                return inner_modified;
             }
 
             // Always remove internal DB fields
@@ -182,7 +381,6 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
                 obj.remove("activeKickpoints");
 
                 // Hide raw IDs for members (privacy), but keep nickname/avatar/points
-                let is_coleader = has_required_role(user_role, "COLEADER");
                 if !is_coleader {
                     if obj.contains_key("userId") {
                         obj.insert("isLinked".to_string(), serde_json::json!(true));
@@ -416,7 +614,7 @@ pub async fn forward_request_with_filter(
                     !crate::auth::has_required_role(user_role, "MEMBER"),
                 );
             } else if is_member_path {
-                body = filter_member_data(body, exempt_tags, user_role);
+                body = filter_member_data(body, game, exempt_tags, user_role);
             }
 
             let status = StatusCode::from_u16(status as u16).unwrap_or(StatusCode::OK);
