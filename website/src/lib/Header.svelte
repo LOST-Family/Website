@@ -25,7 +25,7 @@
     }>();
 
     function handleThemeToggle(
-        event: CustomEvent<{ theme: 'dark' | 'light' }>
+        event: CustomEvent<{ theme: 'dark' | 'light' }>,
     ) {
         dispatch('themeToggle', event.detail);
     }
@@ -81,10 +81,10 @@
             const crClans = crClansRes.ok ? await crClansRes.json() : [];
 
             const officialCocTags = new Set(
-                cocClans.map((c: any) => c.tag.toUpperCase())
+                cocClans.map((c: any) => c.tag.toUpperCase()),
             );
             const officialCrTags = new Set(
-                crClans.map((c: any) => c.tag.toUpperCase())
+                crClans.map((c: any) => c.tag.toUpperCase()),
             );
 
             const badgeMap = new Map<string, string>();
@@ -108,7 +108,7 @@
                     const tag = acc.clan.tag.toUpperCase();
                     if (officialCocTags.has(tag)) {
                         const clanData = cocClans.find(
-                            (c: any) => c.tag.toUpperCase() === tag
+                            (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`coc-${tag}`, {
                             tag: acc.clan.tag,
@@ -127,7 +127,7 @@
                     const tag = acc.clan.tag.toUpperCase();
                     if (officialCrTags.has(tag)) {
                         const clanData = crClans.find(
-                            (c: any) => c.tag.toUpperCase() === tag
+                            (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`cr-${tag}`, {
                             tag: acc.clan.tag,
@@ -194,8 +194,11 @@
                         on:click|preventDefault={() => navigate('coc/clans')}
                         >Clans</a
                     >
-                    <a href="/coc/cwl" class="dropdown-item"
-                        >Clankriegsliga (WIP)</a
+                    <a
+                        href="/coc/cwl"
+                        class="dropdown-item"
+                        on:click|preventDefault={() => navigate('coc/cwl')}
+                        >Clankriegsliga</a
                     >
                 </div>
             </div>
@@ -340,15 +343,15 @@
                                     href="/{userClans[0]
                                         .gameType}/clan/{userClans[0].tag.replace(
                                         '#',
-                                        ''
+                                        '',
                                     )}"
                                     class="dropdown-item"
                                     on:click|preventDefault={() =>
                                         navigate(
                                             `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
                                                 '#',
-                                                ''
-                                            )}`
+                                                '',
+                                            )}`,
                                         )}
                                 >
                                     {#if userClans[0].badgeUrl}
@@ -655,15 +658,15 @@
                             href="/{userClans[0]
                                 .gameType}/clan/{userClans[0].tag.replace(
                                 '#',
-                                ''
+                                '',
                             )}"
                             class="drawer-nav-link"
                             on:click|preventDefault={() =>
                                 navigate(
                                     `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
                                         '#',
-                                        ''
-                                    )}`
+                                        '',
+                                    )}`,
                                 )}
                         >
                             <div class="drawer-link-content">

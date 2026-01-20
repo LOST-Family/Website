@@ -86,17 +86,18 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
                 if let Some(obj) = clan.as_object_mut() {
                     // Fix badgeUrl mismatch (singular vs plural) - Always apply
                     if !obj.contains_key("badgeUrls")
-                        && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                            obj.insert(
-                                "badgeUrls".to_string(),
-                                serde_json::json!({
-                                    "small": url,
-                                    "medium": url,
-                                    "large": url
-                                }),
-                            );
-                            modified = true;
-                        }
+                        && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str())
+                    {
+                        obj.insert(
+                            "badgeUrls".to_string(),
+                            serde_json::json!({
+                                "small": url,
+                                "medium": url,
+                                "large": url
+                            }),
+                        );
+                        modified = true;
+                    }
 
                     if filter_fields {
                         for field in &fields_to_remove {
@@ -109,16 +110,17 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
         } else if let Some(obj) = value.as_object_mut() {
             // Fix badgeUrl mismatch (singular vs plural)
             if !obj.contains_key("badgeUrls")
-                && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                    obj.insert(
-                        "badgeUrls".to_string(),
-                        serde_json::json!({
-                            "small": url,
-                            "medium": url,
-                            "large": url
-                        }),
-                    );
-                }
+                && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str())
+            {
+                obj.insert(
+                    "badgeUrls".to_string(),
+                    serde_json::json!({
+                        "small": url,
+                        "medium": url,
+                        "large": url
+                    }),
+                );
+            }
 
             if filter_fields {
                 for field in &fields_to_remove {
@@ -128,10 +130,9 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             }
         }
 
-        if modified
-            && let Ok(filtered) = serde_json::to_vec(&value) {
-                return Bytes::from(filtered);
-            }
+        if modified && let Ok(filtered) = serde_json::to_vec(&value) {
+            return Bytes::from(filtered);
+        }
     }
     body
 }
@@ -216,9 +217,10 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
                     .unwrap_or("")
                     .to_string();
                 if let Some(obj) = member.as_object_mut()
-                    && process_obj(obj, &tag) {
-                        modified = true;
-                    }
+                    && process_obj(obj, &tag)
+                {
+                    modified = true;
+                }
             }
         } else if let Some(obj) = value.as_object_mut() {
             let tag = obj
@@ -231,10 +233,9 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             }
         }
 
-        if modified
-            && let Ok(filtered) = serde_json::to_vec(&value) {
-                return Bytes::from(filtered);
-            }
+        if modified && let Ok(filtered) = serde_json::to_vec(&value) {
+            return Bytes::from(filtered);
+        }
     }
     body
 }
@@ -316,9 +317,10 @@ pub async fn get_cached_or_update_supercell_cache(
             .await;
 
     if let Ok(Some((body, updated_at))) = &cached_result
-        && now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body.clone()));
-        }
+        && now - updated_at < ttl_seconds
+    {
+        return Ok(Bytes::from(body.clone()));
+    }
 
     match update_supercell_cache(data, game, url_path).await {
         Ok(body) => Ok(body),
@@ -353,9 +355,10 @@ pub async fn get_cached_or_update_upstream_cache(
             .await;
 
     if let Ok(Some((body, updated_at))) = &cached_result
-        && now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body.clone()));
-        }
+        && now - updated_at < ttl_seconds
+    {
+        return Ok(Bytes::from(body.clone()));
+    }
 
     match update_upstream_cache(data, game, url_path).await {
         Ok(body) => Ok(body),

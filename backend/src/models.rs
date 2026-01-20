@@ -43,3 +43,27 @@ pub enum GameType {
     ClashOfClans,
     ClashRoyale,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, sqlx::FromRow)]
+pub struct SideClan {
+    pub clan_tag: String,
+    pub name: String,
+    pub belongs_to: Option<String>,
+    pub display_index: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, sqlx::FromRow)]
+pub struct SideClanCWLStats {
+    pub clan_tag: String,
+    pub season: String, // YYYY-MM
+    pub league_id: Option<i32>,
+    pub league_name: Option<String>,
+    pub league_badge_url: Option<String>,
+    pub rank: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SideClanCwlHistory {
+    pub clan: SideClan,
+    pub history: Vec<SideClanCWLStats>,
+}

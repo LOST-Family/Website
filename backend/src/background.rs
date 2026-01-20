@@ -1,5 +1,6 @@
 use crate::models::{AppState, GameType};
 use crate::utils::{update_supercell_cache, update_upstream_cache};
+
 use log::{debug, error, info};
 use serde::Deserialize;
 use std::time::Duration;
@@ -44,6 +45,16 @@ pub fn spawn_background_task(data: AppState) {
         loop {
             ticker.tick().await;
             refresh_clans(&cr_cache_data, GameType::ClashRoyale).await;
+        }
+    });
+
+    // 4. Task for Side Clans CWL Refresh (Every 1 hour)
+    let side_clans_data = data.clone();
+    tokio::spawn(async move {
+        let mut ticker = interval(Duration::from_secs(3600));
+        loop {
+            ticker.tick().await;
+            refresh_side_clans_cwl(&side_clans_data).await;
         }
     });
 }
@@ -301,4 +312,127 @@ async fn refresh_clans(data: &AppState, game: GameType) {
         "Background Refresh [{}]: Cycle complete. Next run in {} minutes.",
         game_name, data.background_refresh_interval
     );
+}
+
+async fn refresh_side_clans_cwl(data: &AppState) {
+    info!("Background Refresh [Side Clans CWL]: Starting...");
+
+    let clans = match sqlx::query("SELECT clan_tag FROM side_clans")
+        .fetch_all(&data.db_pool)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            error!("Error fetching side clans from DB: {}", e);
+            return;
+        }
+    };
+
+    let now = chrono::Utc::now();
+    let season = now.format("%Y-%m").to_string();
+
+    for row in clans {
+        use sqlx::Row;
+        let clan_tag: String = row.get("clan_tag");
+        let encoded_tag = crate::utils::encode_tag(&clan_tag);
+        let url = format!("https://api.clashofclans.com/v1/clans/{}", encoded_tag);
+
+        let res = data
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", data.clash_of_clans_api_token))
+            .send()
+            .await;
+
+        match res {
+            Ok(resp) => {
+                let status = resp.status();
+                if !status.is_success() {
+                    error!("Error fetching CWL stats for {}: Status {}", clan_tag, status);
+                    continue;
+                }
+                if let Ok(bytes) = resp.bytes().await {
+                    if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                        info!("Fetched data for side clan {}", clan_tag);
+                        if let Some(clan_name) = json.get("name").and_then(|v| v.as_str()) {
+                            let _ = sqlx::query("UPDATE side_clans SET name = $1 WHERE clan_tag = $2")
+                                .bind(clan_name)
+                                .bind(&clan_tag)
+                                .execute(&data.db_pool)
+                                .await;
+                        }
+
+                        if let Some(war_league) = json.get("warLeague") {
+                            let league_id: Option<i32> = war_league
+                                .get("id")
+                                .and_then(|v| v.as_i64())
+                                .map(|v| v as i32);
+                            let league_name: Option<String> = war_league
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            
+                            debug!("Clan {} is in league {:?}", clan_tag, league_name);
+
+                            let mut league_badge_url: Option<String> = war_league
+                                .get("iconUrls")
+                                .and_then(|v| v.get("medium").or(v.get("small")))
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+
+                            if league_badge_url.is_none() {
+                                if let Some(id) = league_id {
+                                    league_badge_url = Some(get_cwl_badge_url(id));
+                                }
+                            }
+
+                            let _ = sqlx::query(
+                                "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url) 
+                                 VALUES ($1, $2, $3, $4, $5) 
+                                 ON CONFLICT (clan_tag, season) DO UPDATE 
+                                 SET league_id = EXCLUDED.league_id, 
+                                     league_name = EXCLUDED.league_name,
+                                     league_badge_url = EXCLUDED.league_badge_url",
+                            )
+                            .bind(&clan_tag)
+                            .bind(&season)
+                            .bind(league_id)
+                            .bind(league_name)
+                            .bind(league_badge_url)
+                            .execute(&data.db_pool)
+                            .await;
+                        }
+                    }
+                }
+            }
+            Err(e) => error!("Error fetching CWL stats for {}: {}", clan_tag, e),
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+fn get_cwl_badge_url(id: i32) -> String {
+    let filename = match id {
+        48000000 => "n_m6p9sTofL_is_H0l7m2t-kAnp73yI707vC-Hj-90.png",
+        48000001 => "NoBqf6O968S_5R2_yAsCndW_nS0Y_wW_l0p3Yk05Xp0.png",
+        48000002 => "9090u6yInKH9tC6_7J2vto_sU9zL3iS8sC3p8g0kX_E.png",
+        48000003 => "F6XvA2h7tC6_7J2vto_sU9zL3iS8sC3p8g0kX_E.png",
+        48000004 => "v_LPrJXvA2h7tC6_7J2vto_sU9zL3iS8sC3p8g0kX_E.png",
+        48000005 => "d3u99dF6XvA2h7tC6_7J2vto_sU9zL3iS8sC3p8g0kX_E.png",
+        48000006 => "8hB7vXvA2h7tC6_7J2vto_sU9zL3iS8sC3p8g0kX_E.png",
+        48000007 => "6v88qT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000008 => "309v8T8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000009 => "p9u8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000010 => "jhB8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000011 => "m3u8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000012 => "l3u8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000013 => "O_O8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000014 => "N_O8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000015 => "M_O8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000016 => "c_O8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000017 => "b_O8XT8uW_XpB8v9rJmS0Y_wW_l0p3Yk05Xp0.png",
+        48000018 => "9vmAr6V5UvS6iS_I4oY8o3Xp_V0mS4G4U8Xo-G_H44A.png",
+        _ => "n_m6p9sTofL_is_H0l7m2t-kAnp73yI707vC-Hj-90.png",
+    };
+    format!("https://api-assets.clashofclans.com/leagues/72/{}", filename)
 }
