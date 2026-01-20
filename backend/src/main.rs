@@ -215,7 +215,7 @@ async fn main() -> std::io::Result<()> {
         .into_iter()
         .map(|v| v["clan_tag"].as_str().unwrap().to_string())
         .collect();
-    
+
     let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
         .bind(&tags_to_keep)
         .execute(&pool)

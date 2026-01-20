@@ -340,7 +340,10 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         let res = data
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", data.clash_of_clans_api_token))
+            .header(
+                "Authorization",
+                format!("Bearer {}", data.clash_of_clans_api_token),
+            )
             .send()
             .await;
 
@@ -348,18 +351,22 @@ async fn refresh_side_clans_cwl(data: &AppState) {
             Ok(resp) => {
                 let status = resp.status();
                 if !status.is_success() {
-                    error!("Error fetching CWL stats for {}: Status {}", clan_tag, status);
+                    error!(
+                        "Error fetching CWL stats for {}: Status {}",
+                        clan_tag, status
+                    );
                     continue;
                 }
                 if let Ok(bytes) = resp.bytes().await {
                     if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
                         info!("Fetched data for side clan {}", clan_tag);
                         if let Some(clan_name) = json.get("name").and_then(|v| v.as_str()) {
-                            let _ = sqlx::query("UPDATE side_clans SET name = $1 WHERE clan_tag = $2")
-                                .bind(clan_name)
-                                .bind(&clan_tag)
-                                .execute(&data.db_pool)
-                                .await;
+                            let _ =
+                                sqlx::query("UPDATE side_clans SET name = $1 WHERE clan_tag = $2")
+                                    .bind(clan_name)
+                                    .bind(&clan_tag)
+                                    .execute(&data.db_pool)
+                                    .await;
                         }
 
                         if let Some(war_league) = json.get("warLeague") {
@@ -371,7 +378,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                 .get("name")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            
+
                             debug!("Clan {} is in league {:?}", clan_tag, league_name);
 
                             let mut league_badge_url: Option<String> = war_league
@@ -434,5 +441,8 @@ fn get_cwl_badge_url(id: i32) -> String {
         48000018 => "9vmAr6V5UvS6iS_I4oY8o3Xp_V0mS4G4U8Xo-G_H44A.png",
         _ => "n_m6p9sTofL_is_H0l7m2t-kAnp73yI707vC-Hj-90.png",
     };
-    format!("https://api-assets.clashofclans.com/leagues/72/{}", filename)
+    format!(
+        "https://api-assets.clashofclans.com/leagues/72/{}",
+        filename
+    )
 }

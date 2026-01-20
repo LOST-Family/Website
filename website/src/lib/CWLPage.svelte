@@ -138,7 +138,7 @@
                         const bTag = b.clan.clan_tag.trim().toUpperCase();
                         if (aTag === tagFull) return -1;
                         if (bTag === tagFull) return 1;
-                        
+
                         // Priority 2: Use display_index from backend
                         if (a.clan.display_index !== b.clan.display_index) {
                             return a.clan.display_index - b.clan.display_index;
