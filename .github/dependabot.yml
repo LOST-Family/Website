@@ -21,7 +21,16 @@ updates:
   # Enable version updates for Docker
   - package-ecosystem: "docker"
     # Look for a `Dockerfile` in the `root` directory
-    directory: "/"
+    directory: "/backend/"
     # Check for updates once a week
     schedule:
       interval: "weekly"
+
+    # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    # Look for a `Dockerfile` in the `root` directory
+    directory: "/website/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+
