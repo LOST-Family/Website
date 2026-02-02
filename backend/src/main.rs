@@ -179,61 +179,7 @@ async fn main() -> std::io::Result<()> {
     .await;
 
     // Seed side clans (Including Main Clans, Excluding Independent Clans)
-    let side_clans_json = r###"[
-        {"clan_tag": "#2YUPV0UYC", "name": "LOST", "belongs_to": "#2YUPV0UYC", "display_index": 1},
-        {"clan_tag": "#2LU2V2LPU", "name": "LOST 2", "belongs_to": "#2LU2V2LPU", "display_index": 2},
-        {"clan_tag": "#2QC0QQPQ2", "name": "LOST 3", "belongs_to": "#2QC0QQPQ2", "display_index": 3},
-        {"clan_tag": "#2YVPC20UY", "name": "LOST 6 EX / Vegan", "belongs_to": "#2YVPC20UY", "display_index": 4},
-        {"clan_tag": "#2J8UG90R2", "name": "LOST 7", "belongs_to": "#2J8UG90R2", "display_index": 5},
-        {"clan_tag": "#2RUJPG9JC", "name": "LOST 8", "belongs_to": "#2RUJPG9JC", "display_index": 6},
-        {"clan_tag": "#2820UPPQC", "name": "LOST F2P", "belongs_to": "#2820UPPQC", "display_index": 7},
-        {"clan_tag": "#2QJQQJ90R", "name": "BitteAufgeben", "belongs_to": "#2YUPV0UYC", "display_index": 8},
-        {"clan_tag": "#2QYPGCPYV", "name": "LOST 3 CWL", "belongs_to": "#2QC0QQPQ2", "display_index": 9},
-        {"clan_tag": "#2GPP0GLYQ", "name": "LOST 3 CWL 2", "belongs_to": "#2LU2V2LPU", "display_index": 10},
-        {"clan_tag": "#2GP2L9L8Y", "name": "LOST 3 Event", "belongs_to": "#2QC0QQPQ2", "display_index": 11},
-        {"clan_tag": "#2LJ0GV8G9", "name": "LOST 4 CWL", "belongs_to": "#2LU2V2LPU", "display_index": 12},
-        {"clan_tag": "#2GPPQQCUR", "name": "LOST 4 Event", "belongs_to": "#2LU2V2LPU", "display_index": 13},
-        {"clan_tag": "#2GV9QPR0U", "name": "LOST 5 CW", "belongs_to": "#2QC0QQPQ2", "display_index": 14},
-        {"clan_tag": "#2RQ9QQCG2", "name": "LOST 6 EX CWL", "belongs_to": "#2YVPC20UY", "display_index": 15},
-        {"clan_tag": "#2R8LG0GQY", "name": "LOST 7 CWL", "belongs_to": "#2J8UG90R2", "display_index": 16},
-        {"clan_tag": "#2J8LYGUP0", "name": "LOST 8 CWL", "belongs_to": "#2RUJPG9JC", "display_index": 17},
-        {"clan_tag": "#2J2J9LL8J", "name": "LOST 8 CWL 2", "belongs_to": "#2RUJPG9JC", "display_index": 18},
-        {"clan_tag": "#2R2LC2UG0", "name": "LOST F2P 2 CWL", "belongs_to": "#2820UPPQC", "display_index": 19},
-        {"clan_tag": "#2QPPYRRUQ", "name": "LOST F2P CWL", "belongs_to": "#2820UPPQC", "display_index": 20},
-        {"clan_tag": "#2GU08UJC8", "name": "LOST F2P CWL 2", "belongs_to": "#2820UPPQC", "display_index": 21},
-        {"clan_tag": "#2LGV0QQJ9", "name": "LOST Push", "belongs_to": "#2YUPV0UYC", "display_index": 22},
-        {"clan_tag": "#2JP0UCC0G", "name": "Lost 5 CWL", "belongs_to": "#2QC0QQPQ2", "display_index": 23},
-        {"clan_tag": "#2R8082GYC", "name": "Lost 5 CWL 2", "belongs_to": "#2QC0QQPQ2", "display_index": 24},
-        {"clan_tag": "#2R8YRPJCV", "name": "Lost 7 CWL 2", "belongs_to": "#2J8UG90R2", "display_index": 25},
-        {"clan_tag": "#2GGJVG9GU", "name": "Vegan 6", "belongs_to": "#2YVPC20UY", "display_index": 26}
-    ]"###;
-
-    // Clear existing side_clans to remove independent ones
-    // We do this by tag to avoid FK issues if possible, or just ignore errors
-    let tags_to_keep: Vec<String> = serde_json::from_str::<Vec<serde_json::Value>>(side_clans_json)
-        .unwrap()
-        .into_iter()
-        .map(|v| v["clan_tag"].as_str().unwrap().to_string())
-        .collect();
-
-    let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
-        .bind(&tags_to_keep)
-        .execute(&pool)
-        .await;
-
-    let side_clans: Vec<models::SideClan> = serde_json::from_str(side_clans_json).unwrap();
-    for clan in side_clans {
-        sqlx::query(
-            "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) VALUES ($1, $2, $3, $4) ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
-        )
-        .bind(clan.clan_tag)
-        .bind(clan.name)
-        .bind(clan.belongs_to)
-        .bind(clan.display_index)
-        .execute(&pool)
-        .await
-        .expect("Failed to seed side_clans");
-    }
+    // Removed hardcoded seed as it is now synchronized dynamically in the background task.
 
     let client = oauth2::reqwest::Client::builder()
         .timeout(Duration::from_secs(200))

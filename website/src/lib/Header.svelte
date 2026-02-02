@@ -147,7 +147,11 @@
                     badgeUrl: badgeMap.get(info.tag.toUpperCase()),
                     index: info.index,
                 }))
-                .sort((a, b) => a.index - b.index);
+                .sort((a, b) => {
+                    const aIdx = a.index === 0 ? 1000 : a.index || 999;
+                    const bIdx = b.index === 0 ? 1000 : b.index || 999;
+                    return aIdx - bIdx;
+                });
         } catch (error) {
             console.error('Failed to fetch user clans:', error);
         }

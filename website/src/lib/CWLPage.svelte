@@ -139,9 +139,17 @@
                         if (aTag === tagFull) return -1;
                         if (bTag === tagFull) return 1;
 
-                        // Priority 2: Use display_index from backend
+                        // Priority 2: Use display_index from backend (0 is last)
                         if (a.clan.display_index !== b.clan.display_index) {
-                            return a.clan.display_index - b.clan.display_index;
+                            const aIdx =
+                                a.clan.display_index === 0
+                                    ? 1000
+                                    : a.clan.display_index;
+                            const bIdx =
+                                b.clan.display_index === 0
+                                    ? 1000
+                                    : b.clan.display_index;
+                            return aIdx - bIdx;
                         }
 
                         // Priority 3: Alphabetical fallback

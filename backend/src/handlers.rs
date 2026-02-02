@@ -298,31 +298,25 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
     let prefix = get_cache_prefix(game);
     let supercell_url_path = format!("/clans/{}", encoded_tag);
 
-    // 1. Get from Supercell cache
-    let sc_cache_key = format!("{}:supercell:{}", prefix, supercell_url_path);
-    let sc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(&sc_cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
+    // 1. Get from Supercell cache (or update if missing/expired)
+    // We use a relatively long TTL (1 hour) because background task should keep it fresh
+    let sc_res = get_cached_or_update_supercell_cache(data, game, &supercell_url_path, 3600).await;
 
     let mut clan_json = match sc_res {
-        Ok(Some((body,))) => {
+        Ok(body) => {
             serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(serde_json::Value::Null)
         }
-        _ => {
+        Err(e) => {
+            error!("Error fetching clan info: {}", e);
             return HttpResponse::NotFound().json(serde_json::json!({ "error": "Clan not found" }));
         }
     };
 
     // 2. Get from Upstream cache and merge
     let upstream_url_path = format!("/api/clans/{}", encoded_tag);
-    let up_cache_key = format!("{}:upstream:{}", prefix, upstream_url_path);
-    let up_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(&up_cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
+    let up_res = get_cached_or_update_upstream_cache(data, game, &upstream_url_path, 3600).await;
 
-    if let Ok(Some((up_body,))) = up_res
+    if let Ok(up_body) = up_res
         && let Ok(up_json) = serde_json::from_slice::<serde_json::Value>(&up_body)
         && let (Some(sc_obj), Some(up_obj)) = (clan_json.as_object_mut(), up_json.as_object())
     {
@@ -441,22 +435,15 @@ async fn get_clan_members_impl(
     let supercell_url_path = format!("/clans/{}", encoded_tag);
     let upstream_url_path = format!("/api/clans/{}/members", encoded_tag);
 
-    // Get bodies from cache
-    let supercell_cache_key = format!("{}:supercell:{}", prefix, supercell_url_path);
-    let upstream_cache_key = format!("{}:upstream:{}", prefix, upstream_url_path);
+    // Get bodies from cache (or update if missing/expired)
+    let supercell_res =
+        get_cached_or_update_supercell_cache(data, game, &supercell_url_path, 3600).await;
 
-    let supercell_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(&supercell_cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
-
-    let upstream_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(&upstream_cache_key)
-        .fetch_optional(&data.db_pool)
-        .await;
+    let upstream_res =
+        get_cached_or_update_upstream_cache(data, game, &upstream_url_path, 3600).await;
 
     let mut supercell_members = match supercell_res {
-        Ok(Some((body,))) => {
+        Ok(body) => {
             let json: serde_json::Value =
                 serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
             json["memberList"].as_array().cloned().unwrap_or_default()
@@ -465,7 +452,7 @@ async fn get_clan_members_impl(
     };
 
     let upstream_body = match upstream_res {
-        Ok(Some((body,))) => Bytes::from(body),
+        Ok(body) => body,
         _ => Bytes::new(),
     };
 
@@ -1634,7 +1621,7 @@ pub async fn get_side_clans(data: web::Data<AppState>) -> impl Responder {
     use crate::models::{SideClan, SideClanCWLStats, SideClanCwlHistory};
 
     let clans_query =
-        sqlx::query_as::<_, SideClan>("SELECT clan_tag, name, belongs_to, display_index FROM side_clans ORDER BY display_index ASC")
+        sqlx::query_as::<_, SideClan>("SELECT clan_tag, name, belongs_to, display_index FROM side_clans ORDER BY CASE WHEN display_index = 0 THEN 1 ELSE 0 END, display_index ASC, name ASC")
             .fetch_all(&data.db_pool)
             .await;
 

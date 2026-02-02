@@ -200,36 +200,88 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             true
         };
 
-        if let Some(members) = value.as_array_mut() {
-            let is_coleader = has_required_role(user_role, "COLEADER");
+        let is_coleader = has_required_role(user_role, "COLEADER");
 
-            members.retain(|m| {
+        if let Some(arr) = value.as_array_mut() {
+            arr.retain(|m| {
                 if is_coleader {
                     return true;
                 }
                 !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
             });
+            for member in arr {
+                if let Some(obj) = member.as_object_mut() {
+                    let tag = obj
+                        .get("tag")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if process_obj(obj, &tag) {
+                        modified = true;
+                    }
+                }
+            }
+        } else if let Some(obj) = value.as_object_mut() {
+            // Handle wrapper objects like { "members": [...] } or { "clans": [ { "members": [...] } ] }
+            if let Some(m_arr) = obj.get_mut("members").and_then(|v| v.as_array_mut()) {
+                m_arr.retain(|m| {
+                    if is_coleader {
+                        return true;
+                    }
+                    !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+                });
+                for member in m_arr {
+                    if let Some(m_obj) = member.as_object_mut() {
+                        let tag = m_obj
+                            .get("tag")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if process_obj(m_obj, &tag) {
+                            modified = true;
+                        }
+                    }
+                }
+            }
 
-            for member in members {
-                let tag = member
+            // Important: we re-borrow obj here AFTER m_arr is dropped
+            if let Some(c_arr) = obj.get_mut("clans").and_then(|v| v.as_array_mut()) {
+                for clan in c_arr {
+                    if let Some(m_arr) = clan.get_mut("members").and_then(|v| v.as_array_mut()) {
+                        m_arr.retain(|m| {
+                            if is_coleader {
+                                return true;
+                            }
+                            !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+                        });
+                        for member in m_arr {
+                            if let Some(m_obj) = member.as_object_mut() {
+                                let tag = m_obj
+                                    .get("tag")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                if process_obj(m_obj, &tag) {
+                                    modified = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also check if the top-level object itself is a player
+            if obj.contains_key("tag")
+                && (obj.contains_key("role") || obj.contains_key("townHallLevel"))
+            {
+                let tag = obj
                     .get("tag")
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                if let Some(obj) = member.as_object_mut()
-                    && process_obj(obj, &tag)
-                {
+                if process_obj(obj, &tag) {
                     modified = true;
                 }
-            }
-        } else if let Some(obj) = value.as_object_mut() {
-            let tag = obj
-                .get("tag")
-                .and_then(|t| t.as_str())
-                .unwrap_or("")
-                .to_string();
-            if process_obj(obj, &tag) {
-                modified = true;
             }
         }
 
