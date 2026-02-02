@@ -36,7 +36,7 @@
         gameType?: 'coc' | 'cr';
     }
 
-    let userClans: { coc: Clan[], cr: Clan[] } = { coc: [], cr: [] };
+    let userClans: { coc: Clan[]; cr: Clan[] } = { coc: [], cr: [] };
     let loading = true;
     let error: string | null = null;
 
@@ -102,9 +102,11 @@
         error = null;
         try {
             const [accountsRes, cocClansRes, crClansRes] = await Promise.all([
-                fetch(`${apiBaseUrl}/api/me/accounts`, { credentials: 'include' }),
+                fetch(`${apiBaseUrl}/api/me/accounts`, {
+                    credentials: 'include',
+                }),
                 fetch(`${apiBaseUrl}/api/coc/clans`),
-                fetch(`${apiBaseUrl}/api/cr/clans`)
+                fetch(`${apiBaseUrl}/api/cr/clans`),
             ]);
 
             if (!accountsRes.ok) {
@@ -112,20 +114,28 @@
             }
 
             const accounts = await accountsRes.json();
-            const allCocClans: Clan[] = cocClansRes.ok ? await cocClansRes.json() : [];
-            const allCrClans: Clan[] = crClansRes.ok ? await crClansRes.json() : [];
+            const allCocClans: Clan[] = cocClansRes.ok
+                ? await cocClansRes.json()
+                : [];
+            const allCrClans: Clan[] = crClansRes.ok
+                ? await crClansRes.json()
+                : [];
 
-            const officialCocTags = new Set(allCocClans.map(c => c.tag));
-            const officialCrTags = new Set(allCrClans.map(c => c.tag));
+            const officialCocTags = new Set(allCocClans.map((c) => c.tag));
+            const officialCrTags = new Set(allCrClans.map((c) => c.tag));
 
             const cocAccountClans = new Set<string>();
-            const cocAccounts = accounts.coc || (Array.isArray(accounts) ? accounts : []);
+            const cocAccounts =
+                accounts.coc || (Array.isArray(accounts) ? accounts : []);
             cocAccounts.forEach((acc: any) => {
                 // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
-                const clan = (acc.clanDB && acc.clanDB.tag) ? acc.clanDB : 
-                             (acc.upstream_clan && acc.upstream_clan.tag) ? acc.upstream_clan : 
-                             acc.clan;
-                
+                const clan =
+                    acc.clanDB && acc.clanDB.tag
+                        ? acc.clanDB
+                        : acc.upstream_clan && acc.upstream_clan.tag
+                          ? acc.upstream_clan
+                          : acc.clan;
+
                 if (clan && officialCocTags.has(clan.tag)) {
                     cocAccountClans.add(clan.tag);
                 }
@@ -135,9 +145,12 @@
             const crAccounts = accounts.cr || [];
             crAccounts.forEach((acc: any) => {
                 // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
-                const clan = (acc.clanDB && acc.clanDB.tag) ? acc.clanDB : 
-                             (acc.upstream_clan && acc.upstream_clan.tag) ? acc.upstream_clan : 
-                             acc.clan;
+                const clan =
+                    acc.clanDB && acc.clanDB.tag
+                        ? acc.clanDB
+                        : acc.upstream_clan && acc.upstream_clan.tag
+                          ? acc.upstream_clan
+                          : acc.clan;
 
                 if (clan && officialCrTags.has(clan.tag)) {
                     crAccountClans.add(clan.tag);
@@ -146,15 +159,14 @@
 
             userClans = {
                 coc: allCocClans
-                    .filter(c => cocAccountClans.has(c.tag))
-                    .map(c => ({...c, gameType: 'coc' as const}))
+                    .filter((c) => cocAccountClans.has(c.tag))
+                    .map((c) => ({ ...c, gameType: 'coc' as const }))
                     .sort((a, b) => (a.index || 0) - (b.index || 0)),
                 cr: allCrClans
-                    .filter(c => crAccountClans.has(c.tag))
-                    .map(c => ({...c, gameType: 'cr' as const}))
-                    .sort((a, b) => (a.index || 0) - (b.index || 0))
+                    .filter((c) => crAccountClans.has(c.tag))
+                    .map((c) => ({ ...c, gameType: 'cr' as const }))
+                    .sort((a, b) => (a.index || 0) - (b.index || 0)),
             };
-
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
@@ -186,7 +198,8 @@
                 <div class="title-group">
                     <h1 class="page-title">Deine Clans</h1>
                     <p class="page-subtitle">
-                        Hier siehst du alle Clans der LOST Family, in denen du Mitglied bist.
+                        Hier siehst du alle Clans der LOST Family, in denen du
+                        Mitglied bist.
                     </p>
                 </div>
             </div>
@@ -214,14 +227,19 @@
                     /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <p>{error}</p>
-                <button class="retry-btn" on:click={loadMyClans}>Erneut versuchen</button>
+                <button class="retry-btn" on:click={loadMyClans}
+                    >Erneut versuchen</button
+                >
             </div>
         {:else if cocClans.length === 0 && crClans.length === 0}
             <div class="empty-state" in:fade>
                 <div class="empty-icon">🏰</div>
                 <h3>Keine Clans gefunden</h3>
                 <p>Du bist derzeit in keinem Clan der LOST Family.</p>
-                <button class="action-btn" on:click={() => dispatch('navigate', 'coc/clans')}>
+                <button
+                    class="action-btn"
+                    on:click={() => dispatch('navigate', 'coc/clans')}
+                >
                     Clans entdecken
                 </button>
             </div>
@@ -240,14 +258,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
@@ -311,14 +329,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
@@ -724,7 +742,8 @@
         color: #1e293b;
     }
 
-    .retry-btn, .action-btn {
+    .retry-btn,
+    .action-btn {
         margin-top: 1rem;
         padding: 0.75rem 1.75rem;
         background: #5865f2;
@@ -736,7 +755,8 @@
         transition: all 0.2s ease;
     }
 
-    .retry-btn:hover, .action-btn:hover {
+    .retry-btn:hover,
+    .action-btn:hover {
         background: #4752c4;
         transform: translateY(-2px);
     }

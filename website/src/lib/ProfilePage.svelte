@@ -28,7 +28,7 @@
                 `${apiBaseUrl}/api/users/${viewUserId}`,
                 {
                     credentials: 'include',
-                }
+                },
             );
             if (response.ok) {
                 viewedUser = await response.json();
@@ -94,11 +94,11 @@
             const [kpRes, idRes] = await Promise.all([
                 fetch(
                     `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/kickpoints/details`,
-                    { credentials: 'include' }
+                    { credentials: 'include' },
                 ),
                 fetch(
                     `${apiBaseUrl}${apiPrefix}/players/${encodedTag}/identity`,
-                    { credentials: 'include' }
+                    { credentials: 'include' },
                 ),
             ]);
 
@@ -438,7 +438,7 @@
                                                     >
                                                     <span class="kp-date"
                                                         >{new Date(
-                                                            kp.date
+                                                            kp.date,
                                                         ).toLocaleDateString()}</span
                                                     >
                                                 </div>
@@ -620,7 +620,7 @@
                                                     >
                                                     <span class="kp-date"
                                                         >{new Date(
-                                                            kp.date
+                                                            kp.date,
                                                         ).toLocaleDateString()}</span
                                                     >
                                                 </div>

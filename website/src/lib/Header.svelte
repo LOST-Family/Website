@@ -663,10 +663,7 @@
                 {#if userClans.length === 1}
                     <a
                         href="/{userClans[0]
-                            .gameType}/clan/{userClans[0].tag.replace(
-                            '#',
-                            '',
-                        )}"
+                            .gameType}/clan/{userClans[0].tag.replace('#', '')}"
                         class="drawer-nav-link"
                         on:click|preventDefault={() =>
                             navigate(
