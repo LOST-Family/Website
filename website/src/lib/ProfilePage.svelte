@@ -909,15 +909,34 @@
 
     .account-count {
         font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.4);
-        background: rgba(255, 255, 255, 0.05);
         padding: 0.25rem 0.75rem;
         border-radius: 20px;
+        font-weight: 600;
+    }
+
+    .coc-count {
+        color: #f59e0b;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .cr-count {
+        color: #60a5fa;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
     }
 
     .light .account-count {
-        color: rgba(0, 0, 0, 0.4);
         background: rgba(0, 0, 0, 0.05);
+        border: none;
+    }
+
+    .light .coc-count {
+        color: #d97706;
+    }
+
+    .light .cr-count {
+        color: #2563eb;
     }
 
     .accounts-grid {
@@ -1255,23 +1274,53 @@
         transform: scale(1.05);
     }
 
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.02);
+        border: 2px dashed rgba(255, 255, 255, 0.05);
+        border-radius: 24px;
+        margin: 1.5rem 0;
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .light .empty-state {
+        background: rgba(0, 0, 0, 0.02);
+        border-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.1));
+    }
+
+    .light .empty-icon {
+        filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.1));
+    }
+
     .empty-state p {
         margin: 0.5rem 0;
-        font-size: 1.1rem;
-        color: rgba(255, 255, 255, 0.6);
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.8);
     }
 
     .empty-state .sub-text {
-        font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.3);
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.4);
     }
 
     .light .empty-state p {
-        color: rgba(0, 0, 0, 0.6);
+        color: #1e293b;
     }
 
     .light .empty-state .sub-text {
-        color: rgba(0, 0, 0, 0.4);
+        color: #64748b;
     }
 
     .admin-view-banner {

@@ -121,16 +121,26 @@
             const cocAccountClans = new Set<string>();
             const cocAccounts = accounts.coc || (Array.isArray(accounts) ? accounts : []);
             cocAccounts.forEach((acc: any) => {
-                if (acc.clan && officialCocTags.has(acc.clan.tag)) {
-                    cocAccountClans.add(acc.clan.tag);
+                // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
+                const clan = (acc.clanDB && acc.clanDB.tag) ? acc.clanDB : 
+                             (acc.upstream_clan && acc.upstream_clan.tag) ? acc.upstream_clan : 
+                             acc.clan;
+                
+                if (clan && officialCocTags.has(clan.tag)) {
+                    cocAccountClans.add(clan.tag);
                 }
             });
 
             const crAccountClans = new Set<string>();
             const crAccounts = accounts.cr || [];
             crAccounts.forEach((acc: any) => {
-                if (acc.clan && officialCrTags.has(acc.clan.tag)) {
-                    crAccountClans.add(acc.clan.tag);
+                // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
+                const clan = (acc.clanDB && acc.clanDB.tag) ? acc.clanDB : 
+                             (acc.upstream_clan && acc.upstream_clan.tag) ? acc.upstream_clan : 
+                             acc.clan;
+
+                if (clan && officialCrTags.has(clan.tag)) {
+                    crAccountClans.add(clan.tag);
                 }
             });
 
