@@ -337,33 +337,45 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         Ok(sync_resp) => {
             if sync_resp.status().is_success() {
                 if let Ok(sync_bytes) = sync_resp.bytes().await {
-                    if let Ok(side_clans) =
-                        serde_json::from_slice::<Vec<crate::models::SideClan>>(&sync_bytes)
-                    {
-                        info!(
-                            "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
-                            side_clans.len()
-                        );
+                    match serde_json::from_slice::<Vec<crate::models::SideClan>>(&sync_bytes) {
+                        Ok(side_clans) => {
+                            info!(
+                                "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
+                                side_clans.len()
+                            );
 
-                        let tags_to_keep: Vec<String> =
-                            side_clans.iter().map(|c| c.clan_tag.clone()).collect();
-                        let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
-                            .bind(&tags_to_keep)
-                            .execute(&data.db_pool)
-                            .await;
+                            let tags_to_keep: Vec<String> =
+                                side_clans.iter().map(|c| c.clan_tag.clone()).collect();
+                            let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
+                                .bind(&tags_to_keep)
+                                .execute(&data.db_pool)
+                                .await;
 
-                        for clan in side_clans {
-                            let _ = sqlx::query(
-                                "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) 
-                                 VALUES ($1, $2, $3, $4) 
-                                 ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
-                            )
-                            .bind(clan.clan_tag)
-                            .bind(clan.name)
-                            .bind(clan.belongs_to)
-                            .bind(clan.display_index)
-                            .execute(&data.db_pool)
-                            .await;
+                            for clan in side_clans {
+                                let _ = sqlx::query(
+                                    "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) 
+                                     VALUES ($1, $2, $3, $4) 
+                                     ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
+                                )
+                                .bind(clan.clan_tag)
+                                .bind(clan.name)
+                                .bind(clan.belongs_to)
+                                .bind(clan.display_index)
+                                .execute(&data.db_pool)
+                                .await;
+                            }
+                        }
+                        Err(e) => {
+                            error!(
+                                "Background Refresh [Side Clans CWL]: Failed to deserialize side clans from sync response: {}",
+                                e
+                            );
+                            if let Ok(body_str) = String::from_utf8(sync_bytes.to_vec()) {
+                                error!(
+                                    "Response snippet: {}",
+                                    &body_str[..body_str.len().min(1000)]
+                                );
+                            }
                         }
                     }
                 }

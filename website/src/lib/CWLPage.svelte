@@ -28,7 +28,8 @@
 
     interface MainClan {
         tag: string;
-        name: string;
+        name?: string;
+        nameDB?: string;
         index: number;
     }
 
@@ -65,9 +66,15 @@
 
         // Group by parent tag
         sideClansHistory.forEach((item) => {
-            const parentTag = item.clan.belongs_to;
-            // Skip if no parent (shouldn't happen with new seed)
-            if (!parentTag) return;
+            // Use parent tag if available, otherwise its own tag
+            let parentTag = (item.clan.belongs_to || item.clan.clan_tag)
+                .trim()
+                .toUpperCase();
+
+            // Normalize parentTag to ensure consistent grouping
+            if (!parentTag.startsWith('#')) {
+                parentTag = '#' + parentTag;
+            }
 
             // EXCLUSION: Don't show clans where the latest history entry is "Unranked"
             // or if there is no history at all.
@@ -82,9 +89,9 @@
         });
 
         const fallbackNames: Record<string, string> = {
-            '#2YUPV0UYC': 'LOST',
-            '#2LU2V2LPU': 'LOST 2',
-            '#2QC0QQPQ2': 'LOST 3',
+            '#2YUPV0UYC': 'LOST 3',
+            '#2LU2V2LPU': 'LOST 4',
+            '#2QC0QQPQ2': 'LOST 5',
             '#2YVPC20UY': 'LOST 6 EX / Vegan',
             '#2J8UG90R2': 'LOST 7',
             '#2RUJPG9JC': 'LOST 8',
@@ -94,7 +101,7 @@
         // Convert to sorted array of groups
         return Object.entries(groups)
             .map(([parentTag, clans]) => {
-                const tagFull = parentTag.trim().toUpperCase();
+                const tagFull = parentTag; // Already normalized in the forEach
 
                 // 1. Try to find the name from mainClans (fetched from API)
                 let mainClan = mainClans.find((c) => {
@@ -105,13 +112,17 @@
                     return cTagWithHash === tagFull || cTag === tagFull;
                 });
 
-                let name = mainClan ? mainClan.name : null;
+                let name = mainClan ? mainClan.name || mainClan.nameDB : null;
 
                 // 2. Try to find the name from sideClansHistory (direct database entry)
                 if (!name) {
-                    const sideMain = sideClansHistory.find(
-                        (s) => s.clan.clan_tag.trim().toUpperCase() === tagFull,
-                    );
+                    const sideMain = sideClansHistory.find((s) => {
+                        const sTag = s.clan.clan_tag.trim().toUpperCase();
+                        const sTagWithHash = sTag.startsWith('#')
+                            ? sTag
+                            : '#' + sTag;
+                        return sTagWithHash === tagFull;
+                    });
                     if (sideMain) name = sideMain.clan.name;
                 }
 
@@ -134,8 +145,14 @@
                     index: mainClan ? mainClan.index || 999 : 999,
                     clans: clans.sort((a, b) => {
                         // Priority 1: Main clan always first
-                        const aTag = a.clan.clan_tag.trim().toUpperCase();
-                        const bTag = b.clan.clan_tag.trim().toUpperCase();
+                        const aTagRaw = a.clan.clan_tag.trim().toUpperCase();
+                        const bTagRaw = b.clan.clan_tag.trim().toUpperCase();
+                        const aTag = aTagRaw.startsWith('#')
+                            ? aTagRaw
+                            : '#' + aTagRaw;
+                        const bTag = bTagRaw.startsWith('#')
+                            ? bTagRaw
+                            : '#' + bTagRaw;
                         if (aTag === tagFull) return -1;
                         if (bTag === tagFull) return 1;
 
