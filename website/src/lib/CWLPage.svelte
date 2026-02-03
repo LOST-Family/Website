@@ -431,12 +431,14 @@
             #fff 0%,
             rgba(255, 255, 255, 0.7) 100%
         );
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
     .cwl-page.light header h1 {
         background: linear-gradient(135deg, #1e293b 0%, #64748b 100%);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }

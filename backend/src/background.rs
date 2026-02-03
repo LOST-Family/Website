@@ -3,7 +3,6 @@ use crate::utils::{update_supercell_cache, update_upstream_cache};
 
 use log::{debug, error, info};
 use serde::Deserialize;
-use std::cmp::Ordering;
 use std::time::Duration;
 use tokio::time::interval;
 

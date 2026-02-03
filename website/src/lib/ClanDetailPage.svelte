@@ -1780,36 +1780,8 @@
         opacity: 0.7;
     }
 
-    .row-left {
-        background: rgba(75, 85, 99, 0.1);
-    }
-
-    .row-new {
-        background: rgba(16, 185, 129, 0.1);
-    }
-
     .row-diff {
         background: rgba(245, 158, 11, 0.05);
-    }
-
-    .diff-label {
-        font-size: 0.7rem;
-        font-weight: 950;
-        padding: 4px 10px;
-        border-radius: 6px;
-        text-transform: uppercase;
-        margin-right: 12px;
-        display: inline-block;
-        vertical-align: middle;
-    }
-
-    .diff-label.left {
-        background: #4b5563;
-        color: white;
-    }
-    .diff-label.new {
-        background: #10b981;
-        color: white;
     }
 
     /* New Diff Grid Layout */

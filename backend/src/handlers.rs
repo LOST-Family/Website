@@ -295,7 +295,6 @@ fn get_cache_prefix(game: GameType) -> &'static str {
 
 async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameType) -> HttpResponse {
     let encoded_tag = encode_tag(tag);
-    let prefix = get_cache_prefix(game);
     let supercell_url_path = format!("/clans/{}", encoded_tag);
 
     // 1. Get from Supercell cache (or update if missing/expired)
