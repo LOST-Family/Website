@@ -65,9 +65,15 @@
 
         // Group by parent tag
         sideClansHistory.forEach((item) => {
-            const parentTag = item.clan.belongs_to;
+            let parentTag = item.clan.belongs_to;
             // Skip if no parent (shouldn't happen with new seed)
             if (!parentTag) return;
+
+            // Normalize parentTag to ensure consistent grouping
+            parentTag = parentTag.trim().toUpperCase();
+            if (!parentTag.startsWith('#')) {
+                parentTag = '#' + parentTag;
+            }
 
             // EXCLUSION: Don't show clans where the latest history entry is "Unranked"
             // or if there is no history at all.
@@ -94,7 +100,7 @@
         // Convert to sorted array of groups
         return Object.entries(groups)
             .map(([parentTag, clans]) => {
-                const tagFull = parentTag.trim().toUpperCase();
+                const tagFull = parentTag; // Already normalized in the forEach
 
                 // 1. Try to find the name from mainClans (fetched from API)
                 let mainClan = mainClans.find((c) => {
@@ -109,9 +115,13 @@
 
                 // 2. Try to find the name from sideClansHistory (direct database entry)
                 if (!name) {
-                    const sideMain = sideClansHistory.find(
-                        (s) => s.clan.clan_tag.trim().toUpperCase() === tagFull,
-                    );
+                    const sideMain = sideClansHistory.find((s) => {
+                        const sTag = s.clan.clan_tag.trim().toUpperCase();
+                        const sTagWithHash = sTag.startsWith('#')
+                            ? sTag
+                            : '#' + sTag;
+                        return sTagWithHash === tagFull;
+                    });
                     if (sideMain) name = sideMain.clan.name;
                 }
 
@@ -134,8 +144,14 @@
                     index: mainClan ? mainClan.index || 999 : 999,
                     clans: clans.sort((a, b) => {
                         // Priority 1: Main clan always first
-                        const aTag = a.clan.clan_tag.trim().toUpperCase();
-                        const bTag = b.clan.clan_tag.trim().toUpperCase();
+                        const aTagRaw = a.clan.clan_tag.trim().toUpperCase();
+                        const bTagRaw = b.clan.clan_tag.trim().toUpperCase();
+                        const aTag = aTagRaw.startsWith('#')
+                            ? aTagRaw
+                            : '#' + aTagRaw;
+                        const bTag = bTagRaw.startsWith('#')
+                            ? bTagRaw
+                            : '#' + bTagRaw;
                         if (aTag === tagFull) return -1;
                         if (bTag === tagFull) return 1;
 
