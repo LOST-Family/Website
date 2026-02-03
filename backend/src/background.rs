@@ -337,11 +337,13 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         Ok(sync_resp) => {
             if sync_resp.status().is_success() {
                 if let Ok(sync_bytes) = sync_resp.bytes().await {
-                    if let Ok(side_clans_history) =
-                        serde_json::from_slice::<Vec<crate::models::SideClanCwlHistory>>(&sync_bytes)
+                    if let Ok(side_clans_history) = serde_json::from_slice::<
+                        Vec<crate::models::SideClanCwlHistory>,
+                    >(&sync_bytes)
                     {
                         let side_clans_history_clone = side_clans_history.clone();
-                        let side_clans: Vec<crate::models::SideClan> = side_clans_history.into_iter().map(|h| h.clan).collect();
+                        let side_clans: Vec<crate::models::SideClan> =
+                            side_clans_history.into_iter().map(|h| h.clan).collect();
                         info!(
                             "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
                             side_clans.len()
@@ -391,7 +393,9 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                             }
                         }
                     } else {
-                        error!("Background Refresh [Side Clans CWL]: Failed to deserialize side clans from sync response");
+                        error!(
+                            "Background Refresh [Side Clans CWL]: Failed to deserialize side clans from sync response"
+                        );
                     }
                 }
             } else {
