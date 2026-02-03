@@ -25,7 +25,7 @@
     }>();
 
     function handleThemeToggle(
-        event: CustomEvent<{ theme: 'dark' | 'light' }>
+        event: CustomEvent<{ theme: 'dark' | 'light' }>,
     ) {
         dispatch('themeToggle', event.detail);
     }
@@ -37,6 +37,12 @@
 
     function toggleMobileMenu() {
         mobileMenuOpen = !mobileMenuOpen;
+    }
+
+    function handleBackdropKeydown(event: KeyboardEvent) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            toggleMobileMenu();
+        }
     }
 
     $: if (typeof document !== 'undefined' && document.body) {
@@ -75,10 +81,10 @@
             const crClans = crClansRes.ok ? await crClansRes.json() : [];
 
             const officialCocTags = new Set(
-                cocClans.map((c: any) => c.tag.toUpperCase())
+                cocClans.map((c: any) => c.tag.toUpperCase()),
             );
             const officialCrTags = new Set(
-                crClans.map((c: any) => c.tag.toUpperCase())
+                crClans.map((c: any) => c.tag.toUpperCase()),
             );
 
             const badgeMap = new Map<string, string>();
@@ -102,7 +108,7 @@
                     const tag = acc.clan.tag.toUpperCase();
                     if (officialCocTags.has(tag)) {
                         const clanData = cocClans.find(
-                            (c: any) => c.tag.toUpperCase() === tag
+                            (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`coc-${tag}`, {
                             tag: acc.clan.tag,
@@ -121,7 +127,7 @@
                     const tag = acc.clan.tag.toUpperCase();
                     if (officialCrTags.has(tag)) {
                         const clanData = crClans.find(
-                            (c: any) => c.tag.toUpperCase() === tag
+                            (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`cr-${tag}`, {
                             tag: acc.clan.tag,
@@ -141,7 +147,11 @@
                     badgeUrl: badgeMap.get(info.tag.toUpperCase()),
                     index: info.index,
                 }))
-                .sort((a, b) => a.index - b.index);
+                .sort((a, b) => {
+                    const aIdx = a.index === 0 ? 1000 : a.index || 999;
+                    const bIdx = b.index === 0 ? 1000 : b.index || 999;
+                    return aIdx - bIdx;
+                });
         } catch (error) {
             console.error('Failed to fetch user clans:', error);
         }
@@ -188,8 +198,11 @@
                         on:click|preventDefault={() => navigate('coc/clans')}
                         >Clans</a
                     >
-                    <a href="/coc/cwl" class="dropdown-item"
-                        >Clankriegsliga (WIP)</a
+                    <a
+                        href="/coc/cwl"
+                        class="dropdown-item"
+                        on:click|preventDefault={() => navigate('coc/cwl')}
+                        >Clankriegsliga</a
                     >
                 </div>
             </div>
@@ -218,6 +231,16 @@
                     >
                 </div>
             </div>
+
+            {#if $user}
+                <a
+                    href="/my-clans"
+                    class="nav-link"
+                    on:click|preventDefault={() => navigate('my-clans')}
+                >
+                    Deine Clans
+                </a>
+            {/if}
         </nav>
 
         <div class="header-actions">
@@ -309,10 +332,10 @@
 
                         <div class="dropdown-divider"></div>
 
-                        <button
-                            on:click={() => navigate('account')}
+                        <a
+                            href="/account"
                             class="dropdown-item"
-                            style="width: 100%; border: none; background: transparent; cursor: pointer; outline: none;"
+                            on:click|preventDefault={() => navigate('account')}
                         >
                             <svg
                                 class="item-icon"
@@ -326,60 +349,31 @@
                                 /><circle cx="12" cy="7" r="4" />
                             </svg>
                             Verknüpfte Accounts
-                        </button>
+                        </a>
 
-                        {#if userClans.length > 0}
-                            {#if userClans.length === 1}
-                                <a
-                                    href="/{userClans[0]
-                                        .gameType}/clan/{userClans[0].tag.replace(
-                                        '#',
-                                        ''
-                                    )}"
-                                    class="dropdown-item"
-                                    on:click|preventDefault={() =>
-                                        navigate(
-                                            `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
-                                                '#',
-                                                ''
-                                            )}`
-                                        )}
-                                >
-                                    {#if userClans[0].badgeUrl}
-                                        <img
-                                            src={userClans[0].badgeUrl}
-                                            alt={userClans[0].name}
-                                            class="item-icon clan-badge-mini"
-                                        />
-                                    {:else}
-                                        <svg
-                                            class="item-icon"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                        >
-                                            <path
-                                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                                            />
-                                            <circle cx="9" cy="7" r="4" />
-                                            <path
-                                                d="M23 21v-2a4 4 0 0 0-3-3.87"
-                                            />
-                                            <path
-                                                d="M16 3.13a4 4 0 0 1 0 7.75"
-                                            />
-                                        </svg>
-                                    {/if}
-                                    Dein Clan
-                                </a>
-                            {:else}
-                                <a
-                                    href="/my-clans"
-                                    class="dropdown-item"
-                                    on:click|preventDefault={() =>
-                                        navigate('my-clans')}
-                                >
+                        {#if userClans.length === 1}
+                            <a
+                                href="/{userClans[0]
+                                    .gameType}/clan/{userClans[0].tag.replace(
+                                    '#',
+                                    '',
+                                )}"
+                                class="dropdown-item"
+                                on:click|preventDefault={() =>
+                                    navigate(
+                                        `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
+                                            '#',
+                                            '',
+                                        )}`,
+                                    )}
+                            >
+                                {#if userClans[0].badgeUrl}
+                                    <img
+                                        src={userClans[0].badgeUrl}
+                                        alt={userClans[0].name}
+                                        class="item-icon clan-badge-mini"
+                                    />
+                                {:else}
                                     <svg
                                         class="item-icon"
                                         viewBox="0 0 24 24"
@@ -394,9 +388,32 @@
                                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                                     </svg>
-                                    Deine Clans
-                                </a>
-                            {/if}
+                                {/if}
+                                Dein Clan
+                            </a>
+                        {:else}
+                            <a
+                                href="/my-clans"
+                                class="dropdown-item"
+                                on:click|preventDefault={() =>
+                                    navigate('my-clans')}
+                            >
+                                <svg
+                                    class="item-icon"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                    />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                                Deine Clans
+                            </a>
                         {/if}
 
                         {#if $user.is_admin}
@@ -500,9 +517,13 @@
 
 <!-- Mobile Navigation Drawer -->
 <div
+    role="button"
+    tabindex="0"
     class="mobile-backdrop"
     class:visible={mobileMenuOpen}
     on:click={toggleMobileMenu}
+    on:keydown={handleBackdropKeydown}
+    aria-label="Menü schließen"
 ></div>
 
 <aside
@@ -515,7 +536,11 @@
             <img src={logo} alt="LOST Family" class="logo-icon" />
             <span class="logo-text-drawer">LOST Family</span>
         </button>
-        <button class="drawer-close" on:click={toggleMobileMenu}>
+        <button
+            class="drawer-close"
+            on:click={toggleMobileMenu}
+            aria-label="Menü schließen"
+        >
             <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -615,46 +640,74 @@
         {#if $user}
             <div class="drawer-section">
                 <span class="section-title">Account</span>
-                <button
+                <a
+                    href="/account"
                     class="drawer-nav-link"
-                    on:click={() => navigate('account')}
-                    >Verknüpfte Accounts</button
+                    on:click|preventDefault={() => navigate('account')}
                 >
-                {#if userClans.length > 0}
-                    {#if userClans.length === 1}
-                        <a
-                            href="/{userClans[0]
-                                .gameType}/clan/{userClans[0].tag.replace(
-                                '#',
-                                ''
-                            )}"
-                            class="drawer-nav-link"
-                            on:click|preventDefault={() =>
-                                navigate(
-                                    `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
-                                        '#',
-                                        ''
-                                    )}`
-                                )}
+                    <div class="drawer-link-content">
+                        <svg
+                            class="drawer-item-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
                         >
-                            <div class="drawer-link-content">
-                                {#if userClans[0].badgeUrl}
-                                    <img
-                                        src={userClans[0].badgeUrl}
-                                        alt={userClans[0].name}
-                                        class="drawer-item-icon clan-badge-mini"
-                                    />
-                                {/if}
-                                Dein Clan
-                            </div>
-                        </a>
-                    {:else}
-                        <button
-                            class="drawer-nav-link"
-                            on:click={() => navigate('my-clans')}
-                            >Deine Clans</button
-                        >
-                    {/if}
+                            <path
+                                d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                            /><circle cx="12" cy="7" r="4" />
+                        </svg>
+                        Verknüpfte Accounts
+                    </div>
+                </a>
+                {#if userClans.length === 1}
+                    <a
+                        href="/{userClans[0]
+                            .gameType}/clan/{userClans[0].tag.replace('#', '')}"
+                        class="drawer-nav-link"
+                        on:click|preventDefault={() =>
+                            navigate(
+                                `${userClans[0].gameType}/clan/${userClans[0].tag.replace(
+                                    '#',
+                                    '',
+                                )}`,
+                            )}
+                    >
+                        <div class="drawer-link-content">
+                            {#if userClans[0].badgeUrl}
+                                <img
+                                    src={userClans[0].badgeUrl}
+                                    alt={userClans[0].name}
+                                    class="drawer-item-icon clan-badge-mini"
+                                />
+                            {/if}
+                            Dein Clan
+                        </div>
+                    </a>
+                {:else}
+                    <a
+                        href="/my-clans"
+                        class="drawer-nav-link"
+                        on:click|preventDefault={() => navigate('my-clans')}
+                    >
+                        <div class="drawer-link-content">
+                            <svg
+                                class="drawer-item-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                                />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                            Deine Clans
+                        </div>
+                    </a>
                 {/if}
 
                 {#if $user.is_admin}
@@ -868,6 +921,11 @@
         border-radius: 8px;
         transition: all 0.2s ease;
         outline: none;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: inherit;
+        justify-content: flex-start;
     }
 
     .dropdown-item:focus {

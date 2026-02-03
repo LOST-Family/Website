@@ -48,22 +48,22 @@
 
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2') || name.includes('II')) return bannerCR2;
-            if (name.includes('3') || name.includes('III')) return bannerCR3;
             if (name.includes('4') || name.includes('IV')) return bannerCR4;
             if (name.includes('5') || name.includes('V')) return bannerCR5;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('6') || name.includes('VI')) return banner6;
         if (name.includes('4') || name.includes('IV')) return banner4;
         if (name.includes('5') || name.includes('V')) return banner5;
-        if (name.includes('6') || name.includes('VI')) return banner6;
-        if (name.includes('7') || name.includes('VII')) return banner7;
-        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }
@@ -73,7 +73,17 @@
         if (n.includes('GP')) return '#a5025a';
         if (n.includes('ANTHRAZIT')) return '#3d3a3f';
 
-        // Priority to index-based coloring to match ClanCard.svelte
+        // Priority to name-based coloring to fix potential index swaps
+        if (n.includes('F2P 2') || n.includes('F2P2')) return '#05762b'; // Green
+        if (n.includes('F2P')) return '#c90000'; // Red
+        if (n.includes('8') || n.includes('VIII')) return '#d100c7'; // Pink
+        if (n.includes('7') || n.includes('VII')) return '#007076'; // Teal
+        if (n.includes('6') || n.includes('VI')) return '#b54800'; // Orange
+        if (n.includes('4') || n.includes('IV')) return '#691a97'; // Purple
+        if (n.includes('5') || n.includes('V')) return '#024885'; // Dark Blue
+        if (n.includes('3') || n.includes('III')) return '#c89e00'; // Gold
+
+        // Fallback to index-based coloring to match ClanCard.svelte
         if (index === 1) return '#c90000'; // First clan is always Red
         if (index === 2) return '#05762b'; // Second is Green
         if (index === 3) return '#c89e00'; // Third is Gold
@@ -83,7 +93,6 @@
         if (index === 7) return '#007076'; // Teal
         if (index === 8) return '#d100c7'; // Pink
 
-        if (n.includes('F2P')) return '#3ba55c';
         return '#c90000';
     }
 
@@ -194,18 +203,39 @@
                 {#if error === 'Administrator-Zutritt verweigert.'}
                     <div class="access-denied-container">
                         <div class="lock-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <rect
+                                    x="3"
+                                    y="11"
+                                    width="18"
+                                    height="11"
+                                    rx="2"
+                                    ry="2"
+                                />
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                         </div>
                         <h3>Zutritt verweigert</h3>
-                        <p>Du benötigst Administrator-Rechte, um auf diese Seite zuzugreifen.</p>
+                        <p>
+                            Du benötigst Administrator-Rechte, um auf diese
+                            Seite zuzugreifen.
+                        </p>
                         <div class="deny-actions">
-                            <button class="action-btn secondary" on:click={() => dispatch('navigate', 'home')}>
+                            <button
+                                class="action-btn secondary"
+                                on:click={() => dispatch('navigate', 'home')}
+                            >
                                 Zurück zur Startseite
                             </button>
-                            <button class="action-btn" on:click={() => dispatch('navigate', 'clans')}>
+                            <button
+                                class="action-btn"
+                                on:click={() => dispatch('navigate', 'clans')}
+                            >
                                 Zu den Clans
                             </button>
                         </div>
@@ -246,14 +276,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
@@ -315,14 +345,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />

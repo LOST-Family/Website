@@ -159,7 +159,7 @@
         'ÄLTESTER 8': '#f261ff',
         'ÄLTESTER GP': '#e04dbd',
         'ÄLTESTER ANTHRAZIT': '#546e7a',
-        MITGLIED: '#f58190',
+        'MITGLIED': '#f58190',
         'MITGLIED 2': '#a0f5b1',
         'MITGLIED 3': '#fdf277',
         'MITGLIED 4': '#d9a6f9',
@@ -288,10 +288,58 @@
                                         .includes(upperRole);
 
                                     if (isCoCStandard || isCRStandard) {
-                                        const clanIndex = clan.index;
                                         const clanNameUpper = (
                                             clan.nameDB || ''
                                         ).toUpperCase();
+
+                                        let clanIndex = clan.index;
+                                        // Robust index determination based on name to match getClanBanner
+                                        if (
+                                            clanNameUpper.includes('F2P 2') ||
+                                            clanNameUpper.includes('F2P2')
+                                        )
+                                            clanIndex = 2;
+                                        else if (
+                                            clanNameUpper.includes('F2P')
+                                        )
+                                            clanIndex = 1;
+                                        else if (
+                                            clanNameUpper.includes('8') ||
+                                            clanNameUpper.includes('VIII')
+                                        )
+                                            clanIndex = 8;
+                                        else if (
+                                            clanNameUpper.includes('7') ||
+                                            clanNameUpper.includes('VII')
+                                        )
+                                            clanIndex = 7;
+                                        else if (
+                                            clanNameUpper.includes('6') ||
+                                            clanNameUpper.includes('VI')
+                                        )
+                                            clanIndex = 6;
+                                        else if (
+                                            clanNameUpper.includes('4') ||
+                                            clanNameUpper.includes('IV')
+                                        )
+                                            clanIndex = 4;
+                                        else if (
+                                            clanNameUpper.includes('5') ||
+                                            clanNameUpper.includes('V')
+                                        )
+                                            clanIndex = 5;
+                                        else if (
+                                            clanNameUpper.includes('3') ||
+                                            clanNameUpper.includes('III')
+                                        )
+                                            clanIndex = 3;
+                                        else if (
+                                            clanNameUpper.includes('2') ||
+                                            clanNameUpper.includes('II')
+                                        )
+                                            clanIndex = 2;
+                                        else if (clanNameUpper === 'LOST')
+                                            clanIndex = 1;
 
                                         if (gameType === 'cr') {
                                             if (upperRole === 'LEADER') {
@@ -443,22 +491,22 @@
         // Clash Royale clans use their own banners
         if (gameType === 'cr') {
             if (name === 'LOST') return bannerCR1;
-            if (name.includes('2') || name.includes('II')) return bannerCR2;
-            if (name.includes('3') || name.includes('III')) return bannerCR3;
             if (name.includes('4') || name.includes('IV')) return bannerCR4;
             if (name.includes('5') || name.includes('V')) return bannerCR5;
+            if (name.includes('3') || name.includes('III')) return bannerCR3;
+            if (name.includes('2') || name.includes('II')) return bannerCR2;
             return bannerDefault;
         }
 
         if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
         if (name.includes('F2P')) return bannerF2P;
         if (name.includes('GP')) return bannerGP;
-        if (name.includes('3') || name.includes('III')) return banner3;
+        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('7') || name.includes('VII')) return banner7;
+        if (name.includes('6') || name.includes('VI')) return banner6;
         if (name.includes('4') || name.includes('IV')) return banner4;
         if (name.includes('5') || name.includes('V')) return banner5;
-        if (name.includes('6') || name.includes('VI')) return banner6;
-        if (name.includes('7') || name.includes('VII')) return banner7;
-        if (name.includes('8') || name.includes('VIII')) return banner8;
+        if (name.includes('3') || name.includes('III')) return banner3;
         if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
         return bannerDefault;
     }
@@ -575,7 +623,7 @@
                                                 ></span>
                                                 <span class="role-title"
                                                     >{getDisplayRole(
-                                                        role
+                                                        role,
                                                     )}</span
                                                 >
                                                 <span class="role-count"
@@ -602,11 +650,11 @@
                                                                 ? '#2e3338'
                                                                 : '#dcddde'}"
                                                             title={getPlayerName(
-                                                                player
+                                                                player,
                                                             )}
                                                         >
                                                             {getPlayerName(
-                                                                player
+                                                                player,
                                                             )}
                                                         </span>
                                                     </div>
