@@ -336,7 +336,9 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         Ok(sync_resp) => {
             if sync_resp.status().is_success() {
                 if let Ok(sync_bytes) = sync_resp.bytes().await {
-                    match serde_json::from_slice::<Vec<crate::models::SideClanCwlHistory>>(&sync_bytes) {
+                    match serde_json::from_slice::<Vec<crate::models::SideClanCwlHistory>>(
+                        &sync_bytes,
+                    ) {
                         Ok(side_clans_history) => {
                             let side_clans_history_clone = side_clans_history.clone();
                             let side_clans: Vec<crate::models::SideClan> =
