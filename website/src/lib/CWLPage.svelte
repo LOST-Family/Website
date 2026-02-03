@@ -88,9 +88,9 @@
         });
 
         const fallbackNames: Record<string, string> = {
-            '#2YUPV0UYC': 'LOST',
-            '#2LU2V2LPU': 'LOST 2',
-            '#2QC0QQPQ2': 'LOST 3',
+            '#2YUPV0UYC': 'LOST 3',
+            '#2LU2V2LPU': 'LOST 4',
+            '#2QC0QQPQ2': 'LOST 5',
             '#2YVPC20UY': 'LOST 6 EX / Vegan',
             '#2J8UG90R2': 'LOST 7',
             '#2RUJPG9JC': 'LOST 8',
