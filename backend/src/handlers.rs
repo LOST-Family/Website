@@ -1160,6 +1160,11 @@ async fn fetch_aggregated_player_accounts(
                         && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
                         && let Some(u_obj) = u_json.as_object()
                     {
+                        // Explicitly mark upstream clan to differentiate from supercell clan
+                        if let Some(upstream_clan) = u_obj.get("clan") {
+                            player_obj.insert("upstream_clan".to_string(), upstream_clan.clone());
+                        }
+
                         for (k, v) in u_obj {
                             if !player_obj.contains_key(k) {
                                 player_obj.insert(k.clone(), v.clone());
@@ -1224,6 +1229,11 @@ async fn fetch_aggregated_player_accounts(
                         && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
                         && let Some(u_obj) = u_json.as_object()
                     {
+                        // Explicitly mark upstream clan to differentiate from supercell clan
+                        if let Some(upstream_clan) = u_obj.get("clan") {
+                            player_obj.insert("upstream_clan".to_string(), upstream_clan.clone());
+                        }
+
                         for (k, v) in u_obj {
                             if !player_obj.contains_key(k) {
                                 player_obj.insert(k.clone(), v.clone());

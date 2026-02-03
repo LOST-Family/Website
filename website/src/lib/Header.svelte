@@ -104,15 +104,23 @@
             const cocAccounts =
                 accounts.coc || (Array.isArray(accounts) ? accounts : []);
             cocAccounts.forEach((acc: any) => {
-                if (acc.clan) {
-                    const tag = acc.clan.tag.toUpperCase();
+                // Better clan detection: prioritize upstream data (upstream_clan or clanDB)
+                const clan =
+                    acc.upstream_clan && acc.upstream_clan.tag
+                        ? acc.upstream_clan
+                        : acc.clanDB && acc.clanDB.tag
+                          ? acc.clanDB
+                          : null;
+
+                if (clan) {
+                    const tag = clan.tag.toUpperCase();
                     if (officialCocTags.has(tag)) {
                         const clanData = cocClans.find(
                             (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`coc-${tag}`, {
-                            tag: acc.clan.tag,
-                            name: acc.clan.name,
+                            tag: clan.tag,
+                            name: clan.name,
                             gameType: 'coc',
                             index: clanData?.index || 0,
                         });
@@ -123,15 +131,23 @@
             // Process Clash Royale accounts
             const crAccounts = accounts.cr || [];
             crAccounts.forEach((acc: any) => {
-                if (acc.clan) {
-                    const tag = acc.clan.tag.toUpperCase();
+                // Better clan detection: prioritize upstream data (upstream_clan or clanDB)
+                const clan =
+                    acc.upstream_clan && acc.upstream_clan.tag
+                        ? acc.upstream_clan
+                        : acc.clanDB && acc.clanDB.tag
+                          ? acc.clanDB
+                          : null;
+
+                if (clan) {
+                    const tag = clan.tag.toUpperCase();
                     if (officialCrTags.has(tag)) {
                         const clanData = crClans.find(
                             (c: any) => c.tag.toUpperCase() === tag,
                         );
                         clansMap.set(`cr-${tag}`, {
-                            tag: acc.clan.tag,
-                            name: acc.clan.name,
+                            tag: clan.tag,
+                            name: clan.name,
                             gameType: 'cr',
                             index: clanData?.index || 0,
                         });
