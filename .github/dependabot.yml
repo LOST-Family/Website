@@ -5,32 +5,35 @@
 
 version: 2
 updates:
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/website/" # Location of package manifests
-    schedule:
-      interval: "weekly"
+    - package-ecosystem: 'npm' # See documentation for possible values
+      directory: '/website/' # Location of package manifests
+      target-branch: 'dev'
+      schedule:
+          interval: 'weekly'
 
-  # Enable version updates for Docker
-  - package-ecosystem: "cargo"
-    # Look for a `Dockerfile` in the `root` directory
-    directory: "/backend/"
-    # Check for updates once a week
-    schedule:
-      interval: "weekly"
+    # Enable version updates for Cargo
+    - package-ecosystem: 'cargo'
+      # Look for a `Cargo.toml` in the `/backend/` directory
+      directory: '/backend/'
+      target-branch: 'dev'
+      # Check for updates once a week
+      schedule:
+          interval: 'weekly'
 
-  # Enable version updates for Docker
-  - package-ecosystem: "docker"
-    # Look for a `Dockerfile` in the `root` directory
-    directory: "/backend/"
-    # Check for updates once a week
-    schedule:
-      interval: "weekly"
+    # Enable version updates for Docker in backend
+    - package-ecosystem: 'docker'
+      # Look for a `Dockerfile` in the `/backend/` directory
+      directory: '/backend/'
+      target-branch: 'dev'
+      # Check for updates once a week
+      schedule:
+          interval: 'weekly'
 
-    # Enable version updates for Docker
-  - package-ecosystem: "docker"
-    # Look for a `Dockerfile` in the `root` directory
-    directory: "/website/"
-    # Check for updates once a week
-    schedule:
-      interval: "weekly"
-
+    # Enable version updates for Docker in website
+    - package-ecosystem: 'docker'
+      # Look for a `Dockerfile` in the `/website/` directory
+      directory: '/website/'
+      target-branch: 'dev'
+      # Check for updates once a week
+      schedule:
+          interval: 'weekly'
