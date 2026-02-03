@@ -3,7 +3,6 @@ use crate::utils::{update_supercell_cache, update_upstream_cache};
 
 use log::{debug, error, info};
 use serde::Deserialize;
-use std::cmp::Ordering;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -337,65 +336,72 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         Ok(sync_resp) => {
             if sync_resp.status().is_success() {
                 if let Ok(sync_bytes) = sync_resp.bytes().await {
-                    if let Ok(side_clans_history) = serde_json::from_slice::<
-                        Vec<crate::models::SideClanCwlHistory>,
-                    >(&sync_bytes)
-                    {
-                        let side_clans_history_clone = side_clans_history.clone();
-                        let side_clans: Vec<crate::models::SideClan> =
-                            side_clans_history.into_iter().map(|h| h.clan).collect();
-                        info!(
-                            "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
-                            side_clans.len()
-                        );
+                    match serde_json::from_slice::<Vec<crate::models::SideClanCwlHistory>>(&sync_bytes) {
+                        Ok(side_clans_history) => {
+                            let side_clans_history_clone = side_clans_history.clone();
+                            let side_clans: Vec<crate::models::SideClan> =
+                                side_clans_history.into_iter().map(|h| h.clan).collect();
+                            info!(
+                                "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
+                                side_clans.len()
+                            );
 
-                        let tags_to_keep: Vec<String> =
-                            side_clans.iter().map(|c| c.clan_tag.clone()).collect();
-                        let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
-                            .bind(&tags_to_keep)
-                            .execute(&data.db_pool)
-                            .await;
+                            let tags_to_keep: Vec<String> =
+                                side_clans.iter().map(|c| c.clan_tag.clone()).collect();
+                            let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
+                                .bind(&tags_to_keep)
+                                .execute(&data.db_pool)
+                                .await;
 
-                        for clan in side_clans {
-                            let _ = sqlx::query(
-                                "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) 
-                                 VALUES ($1, $2, $3, $4) 
-                                 ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
-                            )
-                            .bind(clan.clan_tag)
-                            .bind(clan.name)
-                            .bind(clan.belongs_to)
-                            .bind(clan.display_index)
-                            .execute(&data.db_pool)
-                            .await;
-                        }
-
-                        // Also sync history if available from upstream
-                        for item in side_clans_history_clone {
-                            for stats in item.history {
+                            for clan in side_clans {
                                 let _ = sqlx::query(
-                                    "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url, rank) 
-                                     VALUES ($1, $2, $3, $4, $5, $6) 
-                                     ON CONFLICT (clan_tag, season) DO UPDATE 
-                                     SET league_id = EXCLUDED.league_id, 
-                                         league_name = EXCLUDED.league_name,
-                                         league_badge_url = EXCLUDED.league_badge_url,
-                                         rank = EXCLUDED.rank",
+                                    "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) 
+                                     VALUES ($1, $2, $3, $4) 
+                                     ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
                                 )
-                                .bind(&stats.clan_tag)
-                                .bind(&stats.season)
-                                .bind(stats.league_id)
-                                .bind(stats.league_name)
-                                .bind(stats.league_badge_url)
-                                .bind(stats.rank)
+                                .bind(clan.clan_tag)
+                                .bind(clan.name)
+                                .bind(clan.belongs_to)
+                                .bind(clan.display_index)
                                 .execute(&data.db_pool)
                                 .await;
                             }
+
+                            // Also sync history if available from upstream
+                            for item in side_clans_history_clone {
+                                for stats in item.history {
+                                    let _ = sqlx::query(
+                                        "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url, rank) 
+                                         VALUES ($1, $2, $3, $4, $5, $6) 
+                                         ON CONFLICT (clan_tag, season) DO UPDATE 
+                                         SET league_id = EXCLUDED.league_id, 
+                                             league_name = EXCLUDED.league_name,
+                                             league_badge_url = EXCLUDED.league_badge_url,
+                                             rank = EXCLUDED.rank",
+                                    )
+                                    .bind(&stats.clan_tag)
+                                    .bind(&stats.season)
+                                    .bind(stats.league_id)
+                                    .bind(stats.league_name)
+                                    .bind(stats.league_badge_url)
+                                    .bind(stats.rank)
+                                    .execute(&data.db_pool)
+                                    .await;
+                                }
+                            }
                         }
-                    } else {
-                        error!(
-                            "Background Refresh [Side Clans CWL]: Failed to deserialize side clans from sync response"
-                        );
+                        Err(e) => {
+                            error!(
+                                "Background Refresh [Side Clans CWL]: Failed to deserialize side clans from sync response: {}",
+                                e
+                            );
+                            if let Ok(body_str) = String::from_utf8(sync_bytes.to_vec()) {
+                                error!(
+                                    "Response snippet: {}",
+                                    &body_str[..body_str.len().min(1000)]
+                                );
+                            }
+                        }
                     }
                 }
             } else {
