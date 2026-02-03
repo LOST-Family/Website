@@ -134,6 +134,53 @@ async fn main() -> std::io::Result<()> {
         .execute(&pool)
         .await;
 
+    // Create side_clans table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS side_clans (
+            clan_tag TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            belongs_to TEXT,
+            display_index INTEGER DEFAULT 0
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to run migrations (side_clans)");
+
+    // Add display_index column if it doesn't exist (for existing databases)
+    let _ = sqlx::query(
+        "ALTER TABLE side_clans ADD COLUMN IF NOT EXISTS display_index INTEGER DEFAULT 0",
+    )
+    .execute(&pool)
+    .await;
+
+    // Create side_clans_cwl_stats table
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS side_clans_cwl_stats (
+            clan_tag TEXT NOT NULL,
+            season TEXT NOT NULL,
+            league_id INTEGER,
+            league_name TEXT,
+            league_badge_url TEXT,
+            rank INTEGER,
+            PRIMARY KEY (clan_tag, season),
+            FOREIGN KEY (clan_tag) REFERENCES side_clans(clan_tag) ON DELETE CASCADE
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to run migrations (side_clans_cwl_stats)");
+
+    // Migration for existing table
+    let _ = sqlx::query(
+        "ALTER TABLE side_clans_cwl_stats ADD COLUMN IF NOT EXISTS league_badge_url TEXT",
+    )
+    .execute(&pool)
+    .await;
+
+    // Seed side clans (Including Main Clans, Excluding Independent Clans)
+    // Removed hardcoded seed as it is now synchronized dynamically in the background task.
+
     let client = oauth2::reqwest::Client::builder()
         .timeout(Duration::from_secs(200))
         .build()
@@ -260,6 +307,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/guild", web::get().to(get_guild_info))
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))
+            .route("/api/sideclans", web::get().to(get_side_clans))
     })
     .bind(("0.0.0.0", port))?
     .run()

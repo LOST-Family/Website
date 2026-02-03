@@ -75,6 +75,7 @@
         is_new?: boolean;
         is_left?: boolean;
         is_dirty?: boolean;
+        isHidden?: boolean;
         upstream_name?: string;
         upstream_role?: string;
         upstream_expLevel?: number;
@@ -328,7 +329,7 @@
                             'navigate',
                             backPath.startsWith('/')
                                 ? backPath.substring(1)
-                                : backPath
+                                : backPath,
                         )}
                 >
                     <svg
@@ -682,7 +683,7 @@
                                                                   ? 'RC'
                                                                   : hero.name.substring(
                                                                         0,
-                                                                        2
+                                                                        2,
                                                                     )}</span
                                                     >
                                                     <span class="h-lv-tiny"
@@ -834,12 +835,12 @@
                                                         <td>Rolle</td>
                                                         <td class="val-sc"
                                                             >{getRoleDisplay(
-                                                                m.role
+                                                                m.role,
                                                             )}</td
                                                         >
                                                         <td class="val-up"
                                                             >{getRoleDisplay(
-                                                                m.upstream_role
+                                                                m.upstream_role,
                                                             )}</td
                                                         >
                                                     </tr>
@@ -1005,21 +1006,6 @@
         width: 180px;
         height: 180px;
         filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.6));
-    }
-
-    .level-badge {
-        position: absolute;
-        bottom: -5px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: var(--accent-color);
-        padding: 6px 16px;
-        border-radius: 30px;
-        font-weight: 800;
-        font-size: 0.95rem;
-        box-shadow: 0 8px 20px rgba(88, 101, 242, 0.4);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        white-space: nowrap;
     }
 
     .clan-info-main {

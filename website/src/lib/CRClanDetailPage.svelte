@@ -65,6 +65,7 @@
         is_new?: boolean;
         is_left?: boolean;
         is_dirty?: boolean;
+        isHidden?: boolean;
         upstream_name?: string;
         upstream_role?: string;
         upstream_expLevel?: number;
@@ -260,7 +261,7 @@
                             'navigate',
                             backPath.startsWith('/')
                                 ? backPath.substring(1)
-                                : backPath
+                                : backPath,
                         )}
                 >
                     <svg
@@ -572,7 +573,7 @@
                                         <div class="m-sub-info">
                                             <span class="m-role-label"
                                                 >{getRoleDisplay(
-                                                    member.role
+                                                    member.role,
                                                 )}</span
                                             >
                                             <span class="dot">•</span>
@@ -772,12 +773,12 @@
                                                         <td>Rolle</td>
                                                         <td class="val-sc"
                                                             >{getRoleDisplay(
-                                                                m.role
+                                                                m.role,
                                                             )}</td
                                                         >
                                                         <td class="val-up"
                                                             >{getRoleDisplay(
-                                                                m.upstream_role
+                                                                m.upstream_role,
                                                             )}</td
                                                         >
                                                     </tr>

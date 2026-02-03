@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { fade } from 'svelte/transition';
     import { user, loading as authLoading } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';

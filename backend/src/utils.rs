@@ -85,18 +85,18 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             for clan in clans {
                 if let Some(obj) = clan.as_object_mut() {
                     // Fix badgeUrl mismatch (singular vs plural) - Always apply
-                    if !obj.contains_key("badgeUrls") {
-                        if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                            obj.insert(
-                                "badgeUrls".to_string(),
-                                serde_json::json!({
-                                    "small": url,
-                                    "medium": url,
-                                    "large": url
-                                }),
-                            );
-                            modified = true;
-                        }
+                    if !obj.contains_key("badgeUrls")
+                        && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str())
+                    {
+                        obj.insert(
+                            "badgeUrls".to_string(),
+                            serde_json::json!({
+                                "small": url,
+                                "medium": url,
+                                "large": url
+                            }),
+                        );
+                        modified = true;
                     }
 
                     if filter_fields {
@@ -109,17 +109,17 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             }
         } else if let Some(obj) = value.as_object_mut() {
             // Fix badgeUrl mismatch (singular vs plural)
-            if !obj.contains_key("badgeUrls") {
-                if let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str()) {
-                    obj.insert(
-                        "badgeUrls".to_string(),
-                        serde_json::json!({
-                            "small": url,
-                            "medium": url,
-                            "large": url
-                        }),
-                    );
-                }
+            if !obj.contains_key("badgeUrls")
+                && let Some(url) = obj.get("badgeUrl").and_then(|u| u.as_str())
+            {
+                obj.insert(
+                    "badgeUrls".to_string(),
+                    serde_json::json!({
+                        "small": url,
+                        "medium": url,
+                        "large": url
+                    }),
+                );
             }
 
             if filter_fields {
@@ -130,10 +130,8 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
             }
         }
 
-        if modified {
-            if let Ok(filtered) = serde_json::to_vec(&value) {
-                return Bytes::from(filtered);
-            }
+        if modified && let Ok(filtered) = serde_json::to_vec(&value) {
+            return Bytes::from(filtered);
         }
     }
     body
@@ -202,43 +200,93 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             true
         };
 
-        if let Some(members) = value.as_array_mut() {
-            let is_coleader = has_required_role(user_role, "COLEADER");
+        let is_coleader = has_required_role(user_role, "COLEADER");
 
-            members.retain(|m| {
+        if let Some(arr) = value.as_array_mut() {
+            arr.retain(|m| {
                 if is_coleader {
                     return true;
                 }
                 !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
             });
-
-            for member in members {
-                let tag = member
-                    .get("tag")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("")
-                    .to_string();
+            for member in arr {
                 if let Some(obj) = member.as_object_mut() {
+                    let tag = obj
+                        .get("tag")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     if process_obj(obj, &tag) {
                         modified = true;
                     }
                 }
             }
         } else if let Some(obj) = value.as_object_mut() {
-            let tag = obj
-                .get("tag")
-                .and_then(|t| t.as_str())
-                .unwrap_or("")
-                .to_string();
-            if process_obj(obj, &tag) {
-                modified = true;
+            // Handle wrapper objects like { "members": [...] } or { "clans": [ { "members": [...] } ] }
+            if let Some(m_arr) = obj.get_mut("members").and_then(|v| v.as_array_mut()) {
+                m_arr.retain(|m| {
+                    if is_coleader {
+                        return true;
+                    }
+                    !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+                });
+                for member in m_arr {
+                    if let Some(m_obj) = member.as_object_mut() {
+                        let tag = m_obj
+                            .get("tag")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if process_obj(m_obj, &tag) {
+                            modified = true;
+                        }
+                    }
+                }
+            }
+
+            // Important: we re-borrow obj here AFTER m_arr is dropped
+            if let Some(c_arr) = obj.get_mut("clans").and_then(|v| v.as_array_mut()) {
+                for clan in c_arr {
+                    if let Some(m_arr) = clan.get_mut("members").and_then(|v| v.as_array_mut()) {
+                        m_arr.retain(|m| {
+                            if is_coleader {
+                                return true;
+                            }
+                            !m.get("isHidden").and_then(|v| v.as_bool()).unwrap_or(false)
+                        });
+                        for member in m_arr {
+                            if let Some(m_obj) = member.as_object_mut() {
+                                let tag = m_obj
+                                    .get("tag")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                if process_obj(m_obj, &tag) {
+                                    modified = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also check if the top-level object itself is a player
+            if obj.contains_key("tag")
+                && (obj.contains_key("role") || obj.contains_key("townHallLevel"))
+            {
+                let tag = obj
+                    .get("tag")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if process_obj(obj, &tag) {
+                    modified = true;
+                }
             }
         }
 
-        if modified {
-            if let Ok(filtered) = serde_json::to_vec(&value) {
-                return Bytes::from(filtered);
-            }
+        if modified && let Ok(filtered) = serde_json::to_vec(&value) {
+            return Bytes::from(filtered);
         }
     }
     body
@@ -320,10 +368,10 @@ pub async fn get_cached_or_update_supercell_cache(
             .fetch_optional(&data.db_pool)
             .await;
 
-    if let Ok(Some((body, updated_at))) = &cached_result {
-        if now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body.clone()));
-        }
+    if let Ok(Some((body, updated_at))) = &cached_result
+        && now - updated_at < ttl_seconds
+    {
+        return Ok(Bytes::from(body.clone()));
     }
 
     match update_supercell_cache(data, game, url_path).await {
@@ -358,10 +406,10 @@ pub async fn get_cached_or_update_upstream_cache(
             .fetch_optional(&data.db_pool)
             .await;
 
-    if let Ok(Some((body, updated_at))) = &cached_result {
-        if now - updated_at < ttl_seconds {
-            return Ok(Bytes::from(body.clone()));
-        }
+    if let Ok(Some((body, updated_at))) = &cached_result
+        && now - updated_at < ttl_seconds
+    {
+        return Ok(Bytes::from(body.clone()));
     }
 
     match update_upstream_cache(data, game, url_path).await {

@@ -21,6 +21,7 @@
     import AllClansAdminPage from './lib/AllClansAdminPage.svelte';
     import ProfilePage from './lib/ProfilePage.svelte';
     import AdminPage from './lib/AdminPage.svelte';
+    import CWLPage from './lib/CWLPage.svelte';
     import Footer from './lib/Footer.svelte';
 
     // Logos
@@ -88,7 +89,7 @@
     }
 
     function handleThemeToggle(
-        event: CustomEvent<{ theme: 'dark' | 'light' }>
+        event: CustomEvent<{ theme: 'dark' | 'light' }>,
     ) {
         theme = event.detail.theme;
     }
@@ -169,6 +170,8 @@
                 {bigFarmImage}
                 {twoVtwoImage}
             />
+        {:else if currentPath === '/coc/cwl'}
+            <CWLPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/coc/clans'}
             <ClansPage
                 {theme}
