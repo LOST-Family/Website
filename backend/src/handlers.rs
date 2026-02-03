@@ -1620,7 +1620,7 @@ pub async fn get_side_clans(data: web::Data<AppState>) -> impl Responder {
     use crate::models::{SideClan, SideClanCWLStats, SideClanCwlHistory};
 
     let clans_query =
-        sqlx::query_as::<_, SideClan>("SELECT clan_tag, name, belongs_to, display_index FROM side_clans ORDER BY CASE WHEN display_index = 0 THEN 1 ELSE 0 END, display_index ASC, name ASC")
+        sqlx::query_as::<_, SideClan>("SELECT clan_tag, name, belongs_to, display_index, badge_url FROM side_clans ORDER BY CASE WHEN display_index = 0 THEN 1 ELSE 0 END, display_index ASC, name ASC")
             .fetch_all(&data.db_pool)
             .await;
 

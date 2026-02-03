@@ -9,6 +9,12 @@ use tokio::time::interval;
 #[derive(Deserialize)]
 struct Clan {
     tag: String,
+    name: Option<String>,
+    #[serde(alias = "nameDB")]
+    name_db: Option<String>,
+    index: Option<i32>,
+    #[serde(alias = "badgeUrl")]
+    badge_url: Option<String>,
 }
 
 pub fn spawn_background_task(data: AppState) {
@@ -234,7 +240,13 @@ async fn refresh_clans(data: &AppState, game: GameType) {
         {
             for sc in side_clans {
                 if !clans.iter().any(|c| c.tag == sc.clan_tag) {
-                    clans.push(Clan { tag: sc.clan_tag });
+                    clans.push(Clan {
+                        tag: sc.clan_tag,
+                        name: Some(sc.name),
+                        name_db: None,
+                        index: Some(sc.display_index),
+                        badge_url: sc.badge_url,
+                    });
                 }
             }
         }
@@ -326,6 +338,37 @@ async fn refresh_side_clans_cwl(data: &AppState) {
 
     // 0. Update side clans from external configuration endpoint
     let sync_url = format!("{}/api/sideclans", data.upstream_coc_url);
+    let mut side_clans_to_sync: Vec<crate::models::SideClan> = Vec::new();
+
+    // First, try to fetch main clans to include them as well
+    let clans_url = format!("{}/api/clans", data.upstream_coc_url);
+    if let Ok(clans_resp) = data
+        .client
+        .get(&clans_url)
+        .header("Authorization", format!("Bearer {}", data.coc_api_token))
+        .send()
+        .await
+    {
+        if clans_resp.status().is_success() {
+            if let Ok(clans_bytes) = clans_resp.bytes().await {
+                if let Ok(main_clans) = serde_json::from_slice::<Vec<Clan>>(&clans_bytes) {
+                    for clan in main_clans {
+                        side_clans_to_sync.push(crate::models::SideClan {
+                            clan_tag: clan.tag,
+                            name: clan
+                                .name
+                                .or(clan.name_db)
+                                .unwrap_or_else(|| "Unknown".to_string()),
+                            belongs_to: None, // Main clans don't belong to others
+                            display_index: clan.index.unwrap_or(999),
+                            badge_url: clan.badge_url,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     match data
         .client
         .get(&sync_url)
@@ -339,27 +382,43 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                     match serde_json::from_slice::<Vec<crate::models::SideClan>>(&sync_bytes) {
                         Ok(side_clans) => {
                             info!(
-                                "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
-                                side_clans.len()
+                                "Background Refresh [Side Clans CWL]: Syncing {} side clans and {} main clans...",
+                                side_clans.len(),
+                                side_clans_to_sync.len()
                             );
 
-                            let tags_to_keep: Vec<String> =
-                                side_clans.iter().map(|c| c.clan_tag.clone()).collect();
+                            // Merge side clans, replacing main clan entries if they exist in side clans (to keep belongs_to)
+                            for sc in side_clans {
+                                if let Some(pos) = side_clans_to_sync
+                                    .iter()
+                                    .position(|c| c.clan_tag == sc.clan_tag)
+                                {
+                                    side_clans_to_sync[pos] = sc;
+                                } else {
+                                    side_clans_to_sync.push(sc);
+                                }
+                            }
+
+                            let tags_to_keep: Vec<String> = side_clans_to_sync
+                                .iter()
+                                .map(|c| c.clan_tag.clone())
+                                .collect();
                             let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
                                 .bind(&tags_to_keep)
                                 .execute(&data.db_pool)
                                 .await;
 
-                            for clan in side_clans {
+                            for clan in side_clans_to_sync {
                                 let _ = sqlx::query(
-                                    "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index) 
-                                     VALUES ($1, $2, $3, $4) 
-                                     ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4",
+                                    "INSERT INTO side_clans (clan_tag, name, belongs_to, display_index, badge_url) 
+                                     VALUES ($1, $2, $3, $4, $5) 
+                                     ON CONFLICT (clan_tag) DO UPDATE SET name = $2, belongs_to = $3, display_index = $4, badge_url = $5",
                                 )
                                 .bind(clan.clan_tag)
                                 .bind(clan.name)
                                 .bind(clan.belongs_to)
                                 .bind(clan.display_index)
+                                .bind(clan.badge_url)
                                 .execute(&data.db_pool)
                                 .await;
                             }
@@ -415,12 +474,21 @@ async fn refresh_side_clans_cwl(data: &AppState) {
             Ok(bytes) => {
                 if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
                     info!("Fetched data for side clan {}", clan_tag);
-                    if let Some(clan_name) = json.get("name").and_then(|v| v.as_str()) {
-                        let _ = sqlx::query("UPDATE side_clans SET name = $1 WHERE clan_tag = $2")
-                            .bind(clan_name)
-                            .bind(&clan_tag)
-                            .execute(&data.db_pool)
-                            .await;
+                    let clan_name = json.get("name").and_then(|v| v.as_str());
+                    let badge_url = json
+                        .get("badgeUrls")
+                        .and_then(|v| v.get("medium").or(v.get("small")))
+                        .and_then(|v| v.as_str());
+
+                    if clan_name.is_some() || badge_url.is_some() {
+                        let _ = sqlx::query(
+                            "UPDATE side_clans SET name = COALESCE($1, name), badge_url = COALESCE($2, badge_url) WHERE clan_tag = $3",
+                        )
+                        .bind(clan_name)
+                        .bind(badge_url)
+                        .bind(&clan_tag)
+                        .execute(&data.db_pool)
+                        .await;
                     }
 
                     if let Some(war_league) = json.get("warLeague") {
