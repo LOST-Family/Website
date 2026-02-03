@@ -1318,7 +1318,6 @@ async fn sync_user_accounts(
             .unwrap_or_default();
         bot_a_success = true;
     }
-    }
 
     let mut bot_b_cr = Vec::new();
     let mut bot_b_success = false;
@@ -1344,7 +1343,6 @@ async fn sync_user_accounts(
     if bot_a_success && coc_players != bot_a_coc {
         coc_players = bot_a_coc;
         modified = true;
-    }
     }
 
     // 3. Reconcile CR (Authority is Union of Bot A and Bot B if both present)

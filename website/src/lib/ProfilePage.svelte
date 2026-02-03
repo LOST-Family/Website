@@ -1322,7 +1322,6 @@
     .light .empty-state .sub-text {
         color: #64748b;
     }
-    }
 
     .admin-view-banner {
         display: flex;

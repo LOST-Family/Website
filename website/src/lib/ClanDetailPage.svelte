@@ -1812,7 +1812,6 @@
         color: white;
     }
 
-    }
     /* New Diff Grid Layout */
     .diff-grid-layout {
         display: grid;
