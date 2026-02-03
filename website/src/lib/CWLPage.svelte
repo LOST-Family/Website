@@ -237,7 +237,7 @@
     <div class="container">
         <header>
             <h1>Clankriegsliga</h1>
-            <p>Übersicht der CWL-Leistung unserer Clans</p>
+            <p>Übersicht der CWL-Leistung unserer CoC Clans</p>
         </header>
 
         {#if loading}
