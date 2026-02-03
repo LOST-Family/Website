@@ -336,13 +336,8 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         Ok(sync_resp) => {
             if sync_resp.status().is_success() {
                 if let Ok(sync_bytes) = sync_resp.bytes().await {
-                    match serde_json::from_slice::<Vec<crate::models::SideClanCwlHistory>>(
-                        &sync_bytes,
-                    ) {
-                        Ok(side_clans_history) => {
-                            let side_clans_history_clone = side_clans_history.clone();
-                            let side_clans: Vec<crate::models::SideClan> =
-                                side_clans_history.into_iter().map(|h| h.clan).collect();
+                    match serde_json::from_slice::<Vec<crate::models::SideClan>>(&sync_bytes) {
+                        Ok(side_clans) => {
                             info!(
                                 "Background Refresh [Side Clans CWL]: Syncing {} clans from config...",
                                 side_clans.len()
@@ -367,29 +362,6 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                 .bind(clan.display_index)
                                 .execute(&data.db_pool)
                                 .await;
-                            }
-
-                            // Also sync history if available from upstream
-                            for item in side_clans_history_clone {
-                                for stats in item.history {
-                                    let _ = sqlx::query(
-                                        "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url, rank) 
-                                         VALUES ($1, $2, $3, $4, $5, $6) 
-                                         ON CONFLICT (clan_tag, season) DO UPDATE 
-                                         SET league_id = EXCLUDED.league_id, 
-                                             league_name = EXCLUDED.league_name,
-                                             league_badge_url = EXCLUDED.league_badge_url,
-                                             rank = EXCLUDED.rank",
-                                    )
-                                    .bind(&stats.clan_tag)
-                                    .bind(&stats.season)
-                                    .bind(stats.league_id)
-                                    .bind(stats.league_name)
-                                    .bind(stats.league_badge_url)
-                                    .bind(stats.rank)
-                                    .execute(&data.db_pool)
-                                    .await;
-                                }
                             }
                         }
                         Err(e) => {

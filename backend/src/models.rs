@@ -49,6 +49,7 @@ pub struct SideClan {
     pub clan_tag: String,
     pub name: String,
     pub belongs_to: Option<String>,
+    #[serde(alias = "index")]
     pub display_index: i32,
 }
 
