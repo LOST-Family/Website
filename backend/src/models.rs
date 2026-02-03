@@ -51,6 +51,7 @@ pub struct SideClan {
     pub belongs_to: Option<String>,
     #[serde(alias = "index")]
     pub display_index: i32,
+    pub badge_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, sqlx::FromRow)]

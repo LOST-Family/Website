@@ -10,6 +10,7 @@
         name: string;
         belongs_to: string | null;
         display_index: number;
+        badge_url?: string;
     }
 
     interface CWLStats {
@@ -52,7 +53,8 @@
             }
 
             sideClansHistory = await sideClansRes.json();
-            mainClans = await mainClansRes.json();
+            const mcData = await mainClansRes.json();
+            mainClans = Array.isArray(mcData) ? mcData : mcData.clans || [];
             loading = false;
         } catch (e: any) {
             error = e.message;
@@ -62,6 +64,8 @@
 
     // Reactive grouped clans
     $: groupedClans = (() => {
+        if (!Array.isArray(mainClans)) return [];
+
         const groups: Record<string, SideClanCwlHistory[]> = {};
 
         // Group by parent tag
@@ -76,11 +80,23 @@
                 parentTag = '#' + parentTag;
             }
 
+            // Normalize tags for comparison
+            let itemTag = item.clan.clan_tag.trim().toUpperCase();
+            if (!itemTag.startsWith('#')) itemTag = '#' + itemTag;
+
             // EXCLUSION: Don't show clans where the latest history entry is "Unranked"
             // or if there is no history at all.
+            // EXCEPT for main clans which define a group.
+            const isSelfParent = parentTag === itemTag;
             const latestLeague =
                 item.history.length > 0 ? item.history[0].league_name : null;
-            if (!latestLeague || latestLeague === 'Unranked') return;
+
+            if (
+                !isSelfParent &&
+                (!latestLeague || latestLeague === 'Unranked')
+            ) {
+                return;
+            }
 
             if (!groups[parentTag]) {
                 groups[parentTag] = [];
@@ -143,6 +159,7 @@
                     parentTag,
                     parentName: finalName,
                     index: mainClan ? mainClan.index || 999 : 999,
+                    isMainClan: !!mainClan || !!fallbackNames[tagFull],
                     clans: clans.sort((a, b) => {
                         // Priority 1: Main clan always first
                         const aTagRaw = a.clan.clan_tag.trim().toUpperCase();
@@ -176,6 +193,7 @@
                     }),
                 };
             })
+            .filter((group) => group.isMainClan)
             .sort((a, b) => a.index - b.index);
     })();
 
@@ -263,10 +281,23 @@
                         {#each clans as entry}
                             <div class="clan-stats-card">
                                 <div class="clan-header">
-                                    <h3 class="clan-name">{entry.clan.name}</h3>
-                                    <span class="clan-tag"
-                                        >{entry.clan.clan_tag}</span
-                                    >
+                                    <div class="clan-title-row">
+                                        {#if entry.clan.badge_url}
+                                            <img
+                                                src={entry.clan.badge_url}
+                                                alt=""
+                                                class="clan-badge"
+                                            />
+                                        {/if}
+                                        <div class="clan-info-text">
+                                            <h3 class="clan-name">
+                                                {entry.clan.name}
+                                            </h3>
+                                            <span class="clan-tag"
+                                                >{entry.clan.clan_tag}</span
+                                            >
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="league-info">
@@ -431,12 +462,14 @@
             #fff 0%,
             rgba(255, 255, 255, 0.7) 100%
         );
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
     .cwl-page.light header h1 {
         background: linear-gradient(135deg, #1e293b 0%, #64748b 100%);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
@@ -550,6 +583,23 @@
         align-items: flex-start;
         margin-bottom: 25px;
         gap: 4px;
+    }
+
+    .clan-title-row {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .clan-badge {
+        width: 48px;
+        height: 48px;
+        object-fit: contain;
+    }
+
+    .clan-info-text {
+        display: flex;
+        flex-direction: column;
     }
 
     .clan-name {

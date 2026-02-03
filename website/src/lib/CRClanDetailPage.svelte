@@ -1786,21 +1786,6 @@
         opacity: 0.5;
     }
 
-    .diff-label {
-        font-size: 0.65rem;
-        font-weight: 900;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-    .diff-label.new {
-        background: #10b981;
-        color: white;
-    }
-    .diff-label.left {
-        background: #4b5563;
-        color: white;
-    }
-
     .diff-table-container {
         margin-top: 3rem;
         background: rgba(255, 255, 255, 0.02);

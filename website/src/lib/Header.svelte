@@ -231,16 +231,6 @@
                     >
                 </div>
             </div>
-
-            {#if $user}
-                <a
-                    href="/my-clans"
-                    class="nav-link"
-                    on:click|preventDefault={() => navigate('my-clans')}
-                >
-                    Deine Clans
-                </a>
-            {/if}
         </nav>
 
         <div class="header-actions">
