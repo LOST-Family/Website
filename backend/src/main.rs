@@ -140,7 +140,8 @@ async fn main() -> std::io::Result<()> {
             clan_tag TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             belongs_to TEXT,
-            display_index INTEGER DEFAULT 0
+            display_index INTEGER DEFAULT 0,
+            badge_url TEXT
         )",
     )
     .execute(&pool)
@@ -150,6 +151,13 @@ async fn main() -> std::io::Result<()> {
     // Add display_index column if it doesn't exist (for existing databases)
     let _ = sqlx::query(
         "ALTER TABLE side_clans ADD COLUMN IF NOT EXISTS display_index INTEGER DEFAULT 0",
+    )
+    .execute(&pool)
+    .await;
+
+    // Add badge_url column if it doesn't exist (for existing databases)
+    let _ = sqlx::query(
+        "ALTER TABLE side_clans ADD COLUMN IF NOT EXISTS badge_url TEXT",
     )
     .execute(&pool)
     .await;
