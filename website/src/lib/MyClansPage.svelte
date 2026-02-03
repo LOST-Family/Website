@@ -121,49 +121,55 @@
                 ? await crClansRes.json()
                 : [];
 
-            const officialCocTags = new Set(allCocClans.map((c) => c.tag));
-            const officialCrTags = new Set(allCrClans.map((c) => c.tag));
+            const officialCocTags = new Set(
+                allCocClans.map((c) => c.tag.toUpperCase()),
+            );
+            const officialCrTags = new Set(
+                allCrClans.map((c) => c.tag.toUpperCase()),
+            );
 
             const cocAccountClans = new Set<string>();
             const cocAccounts =
                 accounts.coc || (Array.isArray(accounts) ? accounts : []);
             cocAccounts.forEach((acc: any) => {
-                // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
+                // Determine clan based on Upstream API (upstream_clan or clanDB) if available.
+                // We exclusively use upstream data now to avoid showing non-LOST clans from Supercell API.
                 const clan =
-                    acc.clanDB && acc.clanDB.tag
-                        ? acc.clanDB
-                        : acc.upstream_clan && acc.upstream_clan.tag
-                          ? acc.upstream_clan
-                          : acc.clan;
+                    acc.upstream_clan && acc.upstream_clan.tag
+                        ? acc.upstream_clan
+                        : acc.clanDB && acc.clanDB.tag
+                          ? acc.clanDB
+                          : null;
 
-                if (clan && officialCocTags.has(clan.tag)) {
-                    cocAccountClans.add(clan.tag);
+                if (clan && officialCocTags.has(clan.tag.toUpperCase())) {
+                    cocAccountClans.add(clan.tag.toUpperCase());
                 }
             });
 
             const crAccountClans = new Set<string>();
             const crAccounts = accounts.cr || [];
             crAccounts.forEach((acc: any) => {
-                // Determine clan based on Upstream API (clanDB or upstream_clan) if available, otherwise Supercell API (clan)
+                // Determine clan based on Upstream API (upstream_clan or clanDB) if available.
+                // We exclusively use upstream data now to avoid showing non-LOST clans from Supercell API.
                 const clan =
-                    acc.clanDB && acc.clanDB.tag
-                        ? acc.clanDB
-                        : acc.upstream_clan && acc.upstream_clan.tag
-                          ? acc.upstream_clan
-                          : acc.clan;
+                    acc.upstream_clan && acc.upstream_clan.tag
+                        ? acc.upstream_clan
+                        : acc.clanDB && acc.clanDB.tag
+                          ? acc.clanDB
+                          : null;
 
-                if (clan && officialCrTags.has(clan.tag)) {
-                    crAccountClans.add(clan.tag);
+                if (clan && officialCrTags.has(clan.tag.toUpperCase())) {
+                    crAccountClans.add(clan.tag.toUpperCase());
                 }
             });
 
             userClans = {
                 coc: allCocClans
-                    .filter((c) => cocAccountClans.has(c.tag))
+                    .filter((c) => cocAccountClans.has(c.tag.toUpperCase()))
                     .map((c) => ({ ...c, gameType: 'coc' as const }))
                     .sort((a, b) => (a.index || 0) - (b.index || 0)),
                 cr: allCrClans
-                    .filter((c) => crAccountClans.has(c.tag))
+                    .filter((c) => crAccountClans.has(c.tag.toUpperCase()))
                     .map((c) => ({ ...c, gameType: 'cr' as const }))
                     .sort((a, b) => (a.index || 0) - (b.index || 0)),
             };
@@ -258,14 +264,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
@@ -329,14 +335,14 @@
                                     on:click={() => navigateToClan(clan)}
                                     style="--clan-color: {getClanColor(
                                         clan.nameDB,
-                                        clan.index
+                                        clan.index,
                                     )}"
                                 >
                                     <div class="card-banner">
                                         <img
                                             src={getClanBanner(
                                                 clan.nameDB,
-                                                clan.gameType
+                                                clan.gameType,
                                             )}
                                             alt="Banner"
                                         />
