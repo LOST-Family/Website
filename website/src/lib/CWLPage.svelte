@@ -107,7 +107,7 @@
                     return cTagWithHash === tagFull || cTag === tagFull;
                 });
 
-                let name = mainClan ? mainClan.name || mainClan.nameDB : null;
+                let name = mainClan ? (mainClan.name || mainClan.nameDB) : null;
 
                 // 2. Try to find the name from sideClansHistory (direct database entry)
                 if (!name) {
