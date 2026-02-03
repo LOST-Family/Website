@@ -28,7 +28,8 @@
 
     interface MainClan {
         tag: string;
-        name: string;
+        name?: string;
+        nameDB?: string;
         index: number;
     }
 
@@ -65,9 +66,10 @@
 
         // Group by parent tag
         sideClansHistory.forEach((item) => {
-            const parentTag = item.clan.belongs_to;
-            // Skip if no parent (shouldn't happen with new seed)
-            if (!parentTag) return;
+            // Use parent tag if available, otherwise use its own tag (as it's likely a main clan)
+            const parentTag = (item.clan.belongs_to || item.clan.clan_tag)
+                .trim()
+                .toUpperCase();
 
             // EXCLUSION: Don't show clans where the latest history entry is "Unranked"
             // or if there is no history at all.
@@ -105,7 +107,7 @@
                     return cTagWithHash === tagFull || cTag === tagFull;
                 });
 
-                let name = mainClan ? mainClan.name : null;
+                let name = mainClan ? (mainClan.name || mainClan.nameDB) : null;
 
                 // 2. Try to find the name from sideClansHistory (direct database entry)
                 if (!name) {
