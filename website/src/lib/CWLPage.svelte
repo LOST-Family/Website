@@ -28,7 +28,8 @@
 
     interface MainClan {
         tag: string;
-        name: string;
+        name?: string;
+        nameDB?: string;
         index: number;
     }
 
@@ -65,12 +66,12 @@
 
         // Group by parent tag
         sideClansHistory.forEach((item) => {
-            let parentTag = item.clan.belongs_to;
-            // Skip if no parent (shouldn't happen with new seed)
-            if (!parentTag) return;
+            // Use parent tag if available, otherwise its own tag
+            let parentTag = (item.clan.belongs_to || item.clan.clan_tag)
+                .trim()
+                .toUpperCase();
 
             // Normalize parentTag to ensure consistent grouping
-            parentTag = parentTag.trim().toUpperCase();
             if (!parentTag.startsWith('#')) {
                 parentTag = '#' + parentTag;
             }
@@ -111,7 +112,7 @@
                     return cTagWithHash === tagFull || cTag === tagFull;
                 });
 
-                let name = mainClan ? mainClan.name : null;
+                let name = mainClan ? (mainClan.name || mainClan.nameDB) : null;
 
                 // 2. Try to find the name from sideClansHistory (direct database entry)
                 if (!name) {
