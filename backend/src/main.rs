@@ -156,11 +156,9 @@ async fn main() -> std::io::Result<()> {
     .await;
 
     // Add badge_url column if it doesn't exist (for existing databases)
-    let _ = sqlx::query(
-        "ALTER TABLE side_clans ADD COLUMN IF NOT EXISTS badge_url TEXT",
-    )
-    .execute(&pool)
-    .await;
+    let _ = sqlx::query("ALTER TABLE side_clans ADD COLUMN IF NOT EXISTS badge_url TEXT")
+        .execute(&pool)
+        .await;
 
     // Create side_clans_cwl_stats table
     sqlx::query(
