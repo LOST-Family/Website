@@ -656,6 +656,7 @@
         font-weight: 900;
         letter-spacing: -0.03em;
         background: linear-gradient(to bottom right, #fff, #94a3b8);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         line-height: 1;
@@ -663,6 +664,7 @@
 
     .light .player-titles h2 {
         background: linear-gradient(to bottom right, #1e293b, #64748b);
+        background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
