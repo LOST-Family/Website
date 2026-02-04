@@ -49,11 +49,6 @@
             iconUrls: { large: string; small: string };
             name: string;
         };
-        trophies: number;
-        versusTrophies: number;
-        donations: number;
-        donationsReceived: number;
-        warStars?: number;
         heroes?: any[];
         // Alliance/Upstream data (if unfiltered)
         userId?: string;
@@ -90,13 +85,14 @@
     let selectedPlayer: Player | null = null;
     let playerDetailsLoading = false;
     let playerOtherAccounts: any[] = [];
+    let enrichedTags = new Set<string>();
 
     $: viewerIsCoLeader = !!(
         $user &&
         members.some(
             (m) =>
                 ($user.linked_players || []).includes(m.tag) &&
-                (m.role === 'coLeader' || m.role === 'leader')
+                (m.role === 'coLeader' || m.role === 'leader'),
         )
     );
     $: hasPrivilegedAccess = !!(
@@ -113,17 +109,111 @@
     };
 
     function getRoleDisplay(role: string): string {
-        switch (role) {
+        switch (role?.toLowerCase()) {
             case 'leader':
                 return 'Anführer';
-            case 'coLeader':
+            case 'coleader':
                 return 'Vize-Anführer';
             case 'admin':
+            case 'elder':
                 return 'Ältester';
             case 'member':
                 return 'Mitglied';
             default:
                 return role;
+        }
+    }
+
+    function isRoleWrong(current: any, expected: any): boolean {
+        if (!expected) return false;
+
+        const c = String(current || '')
+            .toLowerCase()
+            .trim();
+        const e = String(expected || '')
+            .toLowerCase()
+            .trim();
+
+        if (c === e) return false;
+
+        // Comprehensive CoC/CR Normalization
+        const normalize = (r: string) => {
+            if (r === 'admin' || r === 'elder' || r === 'ältester')
+                return 'elder';
+            if (
+                r === 'coleader' ||
+                r === 'co-leader' ||
+                r === 'vize-anführer' ||
+                r === 'vize'
+            )
+                return 'coleader';
+            if (r === 'leader' || r === 'anführer') return 'leader';
+            if (r === 'member' || r === 'mitglied') return 'member';
+            return r;
+        };
+
+        return normalize(c) !== normalize(e);
+    }
+
+    function getPlayerName(p: Player): string {
+        const nameCandidate = p.name || '';
+        // If name is tag-like (starts with #) or empty, try Discord info or upstream name
+        if (!nameCandidate || nameCandidate.startsWith('#')) {
+            return (
+                p.nickname ||
+                p.global_name ||
+                p.username ||
+                p.upstream_name ||
+                nameCandidate ||
+                'Unbekannt'
+            );
+        }
+        return nameCandidate;
+    }
+
+    async function enrichMembers(toEnrich: Player[]) {
+        const missing = toEnrich.filter(
+            (p) =>
+                (!p.name || p.name.startsWith('#')) && !enrichedTags.has(p.tag),
+        );
+
+        if (missing.length === 0) return;
+
+        // Mark as enriched to avoid double fetching
+        missing.forEach((p) => enrichedTags.add(p.tag));
+
+        // Fetch in chunks of 5
+        const chunkSize = 5;
+        for (let i = 0; i < missing.length; i += chunkSize) {
+            const chunk = missing.slice(i, i + chunkSize);
+            const results = await Promise.all(
+                chunk.map(async (p) => {
+                    try {
+                        const encodedTag = encodeURIComponent(p.tag);
+                        const res = await fetch(
+                            `${apiBaseUrl}/api/coc/players/${encodedTag}`,
+                            { credentials: 'include' },
+                        );
+                        if (res.ok) {
+                            return { tag: p.tag, detailed: await res.json() };
+                        }
+                    } catch (e) {
+                        console.error(`Failed to fetch info for ${p.tag}`, e);
+                    }
+                    return null;
+                }),
+            );
+
+            // Update members array in one go for this chunk
+            const updates = results.filter(
+                (r): r is { tag: string; detailed: any } => r !== null,
+            );
+            if (updates.length > 0) {
+                members = members.map((m) => {
+                    const update = updates.find((u) => u.tag === m.tag);
+                    return update ? { ...m, ...update.detailed } : m;
+                });
+            }
         }
     }
 
@@ -133,7 +223,7 @@
             const encodedTag = encodeURIComponent(clanTag);
             const clanRes = await fetch(
                 `${apiBaseUrl}/api/coc/clans/${encodedTag}`,
-                { credentials: 'include' }
+                { credentials: 'include' },
             );
             if (!clanRes.ok) throw new Error('Clan nicht gefunden');
             clan = await clanRes.json();
@@ -142,7 +232,7 @@
             try {
                 const configRes = await fetch(
                     `${apiBaseUrl}/api/coc/clans/${encodedTag}/config`,
-                    { credentials: 'include' }
+                    { credentials: 'include' },
                 );
                 if (configRes.ok) clanConfig = await configRes.json();
             } catch (e) {
@@ -151,7 +241,7 @@
 
             const membersRes = await fetch(
                 `${apiBaseUrl}/api/coc/clans/${encodedTag}/members`,
-                { credentials: 'include' }
+                { credentials: 'include' },
             );
             if (!membersRes.ok)
                 throw new Error('Mitglieder konnten nicht geladen werden');
@@ -169,6 +259,9 @@
                 if (rA !== rB) return rA - rB;
                 return (b.trophies || 0) - (a.trophies || 0);
             });
+
+            // Automatically enrich names for members who only have tags (like left members)
+            enrichMembers(members);
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
@@ -192,7 +285,7 @@
                 }),
                 fetch(
                     `${apiBaseUrl}/api/coc/players/${encodedTag}/kickpoints/details`,
-                    { credentials: 'include' }
+                    { credentials: 'include' },
                 ),
                 fetch(`${apiBaseUrl}/api/coc/players/${encodedTag}/identity`, {
                     credentials: 'include',
@@ -217,7 +310,7 @@
             if (updatedPlayer.userId) {
                 const userRes = await fetch(
                     `${apiBaseUrl}/api/users/${updatedPlayer.userId}`,
-                    { credentials: 'include' }
+                    { credentials: 'include' },
                 );
                 if (userRes.ok) {
                     const userData = await userRes.json();
@@ -252,20 +345,8 @@
         fetchClanData();
     }
 
-    $: sortedByDonations = [...members]
-        .sort((a, b) => (b.donations || 0) - (a.donations || 0))
-        .slice(0, 3);
-    $: sortedByTrophies = [...members]
-        .sort((a, b) => (b.trophies || 0) - (a.trophies || 0))
-        .slice(0, 3);
-    $: sortedByStars = [...members]
-        .sort((a, b) => (b.warStars || 0) - (a.warStars || 0))
-        .slice(0, 3);
-
     $: filteredMembers = members
-        .filter(
-            (m) => m.in_supercell && !m.is_new && !m.is_dirty && !m.isHidden
-        ) // Hide diff & hidden members from main list
+        .filter((m) => m.in_supercell && !m.is_new && !m.isHidden) // Hide new & hidden members from main list, but show dirty ones.
         .filter((m) => {
             const nameMatch =
                 m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ??
@@ -403,82 +484,6 @@
                 <!-- Sidebar -->
                 <aside class="sidebar">
                     <div class="sidebar-sticky">
-                        <section class="info-card highlight-card">
-                            <h3>Top Mitglieder</h3>
-                            <div class="top-lists">
-                                <div class="top-list-section">
-                                    <div class="top-list-header">
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                            class="t-icon stars"
-                                        >
-                                            <path
-                                                d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-                                            />
-                                        </svg>
-                                        <span>Top Sterne</span>
-                                    </div>
-                                    <div class="mini-rank-list">
-                                        {#each sortedByStars as player, i}
-                                            <button
-                                                class="rank-item"
-                                                on:click={() =>
-                                                    selectPlayer(player)}
-                                            >
-                                                <span class="rank-num"
-                                                    >{i + 1}</span
-                                                >
-                                                <span class="rank-name"
-                                                    >{player.name}</span
-                                                >
-                                                <span class="rank-val"
-                                                    >{player.warStars ||
-                                                        0}</span
-                                                >
-                                            </button>
-                                        {/each}
-                                    </div>
-                                </div>
-
-                                <div class="top-list-divider"></div>
-
-                                <div class="top-list-section">
-                                    <div class="top-list-header">
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                            class="t-icon donation"
-                                        >
-                                            <path
-                                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                                            />
-                                        </svg>
-                                        <span>Top Spender</span>
-                                    </div>
-                                    <div class="mini-rank-list">
-                                        {#each sortedByDonations as player, i}
-                                            <button
-                                                class="rank-item"
-                                                on:click={() =>
-                                                    selectPlayer(player)}
-                                            >
-                                                <span class="rank-num"
-                                                    >{i + 1}</span
-                                                >
-                                                <span class="rank-name"
-                                                    >{player.name}</span
-                                                >
-                                                <span class="rank-val"
-                                                    >▲{player.donations}</span
-                                                >
-                                            </button>
-                                        {/each}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
                         <section class="info-card">
                             <h3>Clan Informationen</h3>
                             <div class="info-grid">
@@ -494,13 +499,6 @@
                                     <span class="value"
                                         >{clan.chatLanguage?.name ||
                                             'Deutsch'}</span
-                                    >
-                                </div>
-                                <div class="info-item">
-                                    <span class="label">Benötigte Trophäen</span
-                                    >
-                                    <span class="value"
-                                        >{clan.requiredTrophies ?? '0'}</span
                                     >
                                 </div>
                                 <div class="info-item">
@@ -564,13 +562,6 @@
 
                     <div class="members-grid">
                         {#each filteredMembers as member (member.tag)}
-                            {@const total =
-                                (member.donations || 0) +
-                                (member.donationsReceived || 0)}
-                            {@const percent =
-                                total > 0
-                                    ? ((member.donations || 0) / total) * 100
-                                    : 50}
                             <div
                                 class="member-card"
                                 class:is-linked={member.userId}
@@ -587,9 +578,6 @@
                             >
                                 <div class="m-card-header">
                                     <div class="card-glow"></div>
-                                    <div class="m-rank-indicator">
-                                        {members.indexOf(member) + 1}
-                                    </div>
                                     <div class="m-avatar-container">
                                         {#if member.leagueTier || member.league}
                                             <img
@@ -611,7 +599,7 @@
                                     </div>
                                     <div class="m-main-info">
                                         <h4 class="m-name">
-                                            {member.name}
+                                            {getPlayerName(member)}
                                             {#if member.is_diff && member.upstream_name && member.upstream_name !== member.name}
                                                 <span
                                                     class="old-name"
@@ -622,8 +610,23 @@
                                             {/if}
                                         </h4>
                                         <div class="m-sub-info">
-                                            <span class="m-role-label">
+                                            <!-- log member -->
+                                            {console.log(member)}
+                                            <span
+                                                class="m-role-label"
+                                                class:role-error={isRoleWrong(
+                                                    member.role,
+                                                    member.upstream_role,
+                                                )}
+                                            >
                                                 {getRoleDisplay(member.role)}
+                                                {#if isRoleWrong(member.role, member.upstream_role)}
+                                                    <span class="role-expected"
+                                                        >• Upstream: {getRoleDisplay(
+                                                            member.upstream_role,
+                                                        )}</span
+                                                    >
+                                                {/if}
                                             </span>
                                             <span class="dot">•</span>
                                             <span
@@ -637,68 +640,6 @@
                                     <div class="m-points-info">
                                         <div class="m-th-badge">
                                             RH {member.townHallLevel}
-                                        </div>
-                                        <div class="m-stat-group">
-                                            <div
-                                                class="m-trophies-badge m-stars-badge"
-                                                title="Clan-Krieg Sterne"
-                                            >
-                                                <svg
-                                                    viewBox="0 0 24 24"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-                                                    />
-                                                </svg>
-                                                <span
-                                                    >{member.warStars ??
-                                                        '???'}</span
-                                                >
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="m-card-footer">
-                                    {#if member.heroes && member.heroes.length > 0}
-                                        <div class="m-heroes-row">
-                                            {#each member.heroes as hero}
-                                                <div
-                                                    class="m-hero-tiny"
-                                                    title={hero.name}
-                                                >
-                                                    <span class="h-name-tiny"
-                                                        >{hero.name ===
-                                                        'Barbarian King'
-                                                            ? 'BK'
-                                                            : hero.name ===
-                                                                'Archer Queen'
-                                                              ? 'AQ'
-                                                              : hero.name ===
-                                                                  'Grand Warden'
-                                                                ? 'GW'
-                                                                : hero.name ===
-                                                                    'Royal Champion'
-                                                                  ? 'RC'
-                                                                  : hero.name.substring(
-                                                                        0,
-                                                                        2,
-                                                                    )}</span
-                                                    >
-                                                    <span class="h-lv-tiny"
-                                                        >{hero.level}</span
-                                                    >
-                                                </div>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                    <div class="footer-stats-row">
-                                        <div class="donation-stats-mini">
-                                            <span>▲ {member.donations}</span>
-                                            <span
-                                                >▼ {member.donationsReceived}</span
-                                            >
                                         </div>
                                     </div>
                                 </div>
@@ -738,19 +679,107 @@
                                             ></span>
                                             Mitglied, ingame nicht im Clan ({leftMembers.length})
                                         </h4>
-                                        <div class="diff-cards">
-                                            {#each leftMembers as m}
+                                        <div class="members-grid">
+                                            {#each leftMembers as m (m.tag)}
                                                 <div
-                                                    class="mini-diff-card left"
+                                                    class="member-card only-upstream"
+                                                    on:click={() =>
+                                                        selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
                                                 >
-                                                    <div class="m-info">
-                                                        <span class="m-name"
-                                                            >{m.name ||
-                                                                'Unbekannt'}</span
+                                                    <div class="m-card-header">
+                                                        <div
+                                                            class="card-glow"
+                                                        ></div>
+                                                        <div
+                                                            class="m-avatar-container"
                                                         >
-                                                        <span class="m-tag"
-                                                            >{m.tag}</span
+                                                            {#if m.leagueTier || m.league}
+                                                                <img
+                                                                    src={m
+                                                                        .leagueTier
+                                                                        ?.iconUrls
+                                                                        .large ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .large ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .medium ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .small}
+                                                                    alt={m
+                                                                        .leagueTier
+                                                                        ?.name ||
+                                                                        m.league
+                                                                            ?.name}
+                                                                    class="league-icon"
+                                                                />
+                                                            {:else}
+                                                                <div
+                                                                    class="no-league"
+                                                                ></div>
+                                                            {/if}
+                                                        </div>
+                                                        <div
+                                                            class="m-main-info"
                                                         >
+                                                            <h4 class="m-name">
+                                                                {getPlayerName(
+                                                                    m,
+                                                                )}
+                                                            </h4>
+                                                            <div
+                                                                class="m-sub-info"
+                                                            >
+                                                                <span
+                                                                    class="m-role-label"
+                                                                    class:role-error={isRoleWrong(
+                                                                        m.role,
+                                                                        m.upstream_role,
+                                                                    )}
+                                                                >
+                                                                    {getRoleDisplay(
+                                                                        m.role,
+                                                                    )}
+                                                                    {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                        <span
+                                                                            class="role-expected"
+                                                                            >•
+                                                                            Upstream:
+                                                                            {getRoleDisplay(
+                                                                                m.upstream_role,
+                                                                            )}</span
+                                                                        >
+                                                                    {/if}
+                                                                </span>
+                                                                <span
+                                                                    class="dot"
+                                                                    >•</span
+                                                                >
+                                                                <span
+                                                                    class="m-tag-small"
+                                                                    title={m.tag}
+                                                                >
+                                                                    {m.tag}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="m-points-info"
+                                                        >
+                                                            <div
+                                                                class="m-th-badge"
+                                                            >
+                                                                RH {m.townHallLevel ||
+                                                                    '?'}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             {/each}
@@ -765,16 +794,106 @@
                                             ></span>
                                             Kein Mitglied, ingame im Clan ({newMembers.length})
                                         </h4>
-                                        <div class="diff-cards">
-                                            {#each newMembers as m}
-                                                <div class="mini-diff-card new">
-                                                    <div class="m-info">
-                                                        <span class="m-name"
-                                                            >{m.name}</span
+                                        <div class="members-grid">
+                                            {#each newMembers as m (m.tag)}
+                                                <div
+                                                    class="member-card only-supercell"
+                                                    on:click={() =>
+                                                        selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
+                                                >
+                                                    <div class="m-card-header">
+                                                        <div
+                                                            class="card-glow"
+                                                        ></div>
+                                                        <div
+                                                            class="m-avatar-container"
                                                         >
-                                                        <span class="m-tag"
-                                                            >{m.tag}</span
+                                                            {#if m.leagueTier || m.league}
+                                                                <img
+                                                                    src={m
+                                                                        .leagueTier
+                                                                        ?.iconUrls
+                                                                        .large ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .large ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .medium ||
+                                                                        m.league
+                                                                            ?.iconUrls
+                                                                            .small}
+                                                                    alt={m
+                                                                        .leagueTier
+                                                                        ?.name ||
+                                                                        m.league
+                                                                            ?.name}
+                                                                    class="league-icon"
+                                                                />
+                                                            {:else}
+                                                                <div
+                                                                    class="no-league"
+                                                                ></div>
+                                                            {/if}
+                                                        </div>
+                                                        <div
+                                                            class="m-main-info"
                                                         >
+                                                            <h4 class="m-name">
+                                                                {getPlayerName(
+                                                                    m,
+                                                                )}
+                                                            </h4>
+                                                            <div
+                                                                class="m-sub-info"
+                                                            >
+                                                                <span
+                                                                    class="m-role-label"
+                                                                    class:role-error={isRoleWrong(
+                                                                        m.role,
+                                                                        m.upstream_role,
+                                                                    )}
+                                                                >
+                                                                    {getRoleDisplay(
+                                                                        m.role,
+                                                                    )}
+                                                                    {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                        <span
+                                                                            class="role-expected"
+                                                                            >•
+                                                                            Upstream:
+                                                                            {getRoleDisplay(
+                                                                                m.upstream_role,
+                                                                            )}</span
+                                                                        >
+                                                                    {/if}
+                                                                </span>
+                                                                <span
+                                                                    class="dot"
+                                                                    >•</span
+                                                                >
+                                                                <span
+                                                                    class="m-tag-small"
+                                                                    title={m.tag}
+                                                                >
+                                                                    {m.tag}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="m-points-info"
+                                                        >
+                                                            <div
+                                                                class="m-th-badge"
+                                                            >
+                                                                RH {m.townHallLevel}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             {/each}
@@ -784,90 +903,175 @@
                             </div>
 
                             {#if changedMembers.length > 0}
-                                <div class="diff-table-container">
-                                    <div class="table-header">
-                                        <h4>
-                                            Im Clan, falsche Rolle / Daten ({changedMembers.length})
-                                        </h4>
+                                <div
+                                    class="diff-category"
+                                    style="margin-top: 3rem;"
+                                >
+                                    <h4>
+                                        <span class="indicator-dot changed"
+                                        ></span>
+                                        Im Clan, falsche Rolle / Daten ({changedMembers.length})
+                                    </h4>
+                                    <div class="members-grid">
+                                        {#each changedMembers as m (m.tag)}
+                                            <div
+                                                class="member-card has-diff"
+                                                on:click={() => selectPlayer(m)}
+                                                on:keydown={(e) =>
+                                                    e.key === 'Enter' &&
+                                                    selectPlayer(m)}
+                                                role="button"
+                                                tabindex="0"
+                                            >
+                                                <div class="m-card-header">
+                                                    <div
+                                                        class="card-glow"
+                                                    ></div>
+                                                    <div
+                                                        class="m-avatar-container"
+                                                    >
+                                                        {#if m.leagueTier || m.league}
+                                                            <img
+                                                                src={m
+                                                                    .leagueTier
+                                                                    ?.iconUrls
+                                                                    .large ||
+                                                                    m.league
+                                                                        ?.iconUrls
+                                                                        .large ||
+                                                                    m.league
+                                                                        ?.iconUrls
+                                                                        .medium ||
+                                                                    m.league
+                                                                        ?.iconUrls
+                                                                        .small}
+                                                                alt={m
+                                                                    .leagueTier
+                                                                    ?.name ||
+                                                                    m.league
+                                                                        ?.name}
+                                                                class="league-icon"
+                                                            />
+                                                        {:else}
+                                                            <div
+                                                                class="no-league"
+                                                            ></div>
+                                                        {/if}
+                                                    </div>
+                                                    <div class="m-main-info">
+                                                        <h4 class="m-name">
+                                                            {getPlayerName(m)}
+                                                            {#if m.name !== m.upstream_name && m.upstream_name}
+                                                                <span
+                                                                    class="old-name"
+                                                                    >({m.upstream_name})</span
+                                                                >
+                                                            {/if}
+                                                        </h4>
+                                                        <div class="m-sub-info">
+                                                            <span
+                                                                class="m-role-label"
+                                                                class:role-error={isRoleWrong(
+                                                                    m.role,
+                                                                    m.upstream_role,
+                                                                )}
+                                                            >
+                                                                {getRoleDisplay(
+                                                                    m.role,
+                                                                )}
+                                                                {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                    <span
+                                                                        class="role-expected"
+                                                                        >•
+                                                                        Upstream:
+                                                                        {getRoleDisplay(
+                                                                            m.upstream_role,
+                                                                        )}</span
+                                                                    >
+                                                                {/if}
+                                                            </span>
+                                                            <span class="dot"
+                                                                >•</span
+                                                            >
+                                                            <span
+                                                                class="m-tag-small"
+                                                                title={m.tag}
+                                                            >
+                                                                {m.tag}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="m-points-info">
+                                                        <div class="m-th-badge">
+                                                            RH {m.townHallLevel}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="m-card-footer">
+                                                    <div class="m-card-changes">
+                                                        {#if m.name !== m.upstream_name && m.upstream_name}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Name</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{m.name}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{m.upstream_name}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                        {#if isRoleWrong(m.role, m.upstream_role)}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Rolle</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{getRoleDisplay(
+                                                                        m.role,
+                                                                    )}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{getRoleDisplay(
+                                                                        m.upstream_role,
+                                                                    )}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                        {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Level</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{m.expLevel}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{m.upstream_expLevel}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {/each}
                                     </div>
-                                    <table class="diff-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Spieler</th>
-                                                <th>Feld</th>
-                                                <th>Ingame</th>
-                                                <th>Datenbank</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {#each changedMembers as m}
-                                                {#if m.name !== m.upstream_name && m.upstream_name}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Name</td>
-                                                        <td class="val-sc"
-                                                            >{m.name}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{m.upstream_name}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Rolle</td>
-                                                        <td class="val-sc"
-                                                            >{getRoleDisplay(
-                                                                m.role,
-                                                            )}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{getRoleDisplay(
-                                                                m.upstream_role,
-                                                            )}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                                {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Level</td>
-                                                        <td class="val-sc"
-                                                            >{m.expLevel}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{m.upstream_expLevel}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                            {/each}
-                                        </tbody>
-                                    </table>
                                 </div>
                             {/if}
                         </div>
@@ -1161,107 +1365,6 @@
         letter-spacing: -0.01em;
     }
 
-    /* Top Lists Styling */
-    .top-lists {
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-    }
-
-    .top-list-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        font-size: 0.95rem;
-        color: var(--accent-color);
-    }
-
-    .t-icon {
-        width: 20px;
-        height: 20px;
-    }
-    .stars {
-        color: #ff9900;
-    }
-    .donation {
-        color: #00ff88;
-    }
-
-    .mini-rank-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .rank-item {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 14px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-        width: 100%;
-        text-align: left;
-        color: inherit;
-        font: inherit;
-    }
-
-    .light .rank-item {
-        background: rgba(0, 0, 0, 0.03);
-    }
-
-    .rank-item:hover {
-        background: rgba(88, 101, 242, 0.1);
-        border-color: rgba(88, 101, 242, 0.2);
-        transform: scale(1.02);
-    }
-
-    .rank-num {
-        font-weight: 900;
-        font-size: 0.9rem;
-        color: var(--accent-color);
-        width: 1.2rem;
-    }
-
-    .rank-name {
-        flex: 1;
-        font-weight: 600;
-        font-size: 0.95rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .rank-val {
-        font-weight: 800;
-        font-size: 0.9rem;
-        font-variant-numeric: tabular-nums;
-    }
-
-    .top-list-divider {
-        height: 1px;
-        background: linear-gradient(
-            90deg,
-            transparent,
-            var(--border-dark),
-            transparent
-        );
-    }
-
-    .light .top-list-divider {
-        background: linear-gradient(
-            90deg,
-            transparent,
-            var(--border-light),
-            transparent
-        );
-    }
-
     .info-grid {
         display: flex;
         flex-direction: column;
@@ -1402,17 +1505,6 @@
         position: relative;
     }
 
-    .m-rank-indicator {
-        position: absolute;
-        top: -0.5rem;
-        left: -0.5rem;
-        font-size: 0.9rem;
-        font-weight: 900;
-        color: var(--text-dim);
-        opacity: 0.4;
-        font-family: 'JetBrains Mono', monospace;
-    }
-
     .m-avatar-container {
         position: relative;
         width: 44px;
@@ -1454,13 +1546,6 @@
         flex-shrink: 0;
     }
 
-    .m-stat-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        align-items: flex-end;
-    }
-
     .m-th-badge {
         background: #3b82f6;
         color: white;
@@ -1470,29 +1555,6 @@
         font-size: 0.75rem;
         white-space: nowrap;
         box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
-    }
-
-    .m-trophies-badge {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: rgba(0, 0, 0, 0.3);
-        padding: 4px 10px;
-        border-radius: 10px;
-        font-weight: 800;
-        font-size: 0.9rem;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        color: white;
-    }
-
-    .m-trophies-badge svg {
-        width: 14px;
-        height: 14px;
-        color: #ffcc00;
-    }
-
-    .m-stars-badge svg {
-        color: #ff9900;
     }
 
     .card-glow {
@@ -1511,63 +1573,6 @@
 
     .member-card:hover .card-glow {
         opacity: 1;
-    }
-
-    .footer-stats-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-        padding: 0.75rem 0.25rem 0;
-    }
-
-    .donation-stats-mini {
-        font-size: 0.8rem;
-        font-weight: 700;
-        display: flex;
-        gap: 8px;
-    }
-
-    .donation-stats-mini span:first-child {
-        color: #00ff88;
-    }
-    .donation-stats-mini span:last-child {
-        color: #ff4444;
-    }
-
-    .m-heroes-row {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 8px;
-        padding: 4px 6px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 8px;
-        overflow-x: auto;
-    }
-
-    .light .m-heroes-row {
-        background: rgba(0, 0, 0, 0.03);
-    }
-
-    .m-hero-tiny {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        min-width: 24px;
-    }
-
-    .h-name-tiny {
-        font-size: 0.6rem;
-        font-weight: 800;
-        color: var(--text-dim);
-        line-height: 1;
-    }
-
-    .h-lv-tiny {
-        font-size: 0.75rem;
-        font-weight: 900;
-        color: var(--accent-color);
-        line-height: 1.2;
     }
 
     .kickpoint-indicator {
@@ -1636,6 +1641,35 @@
         letter-spacing: 0.05em;
         color: var(--accent-color);
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .m-role-label.role-error {
+        color: #f59e0b;
+        animation: pulse-role 2s infinite;
+    }
+
+    .role-expected {
+        font-size: 0.65rem;
+        font-weight: 500;
+        opacity: 0.8;
+        background: rgba(245, 158, 11, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    @keyframes pulse-role {
+        0% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.7;
+        }
+        100% {
+            opacity: 1;
+        }
     }
 
     .m-sub-info {
@@ -1722,73 +1756,10 @@
         border-top-color: var(--border-light);
     }
 
-    .diff-table-container {
-        margin-top: 2rem;
-        background: var(--bg-card-dark);
-        border: 1px solid var(--border-dark);
-        border-radius: 20px;
-        overflow: hidden;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-    }
-
-    .light .diff-table-container {
-        background: var(--bg-card-light);
-        border-color: var(--border-light);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-    }
-
-    .diff-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.95rem;
-    }
-
-    .diff-table th {
-        text-align: left;
-        padding: 1.25rem 1.5rem;
-        background: rgba(255, 255, 255, 0.05);
-        font-weight: 800;
-        color: var(--text-dim);
-        border-bottom: 1px solid var(--border-dark);
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-    }
-
-    .light .diff-table th {
-        background: rgba(0, 0, 0, 0.03);
-    }
-
-    .diff-table td {
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid var(--border-dark);
-    }
-
-    .light .diff-table td {
-        border-bottom-color: var(--border-light);
-    }
-
-    .val-sc {
-        color: #3b82f6;
-        font-weight: 800;
-    }
-
-    .val-up {
-        color: #9ca3af;
-        font-weight: 600;
-        text-decoration: line-through;
-        opacity: 0.7;
-    }
-
-    .row-diff {
-        background: rgba(245, 158, 11, 0.05);
-    }
-
-    /* New Diff Grid Layout */
     .diff-grid-layout {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 3rem;
         margin-top: 2rem;
     }
 
@@ -1796,15 +1767,15 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin-bottom: 1.25rem;
-        font-size: 1.1rem;
-        font-weight: 700;
-        opacity: 0.8;
+        margin-bottom: 1.5rem;
+        font-size: 1.25rem;
+        font-weight: 800;
+        opacity: 0.9;
     }
 
     .indicator-dot {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
     }
     .indicator-dot.new {
@@ -1814,62 +1785,45 @@
     .indicator-dot.left {
         background: #4b5563;
     }
-
-    .diff-cards {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
+    .indicator-dot.changed {
+        background: #f59e0b;
+        box-shadow: 0 0 10px #f59e0b;
     }
 
-    .mini-diff-card {
+    .m-card-changes {
+        margin-top: 0.5rem;
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 1.25rem;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid var(--border-dark);
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.75rem;
+        background: rgba(245, 158, 11, 0.05);
         border-radius: 12px;
-        transition: all 0.2s;
+        border: 1px solid rgba(245, 158, 11, 0.1);
     }
 
-    .light .mini-diff-card {
-        background: white;
-        border-color: var(--border-light);
-    }
-
-    .mini-diff-card.new {
-        border-left: 4px solid #10b981;
-    }
-    .mini-diff-card.left {
-        border-left: 4px solid #4b5563;
-        opacity: 0.7;
-    }
-
-    .mini-diff-card .m-info {
+    .change-item {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
     }
 
-    .mini-diff-card .m-name {
+    .change-label {
         font-weight: 700;
-        font-size: 1rem;
+        color: var(--text-dim);
+        min-width: 50px;
     }
 
-    .mini-diff-card .m-tag {
-        font-size: 0.75rem;
-        font-family: 'JetBrains Mono', monospace;
-        opacity: 0.5;
+    .change-val-new {
+        color: #3b82f6;
+        font-weight: 800;
     }
 
-    .table-header {
-        margin-top: 3rem;
-        margin-bottom: 1.25rem;
-    }
-
-    .table-header h4 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        opacity: 0.8;
+    .change-val-old {
+        color: #9ca3af;
+        text-decoration: line-through;
+        opacity: 0.7;
+        font-size: 0.8rem;
     }
 
     @media (max-width: 1100px) {
