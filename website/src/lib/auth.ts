@@ -35,14 +35,12 @@ export const user = derived(
                 $userOverride.highest_role !== undefined
                     ? $userOverride.highest_role
                     : $internalUser.highest_role,
-            // If an override is active, we also strip linked players to simulate a "clean" account
-            // unless we want to keep them. For testing "MEMBER" view, we usually want these gone.
-            linked_players: $userOverride ? [] : $internalUser.linked_players,
-            linked_cr_players: $userOverride
-                ? []
-                : $internalUser.linked_cr_players,
+            // Keep linked accounts while overriding role/admin state so clan-scoped
+            // permissions still reflect the actual member relationship.
+            linked_players: $internalUser.linked_players,
+            linked_cr_players: $internalUser.linked_cr_players,
         };
-    }
+    },
 );
 
 export function getRolePriority(role: string | null | undefined): number {
@@ -68,7 +66,7 @@ export function getRolePriority(role: string | null | undefined): number {
 
 export function hasRequiredRole(
     userRole: string | null | undefined,
-    requiredRole: string
+    requiredRole: string,
 ): boolean {
     return getRolePriority(userRole) >= getRolePriority(requiredRole);
 }

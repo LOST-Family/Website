@@ -4,9 +4,19 @@
     import { quintOut } from 'svelte/easing';
     import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
-    import { badgeNameFromId, getArenaNum, getArenaImageUrl, hideOnError } from './crUtils';
+    import {
+        badgeNameFromId,
+        getArenaNum,
+        getArenaImageUrl,
+        hideOnError,
+    } from './crUtils';
     import { getClanBadgeUrl } from './clanDisplay';
-    import { ROLE_ORDER, getRoleDisplay, isRoleWrong, getPlayerName } from './roleUtils';
+    import {
+        ROLE_ORDER,
+        getRoleDisplay,
+        isRoleWrong,
+        getPlayerName,
+    } from './roleUtils';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
@@ -79,6 +89,12 @@
         upstream_expLevel?: number;
     }
 
+    interface KickpointCarrier {
+        activeKickpointsSum?: number | string;
+        activeKickpointsCount?: number | string;
+        activeKickpoints?: Array<{ amount?: number | string }>;
+    }
+
     let clan: Clan | null = null;
     let members: Player[] = [];
     let loading = true;
@@ -88,11 +104,26 @@
     let playerDetailsLoading = false;
     let enrichedTags = new Set<string>();
 
+    function normalizeTag(tag: string | undefined | null): string {
+        return (tag || '').trim().replace(/^#/, '').toUpperCase();
+    }
+
+    $: viewerIsInClan = !!(
+        $user &&
+        members.some((m) =>
+            ($user.linked_cr_players || []).some(
+                (linkedTag) => normalizeTag(linkedTag) === normalizeTag(m.tag),
+            ),
+        )
+    );
     $: viewerIsCoLeader = !!(
         $user &&
         members.some(
             (m) =>
-                ($user.linked_cr_players || []).includes(m.tag) &&
+                ($user.linked_cr_players || []).some(
+                    (linkedTag) =>
+                        normalizeTag(linkedTag) === normalizeTag(m.tag),
+                ) &&
                 (m.role === 'coLeader' || m.role === 'leader'),
         )
     );
@@ -101,6 +132,45 @@
         viewerIsCoLeader ||
         ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
     );
+    $: hasKickpointAccess = !!(hasPrivilegedAccess || viewerIsInClan);
+
+    function toNumber(value: number | string | undefined): number {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    }
+
+    function getActiveKickpointSum(member: KickpointCarrier): number {
+        if (member.activeKickpointsSum !== undefined) {
+            return toNumber(member.activeKickpointsSum);
+        }
+
+        return (member.activeKickpoints || []).reduce(
+            (sum, kickpoint) => sum + toNumber(kickpoint.amount),
+            0,
+        );
+    }
+
+    function getActiveKickpointCount(member: KickpointCarrier): number {
+        if (member.activeKickpointsCount !== undefined) {
+            return toNumber(member.activeKickpointsCount);
+        }
+
+        return member.activeKickpoints?.length || 0;
+    }
+
+    function isAtKickpointLimit(member: {
+        activeKickpointsSum?: number;
+    }): boolean {
+        const maxKickpoints = toNumber(clan?.maxKickpoints);
+
+        return (
+            maxKickpoints > 0 && getActiveKickpointSum(member) >= maxKickpoints
+        );
+    }
 
     function crIsRoleWrong(current: any, expected: any): boolean {
         return isRoleWrong(current, expected, false);
@@ -191,22 +261,28 @@
 
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            const [res, idRes] = await Promise.all([
+            const [res, kpRes, idRes] = await Promise.all([
                 fetch(`${apiBaseUrl}/api/cr/players/${encodedTag}`, {
                     credentials: 'include',
                 }),
+                fetch(
+                    `${apiBaseUrl}/api/cr/players/${encodedTag}/kickpoints/details`,
+                    { credentials: 'include' },
+                ),
                 fetch(`${apiBaseUrl}/api/cr/players/${encodedTag}/identity`, {
                     credentials: 'include',
                 }),
             ]);
 
             const detailedPlayer = res.ok ? await res.json() : {};
+            const kickpoints = kpRes.ok ? await kpRes.json() : [];
             const identity = idRes.ok ? await idRes.json() : {};
 
             selectedPlayer = {
                 ...player,
                 ...detailedPlayer,
                 ...identity,
+                activeKickpoints: kickpoints,
             };
         } catch (e) {
             console.error('Failed to fetch player details:', e);
@@ -510,7 +586,7 @@
                                     <h3>Regelwerk / Kickpoints</h3>
                                 </div>
                                 <div class="reasons-list">
-                                    {#each clan.kickpointReasons as reason}
+                                    {#each [...clan.kickpointReasons].sort((a, b) => b.amount - a.amount) as reason}
                                         <div class="reason-item">
                                             <span class="reason-name"
                                                 >{reason.name}</span
@@ -582,6 +658,7 @@
                                     : 50}
                             <div
                                 class="member-card"
+                                class:maxKickpoints={isAtKickpointLimit(member)}
                                 class:is-linked={member.userId}
                                 class:has-diff={member.is_diff}
                                 on:click={() => selectPlayer(member)}
@@ -652,7 +729,7 @@
                                         </div>
                                     </div>
                                     <div class="m-points-info">
-                                        {#if hasPrivilegedAccess && member.activeKickpointsSum !== undefined && member.activeKickpointsSum > 0}
+                                        {#if hasKickpointAccess && getActiveKickpointCount(member) > 0}
                                             <div
                                                 class="m-kp-badge"
                                                 title="Aktive Kickpoints"
@@ -668,7 +745,9 @@
                                                     />
                                                 </svg>
                                                 <span
-                                                    >{member.activeKickpointsSum}</span
+                                                    >{getActiveKickpointSum(
+                                                        member,
+                                                    )}</span
                                                 >
                                                 {#if clan?.maxKickpoints}
                                                     <span class="max-sep"
@@ -749,6 +828,9 @@
                                             {#each leftMembers as m (m.tag)}
                                                 <div
                                                     class="member-card only-upstream"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
                                                     on:click={() =>
                                                         selectPlayer(m)}
                                                     on:keydown={(e) =>
@@ -865,6 +947,9 @@
                                             {#each newMembers as m (m.tag)}
                                                 <div
                                                     class="member-card only-supercell"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
                                                     on:click={() =>
                                                         selectPlayer(m)}
                                                     on:keydown={(e) =>
@@ -904,6 +989,9 @@
                                                                     >
                                                                 </div>
                                                             {:else}
+                                                                class:maxKickpoints={isAtKickpointLimit(
+                                                                    m,
+                                                                )}
                                                                 <div
                                                                     class="no-league"
                                                                 ></div>
@@ -1154,7 +1242,7 @@
         gameType="cr"
         {theme}
         onClose={closePlayerDetails}
-        {hasPrivilegedAccess}
+        {hasKickpointAccess}
         isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
@@ -1440,9 +1528,51 @@
     .sidebar-sticky {
         position: sticky;
         top: 100px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+        padding: 1rem 0.9rem 1rem 0.15rem;
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(59, 130, 246, 0.22) transparent;
+        -webkit-mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb {
+        background-color: rgba(59, 130, 246, 0.18);
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(59, 130, 246, 0.3);
     }
 
     .info-card {
@@ -1484,27 +1614,35 @@
     .reasons-list {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
-        margin-bottom: 1.25rem;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
     }
 
     .reason-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.05);
+        padding: 0.5rem 0.75rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 12px;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
 
     .reason-name {
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.85);
     }
 
     .reason-amount {
         color: #ed4245;
-        font-weight: 700;
+        font-weight: 800;
+        font-size: 0.75rem;
+        background: rgba(237, 66, 69, 0.12);
+        padding: 0.2rem 0.55rem;
+        border-radius: 8px;
+        min-width: 2rem;
+        text-align: center;
+        flex-shrink: 0;
     }
 
     .max-kp-info,
@@ -1714,6 +1852,20 @@
         transform: translateY(-4px);
         border-color: rgba(88, 101, 242, 0.4);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .member-card.maxKickpoints {
+        border-color: rgba(237, 66, 69, 0.9);
+        box-shadow:
+            0 0 0 1px rgba(237, 66, 69, 0.4),
+            0 18px 36px rgba(237, 66, 69, 0.18);
+    }
+
+    .member-card.maxKickpoints:hover {
+        border-color: rgba(237, 66, 69, 1);
+        box-shadow:
+            0 0 0 1px rgba(237, 66, 69, 0.5),
+            0 22px 42px rgba(237, 66, 69, 0.24);
     }
 
     .member-card.is-linked {

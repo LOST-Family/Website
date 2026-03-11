@@ -2,7 +2,12 @@
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
     import type { GameType } from './auth';
-    import { getArenaNum, getArenaImageUrl, hideOnError, badgeNameFromId } from './crUtils';
+    import {
+        getArenaNum,
+        getArenaImageUrl,
+        hideOnError,
+        badgeNameFromId,
+    } from './crUtils';
     import { getClanBadgeUrl } from './clanDisplay';
 
     export let player: any;
@@ -11,7 +16,7 @@
     export let isOpen: boolean = false;
     export let onClose: () => void;
     export let otherAccounts: any[] = [];
-    export let hasPrivilegedAccess: boolean = false;
+    export let hasKickpointAccess: boolean = false;
     export let isAdmin: boolean = false;
     export let onNavigateToProfile: ((userId: string) => void) | null = null;
     export let onSelectOtherAccount: ((acc: any) => void) | null = null;
@@ -189,7 +194,9 @@
                                 >
                             </div>
                         {/if}
-                        {#if hasPrivilegedAccess}
+                    </div>
+                    {#if hasKickpointAccess}
+                        <div class="stats-grid-large kickpoints-stats">
                             <div class="stat-card">
                                 <span class="label">Kickpunkte</span>
                                 <span
@@ -209,8 +216,8 @@
                                     {player.totalKickpoints || 0}
                                 </span>
                             </div>
-                        {/if}
-                    </div>
+                        </div>
+                    {/if}
 
                     <!-- Other Accounts -->
                     {#if player.playerAccounts && player.playerAccounts.length > 1}
@@ -263,7 +270,7 @@
                     {/if}
 
                     <!-- Kickpoints History -->
-                    {#if hasPrivilegedAccess && ((player.kickpoints && player.kickpoints.length > 0) || (player.activeKickpoints && player.activeKickpoints.length > 0))}
+                    {#if hasKickpointAccess && ((player.kickpoints && player.kickpoints.length > 0) || (player.activeKickpoints && player.activeKickpoints.length > 0))}
                         <div
                             class="detail-section"
                             in:slide={{ duration: 300, delay: 400 }}
@@ -590,10 +597,10 @@
     }
 
     .close-modal {
-        --btn-size: 56px;
+        --btn-size: 44px;
         position: absolute;
-        top: 1.5rem;
-        right: 1.5rem;
+        top: 1.25rem;
+        right: 1.25rem;
         width: var(--btn-size);
         height: var(--btn-size);
         display: flex;
@@ -625,13 +632,13 @@
     }
 
     .close-modal svg {
-        width: 36px;
-        height: 36px;
+        width: 28px;
+        height: 28px;
         stroke-width: 3px;
     }
 
     .modal-header {
-        padding: 4rem 3rem 3rem;
+        padding: 2rem 2.5rem 1.5rem;
         background: linear-gradient(
             to bottom,
             rgba(59, 130, 246, 0.15),
@@ -640,19 +647,19 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 2rem;
+        gap: 1.5rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .player-info-large {
         display: flex;
         align-items: center;
-        gap: 2.5rem;
+        gap: 1.5rem;
     }
 
     .league-icon-large {
-        width: 120px;
-        height: 120px;
+        width: 100px;
+        height: 100px;
         filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.4));
         transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
@@ -663,7 +670,7 @@
 
     .player-titles h2 {
         margin: 0;
-        font-size: 2.75rem;
+        font-size: 2.25rem;
         font-weight: 900;
         letter-spacing: -0.03em;
         background: linear-gradient(to bottom right, #fff, #94a3b8);
@@ -681,11 +688,11 @@
     }
 
     .player-titles .tag {
-        margin: 0.5rem 0 0;
+        margin: 0.25rem 0 0;
         font-family: 'JetBrains Mono', monospace;
         color: #3b82f6;
         font-weight: 700;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         letter-spacing: 1px;
     }
 
@@ -693,7 +700,7 @@
         display: flex;
         align-items: center;
         gap: 1rem;
-        margin-top: 1.5rem;
+        margin-top: 1rem;
         font-size: 1.15rem;
         font-weight: 850;
         color: white;
@@ -702,8 +709,8 @@
             rgba(30, 41, 59, 0.8),
             rgba(15, 23, 42, 0.9)
         );
-        padding: 0.85rem 1.6rem;
-        border-radius: 20px;
+        padding: 0.6rem 1.25rem;
+        border-radius: 16px;
         border: 1px solid rgba(59, 130, 246, 0.25);
         width: fit-content;
         backdrop-filter: blur(12px);
@@ -724,8 +731,8 @@
     }
 
     .clan-info-small img {
-        width: 38px;
-        height: 38px;
+        width: 32px;
+        height: 32px;
         filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.4));
     }
 
@@ -759,25 +766,30 @@
     }
 
     .modal-body {
-        padding: 0 3rem 4rem;
+        padding: 1.5rem 2.5rem 2.5rem;
     }
 
     .stats-grid-large {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 1.5rem;
-        margin-bottom: 4rem;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .stats-grid-large.kickpoints-stats {
+        grid-template-columns: repeat(2, 1fr);
+        margin-bottom: 1.5rem;
     }
 
     .stat-card {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 1.5rem;
-        border-radius: 24px;
+        padding: 1.25rem 1rem;
+        border-radius: 20px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.35rem;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         backdrop-filter: blur(8px);
     }
@@ -807,7 +819,7 @@
     }
 
     .stat-card .value {
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         font-weight: 900;
         color: #3b82f6;
         text-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
@@ -819,16 +831,16 @@
     }
 
     .detail-section {
-        margin-top: 4rem;
+        margin-top: 1.5rem;
     }
 
     .detail-section h3 {
-        font-size: 1.5rem;
+        font-size: 1.35rem;
         font-weight: 900;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
         display: flex;
         align-items: center;
-        gap: 1.25rem;
+        gap: 1rem;
         color: white;
         letter-spacing: -0.01em;
     }
@@ -861,14 +873,14 @@
     .kickpoints-list {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
     .kp-item {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 1.25rem;
-        border-radius: 20px;
+        padding: 1rem 1.25rem;
+        border-radius: 16px;
         transition: all 0.2s;
     }
 
@@ -886,12 +898,12 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
     }
 
     .kp-reason {
         font-weight: 800;
-        font-size: 1.1rem;
+        font-size: 1rem;
         color: white;
     }
 
@@ -918,7 +930,7 @@
     .kp-footer {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.25rem;
     }
 
     .kp-date {
@@ -1246,8 +1258,8 @@
     @media (max-width: 768px) {
         .modal-header {
             flex-direction: column;
-            padding: 2.5rem 2rem 1.5rem;
-            gap: 1.5rem;
+            padding: 1.5rem 1.25rem 1rem;
+            gap: 1rem;
         }
 
         .th-display {
@@ -1256,24 +1268,29 @@
         }
 
         .modal-body {
-            padding: 0 2rem 2.5rem;
+            padding: 1rem 1.25rem 1.5rem;
         }
 
         .stats-grid-large {
             grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .stats-grid-large.kickpoints-stats {
+            grid-template-columns: repeat(2, 1fr);
         }
 
         .player-info-large {
-            gap: 1.25rem;
+            gap: 1rem;
         }
 
         .league-icon-large {
-            width: 70px;
-            height: 70px;
+            width: 64px;
+            height: 64px;
         }
 
         .player-titles h2 {
-            font-size: 1.75rem;
+            font-size: 1.6rem;
         }
     }
 </style>

@@ -647,7 +647,7 @@
     gameType={selectedGameType}
     {theme}
     onClose={closePlayerModal}
-    hasPrivilegedAccess={!!(
+    hasKickpointAccess={!!(
         $user?.is_admin ||
         (viewUserId && $user && viewUserId === $user.discord_id)
     )}

@@ -437,7 +437,12 @@ async fn enrich_clan_badges(body: Bytes, pool: &sqlx::PgPool, game: GameType) ->
 }
 
 // Function to filter out specific fields from member data
-pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option<&str>) -> Bytes {
+pub fn filter_member_data(
+    body: Bytes,
+    exempt_tags: &[String],
+    user_role: Option<&str>,
+    can_view_clan_kickpoints: bool,
+) -> Bytes {
     use crate::auth::has_required_role;
 
     // Coleaders and higher see everything
@@ -449,15 +454,6 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
         let mut modified = false;
         let is_member = has_required_role(user_role, "MEMBER");
 
-        let fields_to_remove_not_member = [
-            "totalKickpoints",
-            "activeKickpoints",
-            "userId",
-            "discordId",
-            "nickname",
-            "avatar",
-        ];
-
         let process_obj = |obj: &mut serde_json::Map<String, serde_json::Value>, tag: &str| {
             if exempt_tags.iter().any(|et| et == tag) {
                 return false;
@@ -466,8 +462,8 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
             // Always remove internal DB fields
             obj.remove("clanDB");
 
-            if is_member {
-                // For members: Return count and sum instead of full details
+            if can_view_clan_kickpoints {
+                // For same-clan viewers: expose summary fields, not the full member-list history payload.
                 if let Some(akp) = obj.get("activeKickpoints").and_then(|v| v.as_array()) {
                     let sum: i64 = akp
                         .iter()
@@ -480,21 +476,25 @@ pub fn filter_member_data(body: Bytes, exempt_tags: &[String], user_role: Option
                     obj.insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
                 }
                 obj.remove("activeKickpoints");
-
-                // Hide raw IDs for members (privacy), but keep nickname/avatar/points
-                let is_coleader = has_required_role(user_role, "COLEADER");
-                if !is_coleader {
-                    if obj.contains_key("userId") {
-                        obj.insert("isLinked".to_string(), serde_json::json!(true));
-                    }
-                    obj.remove("userId");
-                    obj.remove("discordId");
-                }
             } else {
-                // Not a member: Remove counts and identity links
-                for field in &fields_to_remove_not_member {
-                    obj.remove(*field);
+                obj.remove("totalKickpoints");
+                obj.remove("activeKickpoints");
+                obj.remove("activeKickpointsCount");
+                obj.remove("activeKickpointsSum");
+            }
+
+            if is_member {
+                // Hide raw IDs for members, but keep basic linked-account presentation fields.
+                if obj.contains_key("userId") {
+                    obj.insert("isLinked".to_string(), serde_json::json!(true));
                 }
+                obj.remove("userId");
+                obj.remove("discordId");
+            } else {
+                obj.remove("userId");
+                obj.remove("discordId");
+                obj.remove("nickname");
+                obj.remove("avatar");
             }
             true
         };
@@ -772,7 +772,12 @@ pub async fn forward_request_with_filter(
                 // Enrich clan list with badge data from Supercell API cache
                 body = enrich_clan_badges(body, &data.db_pool, game).await;
             } else if is_member_path {
-                body = filter_member_data(body, exempt_tags, user_role);
+                body = filter_member_data(
+                    body,
+                    exempt_tags,
+                    user_role,
+                    crate::auth::has_required_role(user_role, "MEMBER"),
+                );
             }
 
             let status = StatusCode::from_u16(status as u16).unwrap_or(StatusCode::OK);

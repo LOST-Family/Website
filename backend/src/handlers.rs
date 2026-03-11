@@ -293,6 +293,111 @@ fn get_cache_prefix(game: GameType) -> &'static str {
     }
 }
 
+fn normalize_tag(tag: &str) -> String {
+    tag.trim().trim_start_matches('#').to_uppercase()
+}
+
+fn get_game_linked_tags(user: Option<&AuthenticatedUser>, game: GameType) -> &[String] {
+    user.map(|u| {
+        if game == GameType::ClashRoyale {
+            u.linked_cr_players.as_slice()
+        } else {
+            u.linked_players.as_slice()
+        }
+    })
+    .unwrap_or(&[])
+}
+
+async fn get_player_clan_tag(
+    data: &web::Data<AppState>,
+    player_tag: &str,
+    game: GameType,
+) -> Option<String> {
+    let encoded_tag = encode_tag(player_tag);
+    let supercell_url_path = format!("/players/{}", encoded_tag);
+
+    if let Ok(body) =
+        get_cached_or_update_supercell_cache(data, game, &supercell_url_path, 300).await
+        && let Ok(player_json) = serde_json::from_slice::<serde_json::Value>(&body)
+        && let Some(clan_tag) = player_json
+            .get("clan")
+            .and_then(|clan| clan.get("tag"))
+            .and_then(|tag| tag.as_str())
+    {
+        return Some(clan_tag.to_string());
+    }
+
+    let upstream_url_path = format!("/api/players/{}", encoded_tag);
+    if let Ok(body) = get_cached_or_update_upstream_cache(data, game, &upstream_url_path, 300).await
+        && let Ok(player_json) = serde_json::from_slice::<serde_json::Value>(&body)
+        && let Some(clan_tag) = player_json
+            .get("clan")
+            .and_then(|clan| clan.get("tag"))
+            .and_then(|tag| tag.as_str())
+    {
+        return Some(clan_tag.to_string());
+    }
+
+    None
+}
+
+async fn user_has_linked_player_in_clan(
+    data: &web::Data<AppState>,
+    linked_tags: &[String],
+    clan_tag: &str,
+    game: GameType,
+) -> bool {
+    let normalized_clan_tag = normalize_tag(clan_tag);
+    if normalized_clan_tag.is_empty() {
+        return false;
+    }
+
+    let clan_checks = linked_tags.iter().map(|linked_tag| {
+        let data = data.clone();
+        let linked_tag = linked_tag.clone();
+        let normalized_clan_tag = normalized_clan_tag.clone();
+        async move {
+            get_player_clan_tag(&data, &linked_tag, game)
+                .await
+                .map(|linked_clan_tag| normalize_tag(&linked_clan_tag) == normalized_clan_tag)
+                .unwrap_or(false)
+        }
+    });
+
+    join_all(clan_checks)
+        .await
+        .into_iter()
+        .any(|is_match| is_match)
+}
+
+async fn can_view_player_kickpoints(
+    data: &web::Data<AppState>,
+    user: Option<&AuthenticatedUser>,
+    player_tag: &str,
+    player_clan_tag: Option<&str>,
+    game: GameType,
+) -> bool {
+    let user_role = user.and_then(|u| u.claims.role.as_deref());
+    if has_required_role(user_role, "COLEADER") {
+        return true;
+    }
+
+    let linked_tags = get_game_linked_tags(user, game);
+    let normalized_player_tag = normalize_tag(player_tag);
+    if linked_tags
+        .iter()
+        .any(|linked_tag| normalize_tag(linked_tag) == normalized_player_tag)
+    {
+        return true;
+    }
+
+    let Some(player_clan_tag) = player_clan_tag else {
+        return false;
+    };
+
+    user_has_linked_player_in_clan(data, linked_tags, player_clan_tag, game).await
+}
+
 async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameType) -> HttpResponse {
     let encoded_tag = encode_tag(tag);
     let supercell_url_path = format!("/clans/{}", encoded_tag);
@@ -432,21 +537,9 @@ async fn get_clan_members_impl(
 ) -> HttpResponse {
     let encoded_tag = encode_tag(tag);
     let prefix = get_cache_prefix(game);
-    let user_role = opt_user
-        .user
-        .as_ref()
-        .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
+    let user = opt_user.user.as_ref();
+    let user_role = user.and_then(|u| u.claims.role.as_deref());
+    let exempt_tags = get_game_linked_tags(user, game);
 
     let supercell_url_path = format!("/clans/{}", encoded_tag);
     let upstream_url_path = format!("/api/clans/{}/members", encoded_tag);
@@ -472,18 +565,49 @@ async fn get_clan_members_impl(
         _ => Bytes::new(),
     };
 
+    let upstream_members_unfiltered: Vec<serde_json::Value> =
+        serde_json::from_slice(&upstream_body).unwrap_or_default();
+
+    let can_view_clan_kickpoints = has_required_role(user_role, "COLEADER")
+        || exempt_tags.iter().any(|linked_tag| {
+            let normalized_linked_tag = normalize_tag(linked_tag);
+
+            supercell_members.iter().any(|member| {
+                member
+                    .get("tag")
+                    .and_then(|tag| tag.as_str())
+                    .map(|tag| normalize_tag(tag) == normalized_linked_tag)
+                    .unwrap_or(false)
+            }) || upstream_members_unfiltered.iter().any(|member| {
+                member
+                    .get("tag")
+                    .and_then(|tag| tag.as_str())
+                    .map(|tag| normalize_tag(tag) == normalized_linked_tag)
+                    .unwrap_or(false)
+            })
+        });
+
     // Filter upstream members first (privacy logic)
-    let filtered_upstream_body = filter_member_data(upstream_body, exempt_tags, user_role);
+    let filtered_upstream_body = filter_member_data(
+        upstream_body,
+        exempt_tags,
+        user_role,
+        can_view_clan_kickpoints,
+    );
     let upstream_members: Vec<serde_json::Value> =
         serde_json::from_slice(&filtered_upstream_body).unwrap_or_default();
 
     // Helper to normalize tags for comparison (handle casing and # prefix)
-    let normalize_tag = |t: &str| t.to_uppercase().trim_start_matches('#').to_string();
+    let normalize_member_tag = |t: &str| normalize_tag(t);
 
     // Track tags already processed from supercell
     let supercell_tags: Vec<String> = supercell_members
         .iter()
-        .filter_map(|m| m.get("tag").and_then(|t| t.as_str()).map(&normalize_tag))
+        .filter_map(|m| {
+            m.get("tag")
+                .and_then(|t| t.as_str())
+                .map(&normalize_member_tag)
+        })
         .collect();
 
     // Merge upstream data into supercell list
@@ -494,11 +618,14 @@ async fn get_clan_members_impl(
 
         if let Some(tag_ref) = s_member.get("tag").and_then(|t| t.as_str()) {
             let member_tag = tag_ref.to_string();
-            let norm_tag = normalize_tag(&member_tag);
+            let norm_tag = normalize_member_tag(&member_tag);
 
             // Find matching upstream member
             if let Some(u_member) = upstream_members.iter().find(|m| {
-                m.get("tag").and_then(|t| t.as_str()).map(&normalize_tag) == Some(norm_tag.clone())
+                m.get("tag")
+                    .and_then(|t| t.as_str())
+                    .map(&normalize_member_tag)
+                    == Some(norm_tag.clone())
             }) {
                 if let (Some(s_obj), Some(u_obj)) = (s_member.as_object_mut(), u_member.as_object())
                 {
@@ -596,7 +723,7 @@ async fn get_clan_members_impl(
     let mut final_members = supercell_members;
     for u_member in upstream_members {
         if let Some(u_tag) = u_member.get("tag").and_then(|t| t.as_str())
-            && !supercell_tags.contains(&normalize_tag(u_tag))
+            && !supercell_tags.contains(&normalize_member_tag(u_tag))
         {
             let mut mixed_member = u_member.clone();
             if let Some(obj) = mixed_member.as_object_mut() {
@@ -728,28 +855,19 @@ async fn get_player_impl(
     };
 
     // Fetch upstream summary if user is authorized
-    let user_role = opt_user
-        .user
-        .as_ref()
-        .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
+    let user = opt_user.user.as_ref();
     let tag_str = player_json
         .get("tag")
         .and_then(|t| t.as_str())
         .unwrap_or("");
-    let is_exempt = exempt_tags.iter().any(|et| et == tag_str);
+    let player_clan_tag = player_json
+        .get("clan")
+        .and_then(|clan| clan.get("tag"))
+        .and_then(|tag| tag.as_str());
+    let can_view_kickpoints =
+        can_view_player_kickpoints(data, user, tag_str, player_clan_tag, game).await;
 
-    if (has_required_role(user_role, "MEMBER") || is_exempt)
+    if can_view_kickpoints
         && let Ok(u_body) = upstream_res
         && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
         && let Some(obj) = player_json.as_object_mut()
@@ -878,28 +996,20 @@ async fn get_player_kickpoints_impl(
         _ => return HttpResponse::NotFound().finish(),
     };
 
-    let user_role = opt_user
-        .user
-        .as_ref()
-        .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
-
     let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
-    let tag_is_exempt = exempt_tags.iter().any(|et| et == tag_str);
+    let resolved_player_clan_tag = get_player_clan_tag(data, tag_str, game).await;
+    let can_view_kickpoints = can_view_player_kickpoints(
+        data,
+        opt_user.user.as_ref(),
+        tag_str,
+        resolved_player_clan_tag.as_deref(),
+        game,
+    )
+    .await;
 
-    if !has_required_role(user_role, "MEMBER") && !tag_is_exempt {
+    if !can_view_kickpoints {
         return HttpResponse::Forbidden().json(ErrorResponse {
-            error: "Access denied: Requires MEMBER role".into(),
+            error: "Access denied: Requires same clan access".into(),
         });
     }
 
@@ -949,45 +1059,27 @@ async fn get_player_kickpoints_details_impl(
         _ => return HttpResponse::NotFound().finish(),
     };
 
-    let user_role = opt_user
-        .user
-        .as_ref()
-        .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
-
     let tag_str = u_json.get("tag").and_then(|t| t.as_str()).unwrap_or("");
-    let tag_is_exempt = exempt_tags.iter().any(|et| et == tag_str);
+    let resolved_player_clan_tag = get_player_clan_tag(data, tag_str, game).await;
+    let can_view_kickpoints = can_view_player_kickpoints(
+        data,
+        opt_user.user.as_ref(),
+        tag_str,
+        resolved_player_clan_tag.as_deref(),
+        game,
+    )
+    .await;
 
-    if !has_required_role(user_role, "MEMBER") && !tag_is_exempt {
+    if !can_view_kickpoints {
         return HttpResponse::Forbidden().json(ErrorResponse {
-            error: "Access denied: Requires MEMBER role".into(),
+            error: "Access denied: Requires same clan access".into(),
         });
     }
-
-    let is_coleader = has_required_role(user_role, "COLEADER");
 
     if let Some(akp) = u_json
         .get_mut("activeKickpoints")
         .and_then(|v| v.as_array_mut())
     {
-        if !is_coleader && !tag_is_exempt {
-            for kp in akp.iter_mut() {
-                if let Some(kp_obj) = kp.as_object_mut() {
-                    kp_obj.remove("description");
-                    kp_obj.remove("reason");
-                }
-            }
-        }
         return HttpResponse::Ok().json(akp);
     }
 

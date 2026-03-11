@@ -39,6 +39,9 @@
         isWarLogPublic: boolean;
         members: number;
         chatLanguage?: { name: string };
+        maxKickpoints?: number;
+        kickpointsExpireAfterDays?: number;
+        kickpointReasons?: Array<{ name: string; amount: number }>;
     }
 
     interface Player {
@@ -82,6 +85,12 @@
         upstream_expLevel?: number;
     }
 
+    interface KickpointCarrier {
+        activeKickpointsSum?: number | string;
+        activeKickpointsCount?: number | string;
+        activeKickpoints?: Array<{ amount?: number | string }>;
+    }
+
     let clan: Clan | null = null;
     let clanConfig: any = null;
     let members: Player[] = [];
@@ -93,11 +102,26 @@
     let playerOtherAccounts: any[] = [];
     let enrichedTags = new Set<string>();
 
+    function normalizeTag(tag: string | undefined | null): string {
+        return (tag || '').trim().replace(/^#/, '').toUpperCase();
+    }
+
+    $: viewerIsInClan = !!(
+        $user &&
+        members.some((m) =>
+            ($user.linked_players || []).some(
+                (linkedTag) => normalizeTag(linkedTag) === normalizeTag(m.tag),
+            ),
+        )
+    );
     $: viewerIsCoLeader = !!(
         $user &&
         members.some(
             (m) =>
-                ($user.linked_players || []).includes(m.tag) &&
+                ($user.linked_players || []).some(
+                    (linkedTag) =>
+                        normalizeTag(linkedTag) === normalizeTag(m.tag),
+                ) &&
                 (m.role === 'coLeader' || m.role === 'leader'),
         )
     );
@@ -106,6 +130,49 @@
         viewerIsCoLeader ||
         ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
     );
+    $: hasKickpointAccess = !!(hasPrivilegedAccess || viewerIsInClan);
+
+    function toNumber(value: number | string | undefined): number {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    }
+
+    function getActiveKickpointSum(member: KickpointCarrier): number {
+        if (member.activeKickpointsSum !== undefined) {
+            return toNumber(member.activeKickpointsSum);
+        }
+
+        return (member.activeKickpoints || []).reduce(
+            (sum, kickpoint) => sum + toNumber(kickpoint.amount),
+            0,
+        );
+    }
+
+    function getActiveKickpointCount(member: KickpointCarrier): number {
+        if (member.activeKickpointsCount !== undefined) {
+            return toNumber(member.activeKickpointsCount);
+        }
+
+        return member.activeKickpoints?.length || 0;
+    }
+
+    function getClanMaxKickpoints(): number {
+        return toNumber(clan?.maxKickpoints ?? clanConfig?.maxKickpoints);
+    }
+
+    function isAtKickpointLimit(member: {
+        activeKickpointsSum?: number;
+    }): boolean {
+        const maxKickpoints = getClanMaxKickpoints();
+
+        return (
+            maxKickpoints > 0 && getActiveKickpointSum(member) >= maxKickpoints
+        );
+    }
 
     async function enrichMembers(toEnrich: Player[]) {
         const missing = toEnrich.filter(
@@ -465,6 +532,53 @@
                                 </div>
                             </div>
                         </section>
+
+                        {#if clan.kickpointReasons && clan.kickpointReasons.length > 0}
+                            <section
+                                class="info-card reasons-card"
+                                in:slide={{ duration: 400, delay: 200 }}
+                            >
+                                <div class="card-header">
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        class="h-icon"
+                                    >
+                                        <path
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                        />
+                                    </svg>
+                                    <h3>Regelwerk / Kickpoints</h3>
+                                </div>
+                                <div class="reasons-list">
+                                    {#each [...clan.kickpointReasons].sort((a, b) => b.amount - a.amount) as reason}
+                                        <div class="reason-item">
+                                            <span class="reason-name"
+                                                >{reason.name}</span
+                                            >
+                                            <span class="reason-amount"
+                                                >+{reason.amount}</span
+                                            >
+                                        </div>
+                                    {/each}
+                                </div>
+                                {#if clan.maxKickpoints}
+                                    <div class="max-kp-info">
+                                        Maximale Kickpoints: <span class="val"
+                                            >{clan.maxKickpoints}</span
+                                        >
+                                    </div>
+                                {/if}
+                                {#if clan.kickpointsExpireAfterDays}
+                                    <div class="expiry-info">
+                                        Verfall nach {clan.kickpointsExpireAfterDays}
+                                        Tagen
+                                    </div>
+                                {/if}
+                            </section>
+                        {/if}
                     </div>
                 </aside>
 
@@ -510,6 +624,7 @@
                                 class:only-supercell={!member.in_upstream &&
                                     member.in_supercell}
                                 class:has-diff={member.is_diff}
+                                class:maxKickpoints={isAtKickpointLimit(member)}
                                 on:click={() => selectPlayer(member)}
                                 on:keydown={(e) =>
                                     e.key === 'Enter' && selectPlayer(member)}
@@ -584,13 +699,12 @@
                                     </div>
                                 </div>
 
-                                {#if hasPrivilegedAccess && member.activeKickpointsCount && member.activeKickpointsCount > 0}
+                                {#if hasKickpointAccess && isAtKickpointLimit(member)}
                                     <div
-                                        class="kickpoint-indicator {member.activeKickpointsSum &&
-                                        member.activeKickpointsSum >= 10
-                                            ? 'high-risk'
-                                            : ''}"
-                                        title="{member.activeKickpointsCount} aktive Kickpoints"
+                                        class="kickpoint-indicator high-risk"
+                                        title="{getActiveKickpointCount(
+                                            member,
+                                        )} aktive Kickpoints"
                                     >
                                         !
                                     </div>
@@ -623,6 +737,9 @@
                                             {#each leftMembers as m (m.tag)}
                                                 <div
                                                     class="member-card only-upstream"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
                                                     on:click={() =>
                                                         selectPlayer(m)}
                                                     on:keydown={(e) =>
@@ -738,6 +855,9 @@
                                             {#each newMembers as m (m.tag)}
                                                 <div
                                                     class="member-card only-supercell"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
                                                     on:click={() =>
                                                         selectPlayer(m)}
                                                     on:keydown={(e) =>
@@ -782,6 +902,9 @@
                                                             {/if}
                                                         </div>
                                                         <div
+                                                            class:maxKickpoints={isAtKickpointLimit(
+                                                                m,
+                                                            )}
                                                             class="m-main-info"
                                                         >
                                                             <h4 class="m-name">
@@ -1029,7 +1152,7 @@
         {theme}
         onClose={closePlayerDetails}
         otherAccounts={playerOtherAccounts}
-        {hasPrivilegedAccess}
+        {hasKickpointAccess}
         isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
@@ -1278,9 +1401,51 @@
     .sidebar-sticky {
         position: sticky;
         top: 6rem;
+        max-height: calc(100vh - 7rem);
+        overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
         flex-direction: column;
         gap: 2rem;
+        padding: 1rem 0.9rem 1rem 0.15rem;
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(59, 130, 246, 0.22) transparent;
+        -webkit-mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb {
+        background-color: rgba(59, 130, 246, 0.18);
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(59, 130, 246, 0.3);
     }
 
     .info-card {
@@ -1303,6 +1468,97 @@
         font-size: 1.2rem;
         font-weight: 800;
         letter-spacing: -0.01em;
+    }
+
+    .reasons-card {
+        border-color: rgba(237, 66, 69, 0.3);
+    }
+
+    .reasons-card .card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .reasons-card h3 {
+        margin: 0;
+    }
+
+    .h-icon {
+        width: 20px;
+        height: 20px;
+        color: #ed4245;
+    }
+
+    .reasons-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .reason-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        font-size: 0.85rem;
+    }
+
+    .reason-name {
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .light .reason-name {
+        color: rgba(0, 0, 0, 0.75);
+    }
+
+    .reason-amount {
+        color: #ed4245;
+        font-weight: 800;
+        font-size: 0.75rem;
+        background: rgba(237, 66, 69, 0.12);
+        padding: 0.2rem 0.55rem;
+        border-radius: 8px;
+        min-width: 2rem;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .max-kp-info,
+    .expiry-info {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        margin-top: 0.5rem;
+    }
+
+    .max-kp-info {
+        background: rgba(237, 66, 69, 0.15);
+        color: #ff787b;
+        border: 1px solid rgba(237, 66, 69, 0.2);
+    }
+
+    .max-kp-info .val {
+        font-weight: 800;
+    }
+
+    .expiry-info {
+        color: rgba(255, 255, 255, 0.4);
+        font-style: italic;
+    }
+
+    .light .reason-item {
+        background: rgba(0, 0, 0, 0.04);
+        border-color: rgba(0, 0, 0, 0.06);
+    }
+
+    .light .expiry-info {
+        color: rgba(0, 0, 0, 0.4);
     }
 
     .info-grid {
@@ -1436,6 +1692,27 @@
         transform: translateY(-8px);
         border-color: var(--accent-color);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .member-card.maxKickpoints {
+        border-color: rgba(244, 63, 94, 0.85);
+        box-shadow:
+            0 0 0 1px rgba(244, 63, 94, 0.35),
+            0 18px 36px rgba(244, 63, 94, 0.16);
+    }
+
+    .light .member-card.maxKickpoints {
+        border-color: rgba(220, 38, 38, 0.8);
+        box-shadow:
+            0 0 0 1px rgba(220, 38, 38, 0.2),
+            0 14px 28px rgba(220, 38, 38, 0.1);
+    }
+
+    .member-card.maxKickpoints:hover {
+        border-color: rgba(244, 63, 94, 1);
+        box-shadow:
+            0 0 0 1px rgba(244, 63, 94, 0.45),
+            0 22px 42px rgba(244, 63, 94, 0.22);
     }
 
     .m-card-header {
@@ -1822,6 +2099,12 @@
         .sidebar-sticky {
             position: relative;
             top: 0;
+            max-height: none;
+            overflow-y: visible;
+            overflow-x: visible;
+            padding: 0;
+            -webkit-mask-image: none;
+            mask-image: none;
         }
         .members-main {
             order: 1;
