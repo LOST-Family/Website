@@ -2,6 +2,8 @@
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
     import type { GameType } from './auth';
+    import { getArenaNum, getArenaImageUrl, hideOnError, badgeNameFromId } from './crUtils';
+    import { getClanBadgeUrl } from './clanDisplay';
 
     export let player: any;
     export let gameType: GameType;
@@ -73,9 +75,15 @@
                             />
                         {:else if player.arena}
                             <div class="arena-icon-container">
-                                <div class="arena-id-label">
-                                    A{player.arena.id.toString().slice(-2)}
-                                </div>
+                                <img
+                                    src={getArenaImageUrl(player.arena.id)}
+                                    alt=""
+                                    class="arena-img"
+                                    on:error={hideOnError}
+                                />
+                                <span class="arena-fallback-label"
+                                    >A{getArenaNum(player.arena.id)}</span
+                                >
                             </div>
                         {/if}
                         <div class="player-titles">
@@ -106,11 +114,12 @@
                             <p class="tag">{player.tag}</p>
                             {#if player.clan}
                                 <div class="clan-info-small">
-                                    <img
-                                        src={player.clan.badgeUrls?.small ||
-                                            player.clan.badgeUrls?.medium}
-                                        alt=""
-                                    />
+                                    {#if getClanBadgeUrl(player.clan)}
+                                        <img
+                                            src={getClanBadgeUrl(player.clan)}
+                                            alt=""
+                                        />
+                                    {/if}
                                     <span>{player.clan.name}</span>
                                 </div>
                             {/if}
@@ -494,12 +503,14 @@
                                         on:click={() =>
                                             onSelectOtherAccount?.(acc)}
                                     >
-                                        <img
-                                            src={acc.clan?.badgeUrls?.small ||
-                                                ''}
-                                            alt=""
-                                            class="acc-badge"
-                                        />
+                                        {#if acc.clan?.badgeUrls?.small}
+                                            <img
+                                                src={acc.clan?.badgeUrls
+                                                    ?.small || ''}
+                                                alt=""
+                                                class="acc-badge"
+                                            />
+                                        {/if}
                                         <div class="acc-info">
                                             <div class="acc-name">
                                                 {acc.nameDB || acc.name}
@@ -1129,10 +1140,19 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        position: relative;
+        overflow: hidden;
     }
 
-    .arena-id-label {
-        font-size: 2rem;
+    .arena-img {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+    }
+
+    .arena-fallback-label {
+        position: absolute;
+        font-size: 1.5rem;
         font-weight: 900;
         color: #5865f2;
         text-shadow: 0 0 20px rgba(88, 101, 242, 0.5);

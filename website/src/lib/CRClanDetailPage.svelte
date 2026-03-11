@@ -4,6 +4,9 @@
     import { quintOut } from 'svelte/easing';
     import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
+    import { badgeNameFromId, getArenaNum, getArenaImageUrl, hideOnError } from './crUtils';
+    import { getClanBadgeUrl } from './clanDisplay';
+    import { ROLE_ORDER, getRoleDisplay, isRoleWrong, getPlayerName } from './roleUtils';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
@@ -99,73 +102,8 @@
         ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
     );
 
-    const roleOrder: Record<string, number> = {
-        leader: 1,
-        coLeader: 2,
-        elder: 3,
-        member: 4,
-    };
-
-    function getRoleDisplay(role: string): string {
-        switch (role?.toLowerCase()) {
-            case 'leader':
-                return 'Anführer';
-            case 'coleader':
-                return 'Vize-Anführer';
-            case 'admin':
-            case 'elder':
-                return 'Ältester';
-            case 'member':
-                return 'Mitglied';
-            default:
-                return role;
-        }
-    }
-
-    function isRoleWrong(current: any, expected: any): boolean {
-        if (!expected) return false;
-
-        const c = String(current || '')
-            .toLowerCase()
-            .trim();
-        const e = String(expected || '')
-            .toLowerCase()
-            .trim();
-
-        if (c === e) return false;
-
-        // Comprehensive CoC/CR Normalization
-        const normalize = (r: string) => {
-            if (r === 'admin' || r === 'elder' || r === 'ältester')
-                return 'elder';
-            if (
-                r === 'coleader' ||
-                r === 'co-leader' ||
-                r === 'vize-anführer' ||
-                r === 'vize'
-            )
-                return 'coleader';
-            if (r === 'leader' || r === 'anführer') return 'leader';
-            if (r === 'member' || r === 'mitglied') return 'member';
-            return r;
-        };
-
-        return normalize(c) !== normalize(e);
-    }
-
-    function getPlayerName(p: Player): string {
-        const nameCandidate = p.name || '';
-        if (!nameCandidate || nameCandidate.startsWith('#')) {
-            return (
-                p.nickname ||
-                p.global_name ||
-                p.username ||
-                p.upstream_name ||
-                nameCandidate ||
-                'Unbekannt'
-            );
-        }
-        return nameCandidate;
+    function crIsRoleWrong(current: any, expected: any): boolean {
+        return isRoleWrong(current, expected, false);
     }
 
     async function enrichMembers(toEnrich: Player[]) {
@@ -233,8 +171,8 @@
 
             // Sort members by role, then trophies
             members.sort((a, b) => {
-                const rA = roleOrder[a.role] || 99;
-                const rB = roleOrder[b.role] || 99;
+                const rA = ROLE_ORDER[a.role] || 99;
+                const rB = ROLE_ORDER[b.role] || 99;
                 if (rA !== rB) return rA - rB;
                 return (b.trophies || 0) - (a.trophies || 0);
             });
@@ -378,16 +316,20 @@
                 </button>
                 <div
                     class="hero-bg"
-                    style="background-image: url({clan.badgeUrls?.large || ''})"
+                    style={getClanBadgeUrl(clan)
+                        ? `background-image: url(${getClanBadgeUrl(clan)})`
+                        : ''}
                 ></div>
                 <div class="hero-overlay"></div>
                 <div class="hero-content">
                     <div class="badge-container">
-                        <img
-                            src={clan.badgeUrls?.large || ''}
-                            alt={clan.name}
-                            class="clan-badge"
-                        />
+                        {#if getClanBadgeUrl(clan)}
+                            <img
+                                src={getClanBadgeUrl(clan)}
+                                alt={clan.name}
+                                class="clan-badge"
+                            />
+                        {/if}
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">
@@ -655,12 +597,21 @@
                                     </div>
                                     <div class="m-avatar-container">
                                         {#if member.arena}
-                                            <img
-                                                src="https://cdn.clashroyale.com/static/assets/images/arenas/{member
-                                                    .arena.id}.png"
-                                                alt={member.arena.name}
-                                                class="arena-icon"
-                                            />
+                                            <div class="arena-badge-box">
+                                                <img
+                                                    src={getArenaImageUrl(
+                                                        member.arena.id,
+                                                    )}
+                                                    alt=""
+                                                    class="arena-icon"
+                                                    on:error={hideOnError}
+                                                />
+                                                <span class="arena-label"
+                                                    >A{getArenaNum(
+                                                        member.arena.id,
+                                                    )}</span
+                                                >
+                                            </div>
                                         {:else}
                                             <div class="no-league"></div>
                                         {/if}
@@ -680,13 +631,13 @@
                                         <div class="m-sub-info">
                                             <span
                                                 class="m-role-label"
-                                                class:role-error={isRoleWrong(
+                                                class:role-error={crIsRoleWrong(
                                                     member.role,
                                                     member.upstream_role,
                                                 )}
                                             >
                                                 {getRoleDisplay(member.role)}
-                                                {#if isRoleWrong(member.role, member.upstream_role)}
+                                                {#if crIsRoleWrong(member.role, member.upstream_role)}
                                                     <span class="role-expected"
                                                         >• Upstream: {getRoleDisplay(
                                                             member.upstream_role,
@@ -814,14 +765,28 @@
                                                             class="m-avatar-container"
                                                         >
                                                             {#if m.arena}
-                                                                <img
-                                                                    src="https://cdn.clashroyale.com/static/assets/images/arenas/{m
-                                                                        .arena
-                                                                        .id}.png"
-                                                                    alt={m.arena
-                                                                        .name}
-                                                                    class="league-icon"
-                                                                />
+                                                                <div
+                                                                    class="arena-badge-box"
+                                                                >
+                                                                    <img
+                                                                        src={getArenaImageUrl(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}
+                                                                        alt=""
+                                                                        class="arena-icon"
+                                                                        on:error={hideOnError}
+                                                                    />
+                                                                    <span
+                                                                        class="arena-label"
+                                                                        >A{getArenaNum(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}</span
+                                                                    >
+                                                                </div>
                                                             {:else}
                                                                 <div
                                                                     class="no-league"
@@ -841,7 +806,7 @@
                                                             >
                                                                 <span
                                                                     class="m-role-label"
-                                                                    class:role-error={isRoleWrong(
+                                                                    class:role-error={crIsRoleWrong(
                                                                         m.role,
                                                                         m.upstream_role,
                                                                     )}
@@ -849,7 +814,7 @@
                                                                     {getRoleDisplay(
                                                                         m.role,
                                                                     )}
-                                                                    {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                    {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                         <span
                                                                             class="role-expected"
                                                                             >•
@@ -916,14 +881,28 @@
                                                             class="m-avatar-container"
                                                         >
                                                             {#if m.arena}
-                                                                <img
-                                                                    src="https://cdn.clashroyale.com/static/assets/images/arenas/{m
-                                                                        .arena
-                                                                        .id}.png"
-                                                                    alt={m.arena
-                                                                        .name}
-                                                                    class="league-icon"
-                                                                />
+                                                                <div
+                                                                    class="arena-badge-box"
+                                                                >
+                                                                    <img
+                                                                        src={getArenaImageUrl(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}
+                                                                        alt=""
+                                                                        class="arena-icon"
+                                                                        on:error={hideOnError}
+                                                                    />
+                                                                    <span
+                                                                        class="arena-label"
+                                                                        >A{getArenaNum(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}</span
+                                                                    >
+                                                                </div>
                                                             {:else}
                                                                 <div
                                                                     class="no-league"
@@ -943,7 +922,7 @@
                                                             >
                                                                 <span
                                                                     class="m-role-label"
-                                                                    class:role-error={isRoleWrong(
+                                                                    class:role-error={crIsRoleWrong(
                                                                         m.role,
                                                                         m.upstream_role,
                                                                     )}
@@ -951,7 +930,7 @@
                                                                     {getRoleDisplay(
                                                                         m.role,
                                                                     )}
-                                                                    {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                    {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                         <span
                                                                             class="role-expected"
                                                                             >•
@@ -1020,14 +999,26 @@
                                                         class="m-avatar-container"
                                                     >
                                                         {#if m.arena}
-                                                            <img
-                                                                src="https://cdn.clashroyale.com/static/assets/images/arenas/{m
-                                                                    .arena
-                                                                    .id}.png"
-                                                                alt={m.arena
-                                                                    .name}
-                                                                class="league-icon"
-                                                            />
+                                                            <div
+                                                                class="arena-badge-box"
+                                                            >
+                                                                <img
+                                                                    src={getArenaImageUrl(
+                                                                        m.arena
+                                                                            .id,
+                                                                    )}
+                                                                    alt=""
+                                                                    class="arena-icon"
+                                                                    on:error={hideOnError}
+                                                                />
+                                                                <span
+                                                                    class="arena-label"
+                                                                    >A{getArenaNum(
+                                                                        m.arena
+                                                                            .id,
+                                                                    )}</span
+                                                                >
+                                                            </div>
                                                         {:else}
                                                             <div
                                                                 class="no-league"
@@ -1047,7 +1038,7 @@
                                                         <div class="m-sub-info">
                                                             <span
                                                                 class="m-role-label"
-                                                                class:role-error={isRoleWrong(
+                                                                class:role-error={crIsRoleWrong(
                                                                     m.role,
                                                                     m.upstream_role,
                                                                 )}
@@ -1055,7 +1046,7 @@
                                                                 {getRoleDisplay(
                                                                     m.role,
                                                                 )}
-                                                                {#if isRoleWrong(m.role, m.upstream_role)}
+                                                                {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                     <span
                                                                         class="role-expected"
                                                                         >•
@@ -1103,7 +1094,7 @@
                                                                 >
                                                             </div>
                                                         {/if}
-                                                        {#if isRoleWrong(m.role, m.upstream_role)}
+                                                        {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                             <div
                                                                 class="change-item"
                                                             >
@@ -1365,6 +1356,7 @@
         height: 140px;
         border-radius: 24px;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        object-fit: contain;
     }
 
     .clan-info-main {
@@ -1771,6 +1763,35 @@
         font-size: 0.7rem;
         font-weight: 700;
         color: #fff;
+    }
+
+    .arena-badge-box {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        background: rgba(88, 101, 242, 0.1);
+        border-radius: 10px;
+        border: 1px solid rgba(88, 101, 242, 0.2);
+        overflow: hidden;
+    }
+
+    .arena-icon {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .arena-label {
+        position: absolute;
+        bottom: 1px;
+        right: 3px;
+        font-size: 0.55rem;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.5);
+        line-height: 1;
     }
 
     .no-league {

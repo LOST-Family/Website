@@ -2,26 +2,7 @@
     import { onMount } from 'svelte';
     import { fade, slide } from 'svelte/transition';
     import type { GameType } from './auth';
-
-    // Import banners
-    import banner3 from '../assets/Clans/Clash of Clans/Lost-X-3.png';
-    import banner4 from '../assets/Clans/Clash of Clans/Lost-X-4.png';
-    import banner5 from '../assets/Clans/Clash of Clans/Lost-X-5.png';
-    import banner6 from '../assets/Clans/Clash of Clans/Lost-X-6.png';
-    import banner7 from '../assets/Clans/Clash of Clans/Lost-X-7.png';
-    import banner8 from '../assets/Clans/Clash of Clans/Lost-X-8.png';
-    import bannerF2P from '../assets/Clans/Clash of Clans/Lost-X-f2p.png';
-    import bannerF2P2 from '../assets/Clans/Clash of Clans/Lost-X-f2p2.png';
-    import bannerGP from '../assets/Clans/Clash of Clans/Lost-X-gp.png';
-    import bannerAnthrazit from '../assets/Clans/Clash of Clans/Lost-X-anthrazit.png';
-    import bannerDefault from '../assets/Assets/banner-lost.png';
-
-    // Clash Royale banners
-    import bannerCR1 from '../assets/Clans/Clash Royale/Lost_1.png';
-    import bannerCR2 from '../assets/Clans/Clash Royale/Lost_2.png';
-    import bannerCR3 from '../assets/Clans/Clash Royale/Lost_3.png';
-    import bannerCR4 from '../assets/Clans/Clash Royale/Lost_4.png';
-    import bannerCR5 from '../assets/Clans/Clash Royale/Lost_5.png';
+    import { getClanBanner, getClanBadgeUrl } from './clanDisplay';
 
     export let apiBaseUrl: string = '';
     export let theme: 'dark' | 'light' = 'dark';
@@ -39,6 +20,7 @@
         nameDB: string;
         index: number;
         badgeUrl: string;
+        badgeUrls?: { large: string; medium: string; small: string };
     }
 
     interface Player {
@@ -159,7 +141,7 @@
         'ÄLTESTER 8': '#f261ff',
         'ÄLTESTER GP': '#e04dbd',
         'ÄLTESTER ANTHRAZIT': '#546e7a',
-        'MITGLIED': '#f58190',
+        MITGLIED: '#f58190',
         'MITGLIED 2': '#a0f5b1',
         'MITGLIED 3': '#fdf277',
         'MITGLIED 4': '#d9a6f9',
@@ -234,7 +216,7 @@
                     try {
                         const encodedTag = encodeURIComponent(clan.tag);
                         const res = await fetch(
-                            `${apiBaseUrl}${apiPrefix}/clans/${encodedTag}/members-lite`
+                            `${apiBaseUrl}${apiPrefix}/clans/${encodedTag}/members-lite`,
                         );
 
                         if (!res.ok) throw new Error(`Failed to load`);
@@ -299,9 +281,7 @@
                                             clanNameUpper.includes('F2P2')
                                         )
                                             clanIndex = 2;
-                                        else if (
-                                            clanNameUpper.includes('F2P')
-                                        )
+                                        else if (clanNameUpper.includes('F2P'))
                                             clanIndex = 1;
                                         else if (
                                             clanNameUpper.includes('8') ||
@@ -368,7 +348,7 @@
                                                 clanNameUpper.includes('GP');
                                             const isAnthrazit =
                                                 clanNameUpper.includes(
-                                                    'ANTHRAZIT'
+                                                    'ANTHRAZIT',
                                                 );
 
                                             if (isGP) {
@@ -453,14 +433,14 @@
                         clans[index].error = 'Could not load members';
                         console.error(
                             `Error loading members for ${clan.tag}:`,
-                            e
+                            e,
                         );
                     } finally {
                         clans[index].loading = false;
                         // Trigger reactivity
                         clans = [...clans];
                     }
-                })
+                }),
             );
         } catch (e) {
             mainError = e instanceof Error ? e.message : 'Unknown error';
@@ -476,39 +456,13 @@
             grouped.get(role)!.push(member);
         }
         return [...grouped.entries()].sort(
-            (a, b) => (roleOrder[a[0]] ?? 99) - (roleOrder[b[0]] ?? 99)
+            (a, b) => (roleOrder[a[0]] ?? 99) - (roleOrder[b[0]] ?? 99),
         );
     }
 
     function toggleClan(index: number) {
         clans[index].isCollapsed = !clans[index].isCollapsed;
         clans = [...clans];
-    }
-
-    function getClanBanner(clanName: string): string {
-        const name = clanName.toUpperCase();
-
-        // Clash Royale clans use their own banners
-        if (gameType === 'cr') {
-            if (name === 'LOST') return bannerCR1;
-            if (name.includes('4') || name.includes('IV')) return bannerCR4;
-            if (name.includes('5') || name.includes('V')) return bannerCR5;
-            if (name.includes('3') || name.includes('III')) return bannerCR3;
-            if (name.includes('2') || name.includes('II')) return bannerCR2;
-            return bannerDefault;
-        }
-
-        if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
-        if (name.includes('F2P')) return bannerF2P;
-        if (name.includes('GP')) return bannerGP;
-        if (name.includes('8') || name.includes('VIII')) return banner8;
-        if (name.includes('7') || name.includes('VII')) return banner7;
-        if (name.includes('6') || name.includes('VI')) return banner6;
-        if (name.includes('4') || name.includes('IV')) return banner4;
-        if (name.includes('5') || name.includes('V')) return banner5;
-        if (name.includes('3') || name.includes('III')) return banner3;
-        if (name.includes('ANTHRAZIT')) return bannerAnthrazit;
-        return bannerDefault;
     }
 </script>
 
@@ -537,9 +491,9 @@
                         tabindex="0"
                         on:keydown={(e) => e.key === 'Enter' && toggleClan(i)}
                     >
-                        {#if clan.badgeUrl}
+                        {#if getClanBadgeUrl(clan)}
                             <img
-                                src={clan.badgeUrl}
+                                src={getClanBadgeUrl(clan)}
                                 alt="Badge"
                                 class="clan-badge"
                             />
@@ -585,7 +539,7 @@
                             transition:slide
                         >
                             <img
-                                src={getClanBanner(clan.nameDB || '')}
+                                src={getClanBanner(clan.nameDB || '', gameType)}
                                 alt="LOST Clan Banner"
                                 class="clan-banner"
                             />

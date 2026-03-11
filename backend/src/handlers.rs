@@ -352,6 +352,23 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
         );
     }
 
+    // Fallback: construct badgeUrls from badgeId if still missing
+    if let Some(obj) = clan_json.as_object_mut()
+        && !obj.contains_key("badgeUrls")
+        && let Some(badge_id) = obj.get("badgeId").and_then(|v| v.as_i64())
+    {
+        if let Some(url) = crate::utils::badge_url_from_id(badge_id) {
+            obj.insert(
+                "badgeUrls".to_string(),
+                serde_json::json!({
+                    "small": &url,
+                    "medium": &url,
+                    "large": &url
+                }),
+            );
+        }
+    }
+
     HttpResponse::Ok().json(clan_json)
 }
 

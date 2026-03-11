@@ -4,6 +4,12 @@
     import { quintOut } from 'svelte/easing';
     import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
+    import {
+        ROLE_ORDER,
+        getRoleDisplay,
+        isRoleWrong,
+        getPlayerName,
+    } from './roleUtils';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
@@ -101,76 +107,6 @@
         ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
     );
 
-    const roleOrder: Record<string, number> = {
-        leader: 1,
-        coLeader: 2,
-        admin: 3,
-        member: 4,
-    };
-
-    function getRoleDisplay(role: string): string {
-        switch (role?.toLowerCase()) {
-            case 'leader':
-                return 'Anführer';
-            case 'coleader':
-                return 'Vize-Anführer';
-            case 'admin':
-            case 'elder':
-                return 'Ältester';
-            case 'member':
-                return 'Mitglied';
-            default:
-                return role;
-        }
-    }
-
-    function isRoleWrong(current: any, expected: any): boolean {
-        if (!expected) return false;
-
-        const c = String(current || '')
-            .toLowerCase()
-            .trim();
-        const e = String(expected || '')
-            .toLowerCase()
-            .trim();
-
-        if (c === e) return false;
-
-        // Comprehensive CoC/CR Normalization
-        const normalize = (r: string) => {
-            if (r === 'admin' || r === 'elder' || r === 'ältester')
-                return 'elder';
-            if (
-                r === 'coleader' ||
-                r === 'co-leader' ||
-                r === 'vize-anführer' ||
-                r === 'vize'
-            )
-                return 'coleader';
-            if (r === 'leader' || r === 'anführer') return 'leader';
-            if (r === 'member' || r === 'mitglied') return 'member';
-            return r;
-        };
-
-        return normalize(c) !== normalize(e);
-    }
-
-    function getPlayerName(p: Player): string {
-        const nameCandidate = p.name || '';
-        // If name is tag-like (starts with #) or empty, try Discord info or upstream name
-        if (!nameCandidate || nameCandidate.startsWith('#')) {
-            return (
-                p.nickname ||
-                p.global_name ||
-                p.username ||
-                p.upstream_name ||
-                nameCandidate ||
-                'Unbekannt'
-            );
-        }
-        return nameCandidate;
-    }
-
     async function enrichMembers(toEnrich: Player[]) {
         const missing = toEnrich.filter(
             (p) =>
@@ -254,8 +190,8 @@
                 if (a.in_supercell !== b.in_supercell) {
                     return a.in_supercell ? -1 : 1;
                 }
-                const rA = roleOrder[a.role] || 99;
-                const rB = roleOrder[b.role] || 99;
+                const rA = ROLE_ORDER[a.role] || 99;
+                const rB = ROLE_ORDER[b.role] || 99;
                 if (rA !== rB) return rA - rB;
                 return (b.trophies || 0) - (a.trophies || 0);
             });
@@ -431,16 +367,20 @@
                 </button>
                 <div
                     class="hero-bg"
-                    style="background-image: url({clan.badgeUrls?.large || ''})"
+                    style={clan.badgeUrls?.large
+                        ? `background-image: url(${clan.badgeUrls.large})`
+                        : ''}
                 ></div>
                 <div class="hero-overlay"></div>
                 <div class="hero-content">
                     <div class="badge-container">
-                        <img
-                            src={clan.badgeUrls?.large || ''}
-                            alt={clan.name}
-                            class="clan-badge"
-                        />
+                        {#if clan.badgeUrls?.large}
+                            <img
+                                src={clan.badgeUrls.large}
+                                alt={clan.name}
+                                class="clan-badge"
+                            />
+                        {/if}
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">

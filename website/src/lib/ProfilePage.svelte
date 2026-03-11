@@ -5,6 +5,7 @@
     import { user, loading, fetchUser } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
     import type { GameType } from './auth';
+    import { getClanBadgeUrl } from './clanDisplay';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string = '';
@@ -392,10 +393,11 @@
                                         <div class="stat-item span-3">
                                             <span class="stat-label">Clan</span>
                                             <span class="stat-value">
-                                                {#if player.clanDB?.badgeUrl}
+                                                {#if getClanBadgeUrl(player.clanDB)}
                                                     <img
-                                                        src={player.clanDB
-                                                            .badgeUrl}
+                                                        src={getClanBadgeUrl(
+                                                            player.clanDB,
+                                                        )}
                                                         alt=""
                                                         class="small-badge"
                                                     />
@@ -409,10 +411,11 @@
                                                 >Aktueller Clan</span
                                             >
                                             <span class="stat-value">
-                                                {#if player.clan?.badgeUrls?.large}
+                                                {#if getClanBadgeUrl(player.clan)}
                                                     <img
-                                                        src={player.clan
-                                                            .badgeUrls.large}
+                                                        src={getClanBadgeUrl(
+                                                            player.clan,
+                                                        )}
                                                         alt=""
                                                         class="small-badge"
                                                     />
@@ -591,10 +594,11 @@
                                         <div class="stat-item">
                                             <span class="stat-label">Clan</span>
                                             <span class="stat-value">
-                                                {#if player.clan?.badgeUrls?.large}
+                                                {#if getClanBadgeUrl(player.clan)}
                                                     <img
-                                                        src={player.clan
-                                                            .badgeUrls.large}
+                                                        src={getClanBadgeUrl(
+                                                            player.clan,
+                                                        )}
                                                         alt=""
                                                         class="small-badge"
                                                     />
