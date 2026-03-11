@@ -464,6 +464,9 @@ async fn refresh_side_clans_cwl(data: &AppState) {
     let now = chrono::Utc::now();
     let season = now.format("%Y-%m").to_string();
 
+    // Collect leaguegroup data during the main loop for cross-population of ranks afterward
+    let mut collected_leaguegroups: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+
     for row in clans {
         use sqlx::Row;
         let clan_tag: String = row.get("clan_tag");
@@ -517,7 +520,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
 
                         // Try to get rank and accurate season from leaguegroup endpoint
                         let mut rank: Option<i32> = None;
-                        let mut season_to_use = season.clone();
+                        let mut leaguegroup_season: Option<String> = None;
 
                         let lg_url = format!(
                             "https://api.clashofclans.com/v1/clans/{}/currentwar/leaguegroup",
@@ -543,14 +546,14 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                             .get("season")
                                             .and_then(|v: &serde_json::Value| v.as_str())
                                         {
-                                            season_to_use = s.to_string();
+                                            leaguegroup_season = Some(s.to_string());
                                         }
 
-                                        if let Some(clans) = lg_json
+                                        if let Some(clans_arr) = lg_json
                                             .get("clans")
                                             .and_then(|v: &serde_json::Value| v.as_array())
                                         {
-                                            let mut sorted_clans = clans.clone();
+                                            let mut sorted_clans = clans_arr.clone();
                                             sorted_clans.sort_by(|a, b| {
                                                 let a_stars = a
                                                     .get("stars")
@@ -576,12 +579,19 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                                 })
                                             });
 
+                                            // Case-insensitive tag matching for robustness
                                             if let Some(pos) = sorted_clans.iter().position(|c| {
                                                 c.get("tag")
                                                     .and_then(|v: &serde_json::Value| v.as_str())
-                                                    == Some(&clan_tag)
+                                                    .map(|t| t.eq_ignore_ascii_case(&clan_tag))
+                                                    .unwrap_or(false)
                                             }) {
                                                 rank = Some((pos + 1) as i32);
+                                            }
+
+                                            // Store for cross-population after all clans are processed
+                                            if let Some(ref lg_s) = leaguegroup_season {
+                                                collected_leaguegroups.push((lg_s.clone(), sorted_clans));
                                             }
                                         }
                                     }
@@ -589,29 +599,101 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                             }
                         }
 
-                        let _ = sqlx::query(
-                            "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url, rank) 
-                                 VALUES ($1, $2, $3, $4, $5, $6) 
-                                 ON CONFLICT (clan_tag, season) DO UPDATE 
-                                 SET league_id = EXCLUDED.league_id, 
-                                     league_name = EXCLUDED.league_name,
-                                     league_badge_url = EXCLUDED.league_badge_url,
-                                     rank = EXCLUDED.rank",
-                        )
-                        .bind(&clan_tag)
-                        .bind(&season_to_use)
-                        .bind(league_id)
-                        .bind(league_name)
-                        .bind(league_badge_url)
-                        .bind(rank)
-                        .execute(&data.db_pool)
-                        .await;
+                        // Determine if the leaguegroup season differs from the current month.
+                        // After CWL ends, warLeague reflects the NEW league (post-promotion/demotion)
+                        // but the leaguegroup season still refers to the PREVIOUS CWL.
+                        // We must not overwrite the previous season's league with the new league.
+                        if let Some(ref lg_season) = leaguegroup_season {
+                            if lg_season != &season {
+                                // Past season: only update the rank (league was already correctly recorded)
+                                let _ = sqlx::query(
+                                    "UPDATE side_clans_cwl_stats SET rank = COALESCE($1, rank) WHERE clan_tag = $2 AND season = $3",
+                                )
+                                .bind(rank)
+                                .bind(&clan_tag)
+                                .bind(lg_season)
+                                .execute(&data.db_pool)
+                                .await;
+
+                                // Current season: record the warLeague (upcoming/current league, no rank yet)
+                                let _ = sqlx::query(
+                                    "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url)
+                                         VALUES ($1, $2, $3, $4, $5)
+                                         ON CONFLICT (clan_tag, season) DO UPDATE
+                                         SET league_id = COALESCE(EXCLUDED.league_id, side_clans_cwl_stats.league_id),
+                                             league_name = COALESCE(EXCLUDED.league_name, side_clans_cwl_stats.league_name),
+                                             league_badge_url = COALESCE(EXCLUDED.league_badge_url, side_clans_cwl_stats.league_badge_url)",
+                                )
+                                .bind(&clan_tag)
+                                .bind(&season)
+                                .bind(league_id)
+                                .bind(league_name)
+                                .bind(league_badge_url)
+                                .execute(&data.db_pool)
+                                .await;
+                            } else {
+                                // Active CWL: leaguegroup season matches current month — full upsert
+                                let _ = sqlx::query(
+                                    "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url, rank)
+                                         VALUES ($1, $2, $3, $4, $5, $6)
+                                         ON CONFLICT (clan_tag, season) DO UPDATE
+                                         SET league_id = COALESCE(EXCLUDED.league_id, side_clans_cwl_stats.league_id),
+                                             league_name = COALESCE(EXCLUDED.league_name, side_clans_cwl_stats.league_name),
+                                             league_badge_url = COALESCE(EXCLUDED.league_badge_url, side_clans_cwl_stats.league_badge_url),
+                                             rank = COALESCE(EXCLUDED.rank, side_clans_cwl_stats.rank)",
+                                )
+                                .bind(&clan_tag)
+                                .bind(lg_season)
+                                .bind(league_id)
+                                .bind(league_name)
+                                .bind(league_badge_url)
+                                .bind(rank)
+                                .execute(&data.db_pool)
+                                .await;
+                            }
+                        } else {
+                            // No leaguegroup data (CWL not active) — record current league for the current season
+                            let _ = sqlx::query(
+                                "INSERT INTO side_clans_cwl_stats (clan_tag, season, league_id, league_name, league_badge_url)
+                                     VALUES ($1, $2, $3, $4, $5)
+                                     ON CONFLICT (clan_tag, season) DO UPDATE
+                                     SET league_id = COALESCE(EXCLUDED.league_id, side_clans_cwl_stats.league_id),
+                                         league_name = COALESCE(EXCLUDED.league_name, side_clans_cwl_stats.league_name),
+                                         league_badge_url = COALESCE(EXCLUDED.league_badge_url, side_clans_cwl_stats.league_badge_url)",
+                            )
+                            .bind(&clan_tag)
+                            .bind(&season)
+                            .bind(league_id)
+                            .bind(league_name)
+                            .bind(league_badge_url)
+                            .execute(&data.db_pool)
+                            .await;
+                        }
                     }
                 }
             }
             Err(e) => error!("Error fetching CWL stats for {}: {}", clan_tag, e),
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // Second pass: cross-populate ranks from leaguegroup data.
+    // When we fetched leaguegroup for clan A, the response contained ALL clans in that group.
+    // Now that all clan rows exist, fill in any missing ranks from those group responses.
+    for (lg_season, sorted_clans) in &collected_leaguegroups {
+        for (idx, group_clan) in sorted_clans.iter().enumerate() {
+            if let Some(group_tag) = group_clan.get("tag").and_then(|v| v.as_str()) {
+                let group_rank = (idx + 1) as i32;
+                let _ = sqlx::query(
+                    "UPDATE side_clans_cwl_stats SET rank = $1 WHERE clan_tag = $2 AND season = $3 AND rank IS NULL",
+                )
+                .bind(group_rank)
+                .bind(group_tag)
+                .bind(lg_season)
+                .execute(&data.db_pool)
+                .await;
+            }
+        }
     }
 }
 

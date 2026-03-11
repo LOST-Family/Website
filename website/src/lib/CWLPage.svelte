@@ -356,7 +356,7 @@
                                     {/if}
                                 </div>
 
-                                {#if entry.history.length > 1}
+                                {#if entry.history.length > 0}
                                     <div class="history-table-wrapper">
                                         <table class="history-table">
                                             <thead>

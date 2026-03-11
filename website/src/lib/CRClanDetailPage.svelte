@@ -4,6 +4,19 @@
     import { quintOut } from 'svelte/easing';
     import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
+    import {
+        badgeNameFromId,
+        getArenaNum,
+        getArenaImageUrl,
+        hideOnError,
+    } from './crUtils';
+    import { getClanBadgeUrl } from './clanDisplay';
+    import {
+        ROLE_ORDER,
+        getRoleDisplay,
+        isRoleWrong,
+        getPlayerName,
+    } from './roleUtils';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
@@ -59,6 +72,11 @@
         activeKickpointsSum?: number;
         activeKickpoints?: any[];
         // Mixed API Data
+        userId?: string;
+        username?: string;
+        global_name?: string;
+        nickname?: string;
+        avatar?: string;
         in_supercell?: boolean;
         in_upstream?: boolean;
         is_diff?: boolean;
@@ -71,6 +89,12 @@
         upstream_expLevel?: number;
     }
 
+    interface KickpointCarrier {
+        activeKickpointsSum?: number | string;
+        activeKickpointsCount?: number | string;
+        activeKickpoints?: Array<{ amount?: number | string }>;
+    }
+
     let clan: Clan | null = null;
     let members: Player[] = [];
     let loading = true;
@@ -78,13 +102,29 @@
     let searchQuery = '';
     let selectedPlayer: Player | null = null;
     let playerDetailsLoading = false;
+    let enrichedTags = new Set<string>();
 
+    function normalizeTag(tag: string | undefined | null): string {
+        return (tag || '').trim().replace(/^#/, '').toUpperCase();
+    }
+
+    $: viewerIsInClan = !!(
+        $user &&
+        members.some((m) =>
+            ($user.linked_cr_players || []).some(
+                (linkedTag) => normalizeTag(linkedTag) === normalizeTag(m.tag),
+            ),
+        )
+    );
     $: viewerIsCoLeader = !!(
         $user &&
         members.some(
             (m) =>
-                ($user.linked_cr_players || []).includes(m.tag) &&
-                (m.role === 'coLeader' || m.role === 'leader')
+                ($user.linked_cr_players || []).some(
+                    (linkedTag) =>
+                        normalizeTag(linkedTag) === normalizeTag(m.tag),
+                ) &&
+                (m.role === 'coLeader' || m.role === 'leader'),
         )
     );
     $: hasPrivilegedAccess = !!(
@@ -92,26 +132,90 @@
         viewerIsCoLeader ||
         ($userOverride && hasRequiredRole($user?.highest_role, 'COLEADER'))
     );
+    $: hasKickpointAccess = !!(hasPrivilegedAccess || viewerIsInClan);
 
-    const roleOrder: Record<string, number> = {
-        leader: 1,
-        coLeader: 2,
-        elder: 3,
-        member: 4,
-    };
+    function toNumber(value: number | string | undefined): number {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    }
 
-    function getRoleDisplay(role: string): string {
-        switch (role) {
-            case 'leader':
-                return 'Anführer';
-            case 'coLeader':
-                return 'Vize-Anführer';
-            case 'elder':
-                return 'Ältester';
-            case 'member':
-                return 'Mitglied';
-            default:
-                return role;
+    function getActiveKickpointSum(member: KickpointCarrier): number {
+        if (member.activeKickpointsSum !== undefined) {
+            return toNumber(member.activeKickpointsSum);
+        }
+
+        return (member.activeKickpoints || []).reduce(
+            (sum, kickpoint) => sum + toNumber(kickpoint.amount),
+            0,
+        );
+    }
+
+    function getActiveKickpointCount(member: KickpointCarrier): number {
+        if (member.activeKickpointsCount !== undefined) {
+            return toNumber(member.activeKickpointsCount);
+        }
+
+        return member.activeKickpoints?.length || 0;
+    }
+
+    function isAtKickpointLimit(member: {
+        activeKickpointsSum?: number;
+    }): boolean {
+        const maxKickpoints = toNumber(clan?.maxKickpoints);
+
+        return (
+            maxKickpoints > 0 && getActiveKickpointSum(member) >= maxKickpoints
+        );
+    }
+
+    function crIsRoleWrong(current: any, expected: any): boolean {
+        return isRoleWrong(current, expected, false);
+    }
+
+    async function enrichMembers(toEnrich: Player[]) {
+        const missing = toEnrich.filter(
+            (p) =>
+                (!p.name || p.name.startsWith('#')) && !enrichedTags.has(p.tag),
+        );
+
+        if (missing.length === 0) return;
+
+        missing.forEach((p) => enrichedTags.add(p.tag));
+
+        const chunkSize = 5;
+        for (let i = 0; i < missing.length; i += chunkSize) {
+            const chunk = missing.slice(i, i + chunkSize);
+            const results = await Promise.all(
+                chunk.map(async (p) => {
+                    try {
+                        const encodedTag = encodeURIComponent(p.tag);
+                        const res = await fetch(
+                            `${apiBaseUrl}/api/cr/players/${encodedTag}`,
+                            { credentials: 'include' },
+                        );
+                        if (res.ok) {
+                            return { tag: p.tag, detailed: await res.json() };
+                        }
+                    } catch (e) {
+                        console.error(`Failed to fetch info for ${p.tag}`, e);
+                    }
+                    return null;
+                }),
+            );
+
+            const updates = results.filter(
+                (r): r is { tag: string; detailed: any } => r !== null,
+            );
+            if (updates.length > 0) {
+                members = members.map((m) => {
+                    const update = updates.find((u) => u.tag === m.tag);
+                    return update ? { ...m, ...update.detailed } : m;
+                });
+            }
         }
     }
 
@@ -121,14 +225,14 @@
             const encodedTag = encodeURIComponent(clanTag);
             const clanRes = await fetch(
                 `${apiBaseUrl}/api/cr/clans/${encodedTag}`,
-                { credentials: 'include' }
+                { credentials: 'include' },
             );
             if (!clanRes.ok) throw new Error('Clan nicht gefunden');
             clan = await clanRes.json();
 
             const membersRes = await fetch(
                 `${apiBaseUrl}/api/cr/clans/${encodedTag}/members`,
-                { credentials: 'include' }
+                { credentials: 'include' },
             );
             if (!membersRes.ok)
                 throw new Error('Mitglieder konnten nicht geladen werden');
@@ -137,11 +241,13 @@
 
             // Sort members by role, then trophies
             members.sort((a, b) => {
-                const rA = roleOrder[a.role] || 99;
-                const rB = roleOrder[b.role] || 99;
+                const rA = ROLE_ORDER[a.role] || 99;
+                const rB = ROLE_ORDER[b.role] || 99;
                 if (rA !== rB) return rA - rB;
                 return (b.trophies || 0) - (a.trophies || 0);
             });
+
+            enrichMembers(members);
         } catch (e) {
             error = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
@@ -155,22 +261,28 @@
 
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            const [res, idRes] = await Promise.all([
+            const [res, kpRes, idRes] = await Promise.all([
                 fetch(`${apiBaseUrl}/api/cr/players/${encodedTag}`, {
                     credentials: 'include',
                 }),
+                fetch(
+                    `${apiBaseUrl}/api/cr/players/${encodedTag}/kickpoints/details`,
+                    { credentials: 'include' },
+                ),
                 fetch(`${apiBaseUrl}/api/cr/players/${encodedTag}/identity`, {
                     credentials: 'include',
                 }),
             ]);
 
             const detailedPlayer = res.ok ? await res.json() : {};
+            const kickpoints = kpRes.ok ? await kpRes.json() : [];
             const identity = idRes.ok ? await idRes.json() : {};
 
             selectedPlayer = {
                 ...player,
                 ...detailedPlayer,
                 ...identity,
+                activeKickpoints: kickpoints,
             };
         } catch (e) {
             console.error('Failed to fetch player details:', e);
@@ -195,9 +307,7 @@
         .slice(0, 3);
 
     $: filteredMembers = members
-        .filter(
-            (m) => m.in_supercell && !m.is_new && !m.is_dirty && !m.isHidden
-        ) // Hide diff & hidden members from main list
+        .filter((m) => m.in_supercell && !m.is_new && !m.isHidden) // Hide new & hidden members, keep dirty ones in main list.
         .filter((m) => {
             const nameMatch =
                 m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ??
@@ -282,16 +392,20 @@
                 </button>
                 <div
                     class="hero-bg"
-                    style="background-image: url({clan.badgeUrls?.large || ''})"
+                    style={getClanBadgeUrl(clan)
+                        ? `background-image: url(${getClanBadgeUrl(clan)})`
+                        : ''}
                 ></div>
                 <div class="hero-overlay"></div>
                 <div class="hero-content">
                     <div class="badge-container">
-                        <img
-                            src={clan.badgeUrls?.large || ''}
-                            alt={clan.name}
-                            class="clan-badge"
-                        />
+                        {#if getClanBadgeUrl(clan)}
+                            <img
+                                src={getClanBadgeUrl(clan)}
+                                alt={clan.name}
+                                class="clan-badge"
+                            />
+                        {/if}
                     </div>
                     <div class="clan-info-main">
                         <div class="title-row">
@@ -472,7 +586,7 @@
                                     <h3>Regelwerk / Kickpoints</h3>
                                 </div>
                                 <div class="reasons-list">
-                                    {#each clan.kickpointReasons as reason}
+                                    {#each [...clan.kickpointReasons].sort((a, b) => b.amount - a.amount) as reason}
                                         <div class="reason-item">
                                             <span class="reason-name"
                                                 >{reason.name}</span
@@ -544,7 +658,9 @@
                                     : 50}
                             <div
                                 class="member-card"
+                                class:maxKickpoints={isAtKickpointLimit(member)}
                                 class:is-linked={member.userId}
+                                class:has-diff={member.is_diff}
                                 on:click={() => selectPlayer(member)}
                                 on:keydown={(e) =>
                                     e.key === 'Enter' && selectPlayer(member)}
@@ -558,24 +674,54 @@
                                     </div>
                                     <div class="m-avatar-container">
                                         {#if member.arena}
-                                            <div
-                                                class="arena-badge"
-                                                title={member.arena.name}
-                                            >
-                                                Arena {member.arena.id}
+                                            <div class="arena-badge-box">
+                                                <img
+                                                    src={getArenaImageUrl(
+                                                        member.arena.id,
+                                                    )}
+                                                    alt=""
+                                                    class="arena-icon"
+                                                    on:error={hideOnError}
+                                                />
+                                                <span class="arena-label"
+                                                    >A{getArenaNum(
+                                                        member.arena.id,
+                                                    )}</span
+                                                >
                                             </div>
                                         {:else}
                                             <div class="no-league"></div>
                                         {/if}
                                     </div>
                                     <div class="m-main-info">
-                                        <h4 class="m-name">{member.name}</h4>
+                                        <h4 class="m-name">
+                                            {getPlayerName(member)}
+                                            {#if member.is_diff && member.upstream_name && member.upstream_name !== member.name}
+                                                <span
+                                                    class="old-name"
+                                                    title="Upstream Name: {member.upstream_name}"
+                                                >
+                                                    ({member.upstream_name})
+                                                </span>
+                                            {/if}
+                                        </h4>
                                         <div class="m-sub-info">
-                                            <span class="m-role-label"
-                                                >{getRoleDisplay(
+                                            <span
+                                                class="m-role-label"
+                                                class:role-error={crIsRoleWrong(
                                                     member.role,
-                                                )}</span
+                                                    member.upstream_role,
+                                                )}
                                             >
+                                                {getRoleDisplay(member.role)}
+                                                {#if crIsRoleWrong(member.role, member.upstream_role)}
+                                                    <span class="role-expected"
+                                                        >• Upstream: {getRoleDisplay(
+                                                            member.upstream_role,
+                                                        )}</span
+                                                    >
+                                                {/if}
+                                            </span>
                                             <span class="dot">•</span>
                                             <span class="m-tag-small"
                                                 >{member.tag}</span
@@ -583,7 +729,7 @@
                                         </div>
                                     </div>
                                     <div class="m-points-info">
-                                        {#if hasPrivilegedAccess && member.activeKickpointsSum !== undefined && member.activeKickpointsSum > 0}
+                                        {#if hasKickpointAccess && getActiveKickpointCount(member) > 0}
                                             <div
                                                 class="m-kp-badge"
                                                 title="Aktive Kickpoints"
@@ -599,7 +745,9 @@
                                                     />
                                                 </svg>
                                                 <span
-                                                    >{member.activeKickpointsSum}</span
+                                                    >{getActiveKickpointSum(
+                                                        member,
+                                                    )}</span
                                                 >
                                                 {#if clan?.maxKickpoints}
                                                     <span class="max-sep"
@@ -676,19 +824,111 @@
                                             ></span>
                                             Mitglied, ingame nicht im Clan ({leftMembers.length})
                                         </h4>
-                                        <div class="diff-cards">
-                                            {#each leftMembers as m}
+                                        <div class="members-grid">
+                                            {#each leftMembers as m (m.tag)}
                                                 <div
-                                                    class="mini-diff-card left"
+                                                    class="member-card only-upstream"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
+                                                    on:click={() =>
+                                                        selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
                                                 >
-                                                    <div class="m-info">
-                                                        <span class="m-name"
-                                                            >{m.name ||
-                                                                'Unbekannt'}</span
+                                                    <div class="m-card-header">
+                                                        <div
+                                                            class="card-glow"
+                                                        ></div>
+                                                        <div
+                                                            class="m-avatar-container"
                                                         >
-                                                        <span class="m-tag"
-                                                            >{m.tag}</span
+                                                            {#if m.arena}
+                                                                <div
+                                                                    class="arena-badge-box"
+                                                                >
+                                                                    <img
+                                                                        src={getArenaImageUrl(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}
+                                                                        alt=""
+                                                                        class="arena-icon"
+                                                                        on:error={hideOnError}
+                                                                    />
+                                                                    <span
+                                                                        class="arena-label"
+                                                                        >A{getArenaNum(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}</span
+                                                                    >
+                                                                </div>
+                                                            {:else}
+                                                                <div
+                                                                    class="no-league"
+                                                                ></div>
+                                                            {/if}
+                                                        </div>
+                                                        <div
+                                                            class="m-main-info"
                                                         >
+                                                            <h4 class="m-name">
+                                                                {getPlayerName(
+                                                                    m,
+                                                                )}
+                                                            </h4>
+                                                            <div
+                                                                class="m-sub-info"
+                                                            >
+                                                                <span
+                                                                    class="m-role-label"
+                                                                    class:role-error={crIsRoleWrong(
+                                                                        m.role,
+                                                                        m.upstream_role,
+                                                                    )}
+                                                                >
+                                                                    {getRoleDisplay(
+                                                                        m.role,
+                                                                    )}
+                                                                    {#if crIsRoleWrong(m.role, m.upstream_role)}
+                                                                        <span
+                                                                            class="role-expected"
+                                                                            >•
+                                                                            Upstream:
+                                                                            {getRoleDisplay(
+                                                                                m.upstream_role,
+                                                                            )}</span
+                                                                        >
+                                                                    {/if}
+                                                                </span>
+                                                                <span
+                                                                    class="dot"
+                                                                    >•</span
+                                                                >
+                                                                <span
+                                                                    class="m-tag-small"
+                                                                    title={m.tag}
+                                                                >
+                                                                    {m.tag}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="m-points-info"
+                                                        >
+                                                            <div
+                                                                class="m-th-badge"
+                                                            >
+                                                                LV {m.expLevel ||
+                                                                    '?'}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             {/each}
@@ -703,16 +943,113 @@
                                             ></span>
                                             Kein Mitglied, ingame im Clan ({newMembers.length})
                                         </h4>
-                                        <div class="diff-cards">
-                                            {#each newMembers as m}
-                                                <div class="mini-diff-card new">
-                                                    <div class="m-info">
-                                                        <span class="m-name"
-                                                            >{m.name}</span
+                                        <div class="members-grid">
+                                            {#each newMembers as m (m.tag)}
+                                                <div
+                                                    class="member-card only-supercell"
+                                                    class:maxKickpoints={isAtKickpointLimit(
+                                                        m,
+                                                    )}
+                                                    on:click={() =>
+                                                        selectPlayer(m)}
+                                                    on:keydown={(e) =>
+                                                        e.key === 'Enter' &&
+                                                        selectPlayer(m)}
+                                                    role="button"
+                                                    tabindex="0"
+                                                >
+                                                    <div class="m-card-header">
+                                                        <div
+                                                            class="card-glow"
+                                                        ></div>
+                                                        <div
+                                                            class="m-avatar-container"
                                                         >
-                                                        <span class="m-tag"
-                                                            >{m.tag}</span
+                                                            {#if m.arena}
+                                                                <div
+                                                                    class="arena-badge-box"
+                                                                >
+                                                                    <img
+                                                                        src={getArenaImageUrl(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}
+                                                                        alt=""
+                                                                        class="arena-icon"
+                                                                        on:error={hideOnError}
+                                                                    />
+                                                                    <span
+                                                                        class="arena-label"
+                                                                        >A{getArenaNum(
+                                                                            m
+                                                                                .arena
+                                                                                .id,
+                                                                        )}</span
+                                                                    >
+                                                                </div>
+                                                            {:else}
+                                                                class:maxKickpoints={isAtKickpointLimit(
+                                                                    m,
+                                                                )}
+                                                                <div
+                                                                    class="no-league"
+                                                                ></div>
+                                                            {/if}
+                                                        </div>
+                                                        <div
+                                                            class="m-main-info"
                                                         >
+                                                            <h4 class="m-name">
+                                                                {getPlayerName(
+                                                                    m,
+                                                                )}
+                                                            </h4>
+                                                            <div
+                                                                class="m-sub-info"
+                                                            >
+                                                                <span
+                                                                    class="m-role-label"
+                                                                    class:role-error={crIsRoleWrong(
+                                                                        m.role,
+                                                                        m.upstream_role,
+                                                                    )}
+                                                                >
+                                                                    {getRoleDisplay(
+                                                                        m.role,
+                                                                    )}
+                                                                    {#if crIsRoleWrong(m.role, m.upstream_role)}
+                                                                        <span
+                                                                            class="role-expected"
+                                                                            >•
+                                                                            Upstream:
+                                                                            {getRoleDisplay(
+                                                                                m.upstream_role,
+                                                                            )}</span
+                                                                        >
+                                                                    {/if}
+                                                                </span>
+                                                                <span
+                                                                    class="dot"
+                                                                    >•</span
+                                                                >
+                                                                <span
+                                                                    class="m-tag-small"
+                                                                    title={m.tag}
+                                                                >
+                                                                    {m.tag}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            class="m-points-info"
+                                                        >
+                                                            <div
+                                                                class="m-th-badge"
+                                                            >
+                                                                LV {m.expLevel}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             {/each}
@@ -722,90 +1059,174 @@
                             </div>
 
                             {#if changedMembers.length > 0}
-                                <div class="diff-table-container">
-                                    <div class="table-header">
-                                        <h4>
-                                            Im Clan, falsche Rolle / Daten ({changedMembers.length})
-                                        </h4>
+                                <div
+                                    class="diff-category"
+                                    style="margin-top: 3rem;"
+                                >
+                                    <h4>
+                                        <span class="indicator-dot changed"
+                                        ></span>
+                                        Im Clan, falsche Rolle / Daten ({changedMembers.length})
+                                    </h4>
+                                    <div class="members-grid">
+                                        {#each changedMembers as m (m.tag)}
+                                            <div
+                                                class="member-card has-diff"
+                                                on:click={() => selectPlayer(m)}
+                                                on:keydown={(e) =>
+                                                    e.key === 'Enter' &&
+                                                    selectPlayer(m)}
+                                                role="button"
+                                                tabindex="0"
+                                            >
+                                                <div class="m-card-header">
+                                                    <div
+                                                        class="card-glow"
+                                                    ></div>
+                                                    <div
+                                                        class="m-avatar-container"
+                                                    >
+                                                        {#if m.arena}
+                                                            <div
+                                                                class="arena-badge-box"
+                                                            >
+                                                                <img
+                                                                    src={getArenaImageUrl(
+                                                                        m.arena
+                                                                            .id,
+                                                                    )}
+                                                                    alt=""
+                                                                    class="arena-icon"
+                                                                    on:error={hideOnError}
+                                                                />
+                                                                <span
+                                                                    class="arena-label"
+                                                                    >A{getArenaNum(
+                                                                        m.arena
+                                                                            .id,
+                                                                    )}</span
+                                                                >
+                                                            </div>
+                                                        {:else}
+                                                            <div
+                                                                class="no-league"
+                                                            ></div>
+                                                        {/if}
+                                                    </div>
+                                                    <div class="m-main-info">
+                                                        <h4 class="m-name">
+                                                            {getPlayerName(m)}
+                                                            {#if m.name !== m.upstream_name && m.upstream_name}
+                                                                <span
+                                                                    class="old-name"
+                                                                    >({m.upstream_name})</span
+                                                                >
+                                                            {/if}
+                                                        </h4>
+                                                        <div class="m-sub-info">
+                                                            <span
+                                                                class="m-role-label"
+                                                                class:role-error={crIsRoleWrong(
+                                                                    m.role,
+                                                                    m.upstream_role,
+                                                                )}
+                                                            >
+                                                                {getRoleDisplay(
+                                                                    m.role,
+                                                                )}
+                                                                {#if crIsRoleWrong(m.role, m.upstream_role)}
+                                                                    <span
+                                                                        class="role-expected"
+                                                                        >•
+                                                                        Upstream:
+                                                                        {getRoleDisplay(
+                                                                            m.upstream_role,
+                                                                        )}</span
+                                                                    >
+                                                                {/if}
+                                                            </span>
+                                                            <span class="dot"
+                                                                >•</span
+                                                            >
+                                                            <span
+                                                                class="m-tag-small"
+                                                                title={m.tag}
+                                                            >
+                                                                {m.tag}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="m-points-info">
+                                                        <div class="m-th-badge">
+                                                            LV {m.expLevel}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="m-card-footer">
+                                                    <div class="m-card-changes">
+                                                        {#if m.name !== m.upstream_name && m.upstream_name}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Name</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{m.name}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{m.upstream_name}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                        {#if crIsRoleWrong(m.role, m.upstream_role)}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Rolle</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{getRoleDisplay(
+                                                                        m.role,
+                                                                    )}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{getRoleDisplay(
+                                                                        m.upstream_role,
+                                                                    )}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                        {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
+                                                            <div
+                                                                class="change-item"
+                                                            >
+                                                                <span
+                                                                    class="change-label"
+                                                                    >Level</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-new"
+                                                                    >{m.expLevel}</span
+                                                                >
+                                                                <span
+                                                                    class="change-val-old"
+                                                                    >{m.upstream_expLevel}</span
+                                                                >
+                                                            </div>
+                                                        {/if}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {/each}
                                     </div>
-                                    <table class="diff-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Spieler</th>
-                                                <th>Feld</th>
-                                                <th>Ingame</th>
-                                                <th>Datenbank</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {#each changedMembers as m}
-                                                {#if m.name !== m.upstream_name && m.upstream_name}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Name</td>
-                                                        <td class="val-sc"
-                                                            >{m.name}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{m.upstream_name}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                                {#if m.upstream_role && !(m.role === m.upstream_role || (m.role === 'elder' && m.upstream_role === 'admin') || (m.role === 'admin' && m.upstream_role === 'elder'))}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Rolle</td>
-                                                        <td class="val-sc"
-                                                            >{getRoleDisplay(
-                                                                m.role,
-                                                            )}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{getRoleDisplay(
-                                                                m.upstream_role,
-                                                            )}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                                {#if m.upstream_expLevel && String(m.expLevel) !== String(m.upstream_expLevel)}
-                                                    <tr class="row-diff">
-                                                        <td
-                                                            ><strong
-                                                                >{m.name}</strong
-                                                            >
-                                                            <span
-                                                                class="tag-small"
-                                                                >({m.tag})</span
-                                                            ></td
-                                                        >
-                                                        <td>Level</td>
-                                                        <td class="val-sc"
-                                                            >{m.expLevel}</td
-                                                        >
-                                                        <td class="val-up"
-                                                            >{m.upstream_expLevel}</td
-                                                        >
-                                                    </tr>
-                                                {/if}
-                                            {/each}
-                                        </tbody>
-                                    </table>
                                 </div>
                             {/if}
                         </div>
@@ -821,7 +1242,7 @@
         gameType="cr"
         {theme}
         onClose={closePlayerDetails}
-        {hasPrivilegedAccess}
+        {hasKickpointAccess}
         isAdmin={$user?.is_admin}
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
@@ -1023,6 +1444,7 @@
         height: 140px;
         border-radius: 24px;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        object-fit: contain;
     }
 
     .clan-info-main {
@@ -1106,9 +1528,51 @@
     .sidebar-sticky {
         position: sticky;
         top: 100px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        overflow-x: hidden;
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+        padding: 1rem 0.9rem 1rem 0.15rem;
+        scrollbar-gutter: stable;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(59, 130, 246, 0.22) transparent;
+        -webkit-mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        mask-image: linear-gradient(
+            to bottom,
+            transparent 0,
+            #000 1.25rem,
+            #000 calc(100% - 1.25rem),
+            transparent 100%
+        );
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb {
+        background-color: rgba(59, 130, 246, 0.18);
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+    .sidebar-sticky::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(59, 130, 246, 0.3);
     }
 
     .info-card {
@@ -1150,27 +1614,35 @@
     .reasons-list {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
-        margin-bottom: 1.25rem;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
     }
 
     .reason-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.05);
+        padding: 0.5rem 0.75rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 12px;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
 
     .reason-name {
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.85);
     }
 
     .reason-amount {
         color: #ed4245;
-        font-weight: 700;
+        font-weight: 800;
+        font-size: 0.75rem;
+        background: rgba(237, 66, 69, 0.12);
+        padding: 0.2rem 0.55rem;
+        border-radius: 8px;
+        min-width: 2rem;
+        text-align: center;
+        flex-shrink: 0;
     }
 
     .max-kp-info,
@@ -1382,6 +1854,20 @@
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     }
 
+    .member-card.maxKickpoints {
+        border-color: rgba(237, 66, 69, 0.9);
+        box-shadow:
+            0 0 0 1px rgba(237, 66, 69, 0.4),
+            0 18px 36px rgba(237, 66, 69, 0.18);
+    }
+
+    .member-card.maxKickpoints:hover {
+        border-color: rgba(237, 66, 69, 1);
+        box-shadow:
+            0 0 0 1px rgba(237, 66, 69, 0.5),
+            0 22px 42px rgba(237, 66, 69, 0.24);
+    }
+
     .member-card.is-linked {
         border-color: rgba(88, 101, 242, 0.3);
     }
@@ -1431,6 +1917,35 @@
         color: #fff;
     }
 
+    .arena-badge-box {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        background: rgba(88, 101, 242, 0.1);
+        border-radius: 10px;
+        border: 1px solid rgba(88, 101, 242, 0.2);
+        overflow: hidden;
+    }
+
+    .arena-icon {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .arena-label {
+        position: absolute;
+        bottom: 1px;
+        right: 3px;
+        font-size: 0.55rem;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.5);
+        line-height: 1;
+    }
+
     .no-league {
         width: 48px;
         height: 48px;
@@ -1462,9 +1977,56 @@
         color: rgba(255, 255, 255, 0.5);
     }
 
+    .league-icon {
+        width: 1.25rem;
+        height: 1.25rem;
+        object-fit: contain;
+    }
+
+    .has-diff {
+        border-left: 3px solid #f59e0b;
+    }
+
+    .old-name {
+        font-size: 0.8em;
+        text-decoration: line-through;
+        opacity: 0.6;
+        margin-right: 0.5rem;
+    }
+
     .m-role-label {
         color: #5865f2;
         font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .m-role-label.role-error {
+        color: #f59e0b;
+        animation: pulse-role 2s infinite;
+    }
+
+    .role-expected {
+        font-size: 0.65rem;
+        font-weight: 500;
+        opacity: 0.8;
+        background: rgba(245, 158, 11, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: #f59e0b;
+    }
+
+    @keyframes pulse-role {
+        0% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.7;
+        }
+        100% {
+            opacity: 1;
+        }
     }
 
     .m-kp-badge {
