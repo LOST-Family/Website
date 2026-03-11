@@ -840,7 +840,7 @@
         margin-bottom: 1rem;
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 1.25rem;
         color: white;
         letter-spacing: -0.01em;
     }
@@ -873,7 +873,7 @@
     .kickpoints-list {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 1rem;
     }
 
     .kp-item {
@@ -898,7 +898,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.5rem;
     }
 
     .kp-reason {
@@ -930,7 +930,7 @@
     .kp-footer {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.5rem;
     }
 
     .kp-date {
