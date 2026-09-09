@@ -2,6 +2,7 @@
     import ThemeToggle from './ThemeToggle.svelte';
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { user, loading, login, logout } from './auth';
+    import { ticketGuilds } from './tickets';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let logo: string;
@@ -422,6 +423,32 @@
                             </a>
                         {/if}
 
+                        <!-- Tickets sieht, wer in Discord eine Team-Rolle
+                             traegt — das ist nicht dasselbe wie is_admin auf
+                             der Website, und der Bot entscheidet es. -->
+                        {#if ($ticketGuilds ?? []).length > 0}
+                            <a
+                                href="/tickets"
+                                class="dropdown-item"
+                                on:click|preventDefault={() =>
+                                    navigate('tickets')}
+                            >
+                                <svg
+                                    class="item-icon"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"
+                                    />
+                                    <path d="M13 5v14" stroke-dasharray="2 3" />
+                                </svg>
+                                Tickets
+                            </a>
+                        {/if}
+
                         {#if $user.is_admin}
                             <a
                                 href="/admin/clans"
@@ -712,6 +739,30 @@
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                             </svg>
                             Deine Clans
+                        </div>
+                    </a>
+                {/if}
+
+                {#if ($ticketGuilds ?? []).length > 0}
+                    <a
+                        href="/tickets"
+                        class="drawer-nav-link"
+                        on:click|preventDefault={() => navigate('tickets')}
+                    >
+                        <div class="drawer-link-content">
+                            <svg
+                                class="drawer-item-icon"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"
+                                />
+                                <path d="M13 5v14" stroke-dasharray="2 3" />
+                            </svg>
+                            Tickets
                         </div>
                     </a>
                 {/if}

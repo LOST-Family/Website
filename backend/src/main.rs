@@ -7,11 +7,13 @@ mod auth;
 mod background;
 mod handlers;
 mod models;
+mod tickets;
 mod utils;
 
 use auth::*;
 use background::spawn_background_task;
 use handlers::*;
+use tickets::*;
 use models::AppState;
 
 use std::time::Duration;
@@ -35,6 +37,13 @@ async fn main() -> std::io::Result<()> {
         env::var("CLASH_OF_CLANS_API_TOKEN").expect("CLASH_OF_CLANS_API_TOKEN must be set");
     let clash_royale_api_token =
         env::var("CLASH_ROYALE_API_TOKEN").expect("CLASH_ROYALE_API_TOKEN must be set");
+
+    // Ticket-Bot (optional — ohne diese beiden bleibt nur das Ticket-Dashboard aus)
+    let upstream_ticket_url = env::var("UPSTREAM_TICKET_API_URL").ok();
+    let ticket_api_token = env::var("TICKET_BOT_API_TOKEN").ok();
+    if upstream_ticket_url.is_none() {
+        println!("UPSTREAM_TICKET_API_URL nicht gesetzt — Ticket-Dashboard bleibt aus");
+    }
 
     let port = env::var("SERVER_PORT")
         .unwrap_or_else(|_| "8080".to_string())
@@ -200,6 +209,8 @@ async fn main() -> std::io::Result<()> {
         cr_api_token,
         clash_of_clans_api_token,
         clash_royale_api_token,
+        upstream_ticket_url,
+        ticket_api_token,
         db_pool: pool,
         oauth_client,
         jwt_secret,
@@ -314,6 +325,14 @@ async fn main() -> std::io::Result<()> {
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))
             .route("/api/sideclans", web::get().to(get_side_clans))
+            // Ticket-Dashboard. Die spezifischen Pfade muessen VOR /{id}
+            // stehen, sonst schluckt der Platzhalter "stats" und "panels".
+            .route("/api/tickets/guilds", web::get().to(get_ticket_guilds))
+            .route("/api/tickets/stats", web::get().to(get_ticket_stats))
+            .route("/api/tickets/panels", web::get().to(get_ticket_panels))
+            .route("/api/tickets/legacy", web::get().to(get_ticket_legacy))
+            .route("/api/tickets", web::get().to(get_ticket_list))
+            .route("/api/tickets/{id}", web::get().to(get_ticket_detail))
     })
     .bind(("0.0.0.0", port))?
     .run()

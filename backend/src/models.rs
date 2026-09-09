@@ -26,6 +26,11 @@ pub struct AppState {
     // Official Supercell APIs
     pub clash_of_clans_api_token: String,
     pub clash_royale_api_token: String,
+    // Ticket-Bot. Optional: fehlt die Konfiguration, laeuft die Website
+    // weiter und nur das Ticket-Dashboard meldet 503. Ein Ticketsystem, das
+    // nicht erreichbar ist, darf nicht die Clanseiten mitnehmen.
+    pub upstream_ticket_url: Option<String>,
+    pub ticket_api_token: Option<String>,
     pub db_pool: PgPool,
     pub oauth_client: DiscordOAuthClient,
     pub jwt_secret: String,

@@ -9,6 +9,7 @@
         userOverride,
     } from './lib/auth';
     import type { GameType } from './lib/auth';
+    import { ladeTicketGuilds } from './lib/tickets';
 
     // Components
     import Header from './lib/Header.svelte';
@@ -21,6 +22,7 @@
     import AllClansAdminPage from './lib/AllClansAdminPage.svelte';
     import ProfilePage from './lib/ProfilePage.svelte';
     import AdminPage from './lib/AdminPage.svelte';
+    import TicketsPage from './lib/TicketsPage.svelte';
     import CWLPage from './lib/CWLPage.svelte';
     import Footer from './lib/Footer.svelte';
 
@@ -57,6 +59,9 @@
         mounted = true;
         fetchUser();
         checkOverrides();
+        // Einmal je Sitzung: auf welchen Discord-Servern darf dieser Nutzer
+        // Tickets sehen? Davon haengt ab, ob die Navigation den Eintrag zeigt.
+        ladeTicketGuilds(apiBaseUrl);
 
         // Simple SPA routing
         const handlePopState = () => {
@@ -196,6 +201,8 @@
                 {apiBaseUrl}
                 viewUserId={currentPath.split('/').pop()}
             />
+        {:else if currentPath === '/tickets'}
+            <TicketsPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/admin'}
             <AdminPage {theme} {apiBaseUrl} />
         {:else if currentPath === '/admin/clans'}
