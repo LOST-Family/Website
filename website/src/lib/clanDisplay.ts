@@ -17,12 +17,16 @@ import bannerCR2 from '../assets/Clans/Clash Royale/Lost_2.png';
 import bannerCR3 from '../assets/Clans/Clash Royale/Lost_3.png';
 import bannerCR4 from '../assets/Clans/Clash Royale/Lost_4.png';
 import bannerCR5 from '../assets/Clans/Clash Royale/Lost_5.png';
+import bannerCRPass from '../assets/Clans/Clash Royale/Lost_f2p-pass.png';
 
 export function getClanBanner(clanName: string, gameType?: GameType): string {
     const name = (clanName || '').toUpperCase();
 
     if (gameType === 'cr') {
         if (name === 'LOST') return bannerCR1;
+        // Vor den Ziffern: "LOST F2P + Pass" enthaelt die 2 aus "F2P" und
+        // bekam deshalb das Banner von LOST 2.
+        if (name.includes('PASS')) return bannerCRPass;
         if (name.includes('4') || name.includes('IV')) return bannerCR4;
         if (name.includes('5') || name.includes('V')) return bannerCR5;
         if (name.includes('3') || name.includes('III')) return bannerCR3;
@@ -30,11 +34,9 @@ export function getClanBanner(clanName: string, gameType?: GameType): string {
         return bannerDefault;
     }
 
-    // Vor F2P und nicht danach: LOST GP heisst ausgeschrieben "LOST F2P + Pass"
-    // und wuerde sonst am F2P-Zweig haengenbleiben.
-    if (name.includes('GP') || name.includes('PASS')) return bannerGP;
     if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
     if (name.includes('F2P')) return bannerF2P;
+    if (name.includes('GP')) return bannerGP;
     if (name.includes('7') || name.includes('VII')) return banner7;
     if (name.includes('6') || name.includes('VI')) return banner6;
     if (name.includes('4') || name.includes('IV')) return banner4;
@@ -46,9 +48,12 @@ export function getClanBanner(clanName: string, gameType?: GameType): string {
 
 export function getClanColor(name: string, index: number): string {
     const n = (name || '').toUpperCase();
-    // Wie oben zuerst: der Name traegt beides. Das Rot ist die Rollenfarbe des
-    // Clans auf Discord; das Banner Lost-X-gp.png ist darauf umgefaerbt.
-    if (n.includes('GP') || n.includes('PASS')) return '#be4d40';
+    // getClanColor bekommt kein gameType, hier stehen also beide Spiele
+    // nebeneinander. "PASS" ist der Clash-Royale-Clan "LOST F2P + Pass" und
+    // traegt die Rollenfarbe, die er auf Discord hat; "GP" ist der
+    // Clash-of-Clans-Clan LOST GP und bleibt bei seinem Magenta.
+    if (n.includes('PASS')) return '#be4d40';
+    if (n.includes('GP')) return '#a5025a';
     if (n.includes('ANTHRAZIT')) return '#3d3a3f';
 
     if (n.includes('F2P 2') || n.includes('F2P2')) return '#05762b';
