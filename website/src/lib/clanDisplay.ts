@@ -30,9 +30,11 @@ export function getClanBanner(clanName: string, gameType?: GameType): string {
         return bannerDefault;
     }
 
+    // Vor F2P und nicht danach: LOST GP heisst ausgeschrieben "LOST F2P + Pass"
+    // und wuerde sonst am F2P-Zweig haengenbleiben.
+    if (name.includes('GP') || name.includes('PASS')) return bannerGP;
     if (name.includes('F2P 2') || name.includes('F2P2')) return bannerF2P2;
     if (name.includes('F2P')) return bannerF2P;
-    if (name.includes('GP')) return bannerGP;
     if (name.includes('7') || name.includes('VII')) return banner7;
     if (name.includes('6') || name.includes('VI')) return banner6;
     if (name.includes('4') || name.includes('IV')) return banner4;
@@ -44,7 +46,9 @@ export function getClanBanner(clanName: string, gameType?: GameType): string {
 
 export function getClanColor(name: string, index: number): string {
     const n = (name || '').toUpperCase();
-    if (n.includes('GP')) return '#a5025a';
+    // Wie oben zuerst: der Name traegt beides. Das Rot ist die Rollenfarbe des
+    // Clans auf Discord; das Banner Lost-X-gp.png ist darauf umgefaerbt.
+    if (n.includes('GP') || n.includes('PASS')) return '#be4d40';
     if (n.includes('ANTHRAZIT')) return '#3d3a3f';
 
     if (n.includes('F2P 2') || n.includes('F2P2')) return '#05762b';
