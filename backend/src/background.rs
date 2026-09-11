@@ -125,7 +125,7 @@ async fn measure_and_save_latency(data: &AppState) {
     let start = std::time::Instant::now();
     let coc_sc_res = data
         .client
-        .get("https://api.clashofclans.com/v1/clans/%232PP")
+        .get(format!("{}/clans/%232PP", crate::utils::get_supercell_api_url(GameType::ClashOfClans)))
         .header(
             "Authorization",
             format!("Bearer {}", data.clash_of_clans_api_token),
@@ -152,7 +152,7 @@ async fn measure_and_save_latency(data: &AppState) {
     let start = std::time::Instant::now();
     let cr_sc_res = data
         .client
-        .get("https://api.clashroyale.com/v1/clans/%232PP")
+        .get(format!("{}/clans/%232PP", crate::utils::get_supercell_api_url(GameType::ClashRoyale)))
         .header(
             "Authorization",
             format!("Bearer {}", data.clash_royale_api_token),
@@ -523,7 +523,8 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                         let mut leaguegroup_season: Option<String> = None;
 
                         let lg_url = format!(
-                            "https://api.clashofclans.com/v1/clans/{}/currentwar/leaguegroup",
+                            "{}/clans/{}/currentwar/leaguegroup",
+                            crate::utils::get_supercell_api_url(GameType::ClashOfClans),
                             encoded_tag
                         );
                         let lg_res = data

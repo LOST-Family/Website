@@ -25,10 +25,33 @@ fn get_cache_prefix(game: GameType) -> &'static str {
     }
 }
 
-fn get_supercell_api_url(game: GameType) -> &'static str {
+/// Basisadresse der Supercell-API, konfigurierbar ueber die Umgebung.
+///
+/// Supercell-Keys sind an feste IP-Adressen gebunden. Seit dem Umzug auf den
+/// Homeserver hinter einem Hausanschluss mit wechselnder IP geht das nur noch
+/// ueber einen Proxy mit fester Adresse:
+///
+///   COC_API_BASE_URL=https://cocproxy.royaleapi.dev/v1
+///   CR_API_BASE_URL=https://proxy.royaleapi.dev/v1
+///
+/// Ohne gesetzte Variablen bleiben die offiziellen Adressen.
+pub fn get_supercell_api_url(game: GameType) -> &'static str {
+    use std::sync::OnceLock;
+    static COC: OnceLock<String> = OnceLock::new();
+    static CR: OnceLock<String> = OnceLock::new();
     match game {
-        GameType::ClashOfClans => "https://api.clashofclans.com/v1",
-        GameType::ClashRoyale => "https://api.clashroyale.com/v1",
+        GameType::ClashOfClans => COC
+            .get_or_init(|| {
+                std::env::var("COC_API_BASE_URL")
+                    .unwrap_or_else(|_| "https://api.clashofclans.com/v1".to_string())
+            })
+            .as_str(),
+        GameType::ClashRoyale => CR
+            .get_or_init(|| {
+                std::env::var("CR_API_BASE_URL")
+                    .unwrap_or_else(|_| "https://api.clashroyale.com/v1".to_string())
+            })
+            .as_str(),
     }
 }
 
