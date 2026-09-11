@@ -353,6 +353,9 @@ async fn refresh_side_clans_cwl(data: &AppState) {
             if let Ok(clans_bytes) = clans_resp.bytes().await {
                 if let Ok(main_clans) = serde_json::from_slice::<Vec<Clan>>(&clans_bytes) {
                     for clan in main_clans {
+                        if crate::utils::ist_geschlossen(&data.geschlossene_clans, &clan.tag) {
+                            continue;
+                        }
                         side_clans_to_sync.push(crate::models::SideClan {
                             clan_tag: clan.tag,
                             name: clan
@@ -389,6 +392,16 @@ async fn refresh_side_clans_cwl(data: &AppState) {
 
                             // Merge side clans, replacing main clan entries if they exist in side clans (to keep belongs_to)
                             for sc in side_clans {
+                                // Mit dem Hauptclan verschwinden auch seine
+                                // Nebenclans (die CWL-Ableger) von der Website.
+                                if crate::utils::ist_geschlossen(
+                                    &data.geschlossene_clans,
+                                    &sc.clan_tag,
+                                ) || sc.belongs_to.as_deref().is_some_and(|b| {
+                                    crate::utils::ist_geschlossen(&data.geschlossene_clans, b)
+                                }) {
+                                    continue;
+                                }
                                 if let Some(pos) = side_clans_to_sync
                                     .iter()
                                     .position(|c| c.clan_tag == sc.clan_tag)

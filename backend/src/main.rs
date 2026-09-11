@@ -45,6 +45,24 @@ async fn main() -> std::io::Result<()> {
         println!("UPSTREAM_TICKET_API_URL nicht gesetzt — Ticket-Dashboard bleibt aus");
     }
 
+    // Geschlossene Clans (kommagetrennte Tags, Raute optional). Leer erlaubt.
+    // Absichtlich eine Umgebungsvariable und keine Liste im Code: schliesst
+    // wieder ein Clan, reicht ein Eintrag in der .env und ein Neustart des
+    // Containers — kein neuer Build.
+    let geschlossene_clans: Vec<String> = env::var("GESCHLOSSENE_CLANS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(utils::clan_tag_normalisiert)
+        .collect();
+    if !geschlossene_clans.is_empty() {
+        println!(
+            "Geschlossene Clans, auf der Website ausgeblendet: {}",
+            geschlossene_clans.join(", ")
+        );
+    }
+
     let port = env::var("SERVER_PORT")
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
@@ -212,6 +230,7 @@ async fn main() -> std::io::Result<()> {
         upstream_ticket_url,
         ticket_api_token,
         db_pool: pool,
+        geschlossene_clans,
         oauth_client,
         jwt_secret,
         frontend_url,

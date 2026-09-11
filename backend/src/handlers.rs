@@ -399,6 +399,9 @@ async fn can_view_player_kickpoints(
 }
 
 async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameType) -> HttpResponse {
+    if let Some(aus) = crate::utils::gesperrter_clan(&data.geschlossene_clans, tag) {
+        return aus;
+    }
     let encoded_tag = encode_tag(tag);
     let supercell_url_path = format!("/clans/{}", encoded_tag);
 
@@ -483,6 +486,9 @@ async fn get_clan_config_impl(
     opt_user: OptionalAuthenticatedUser,
     game: GameType,
 ) -> HttpResponse {
+    if let Some(aus) = crate::utils::gesperrter_clan(&data.geschlossene_clans, tag) {
+        return aus;
+    }
     let user_role = opt_user
         .user
         .as_ref()
@@ -535,6 +541,9 @@ async fn get_clan_members_impl(
     opt_user: OptionalAuthenticatedUser,
     game: GameType,
 ) -> HttpResponse {
+    if let Some(aus) = crate::utils::gesperrter_clan(&data.geschlossene_clans, tag) {
+        return aus;
+    }
     let encoded_tag = encode_tag(tag);
     let prefix = get_cache_prefix(game);
     let user = opt_user.user.as_ref();
@@ -1747,6 +1756,17 @@ pub async fn get_side_clans(data: web::Data<AppState>) -> impl Responder {
         Ok(clans) => {
             let mut results = Vec::new();
             for clan in clans {
+                // Auch hier filtern und nicht nur beim Abgleich: sonst bliebe
+                // ein gerade geschlossener Clan bis zum naechsten Durchlauf
+                // des Hintergrunddienstes sichtbar.
+                if crate::utils::ist_geschlossen(&data.geschlossene_clans, &clan.clan_tag)
+                    || clan.belongs_to.as_deref().is_some_and(|b| {
+                        crate::utils::ist_geschlossen(&data.geschlossene_clans, b)
+                    })
+                {
+                    continue;
+                }
+
                 let history = sqlx::query_as::<_, SideClanCWLStats>(
                     "SELECT clan_tag, season, league_id, league_name, league_badge_url, rank FROM side_clans_cwl_stats WHERE clan_tag = $1 ORDER BY season DESC"
                 )

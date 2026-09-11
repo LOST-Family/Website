@@ -110,7 +110,6 @@
             '#2QC0QQPQ2': 'LOST 5',
             '#2YVPC20UY': 'LOST 6 EX / Vegan',
             '#2J8UG90R2': 'LOST 7',
-            '#2RUJPG9JC': 'LOST 8',
             '#2820UPPQC': 'Lost F2P & LOST F2P 2',
         };
 

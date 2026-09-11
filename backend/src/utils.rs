@@ -268,8 +268,51 @@ pub fn badge_url_from_id(badge_id: i64) -> Option<String> {
     ))
 }
 
+/// Bringt einen Clan-Tag auf eine vergleichbare Form: Grossbuchstaben, genau
+/// eine fuehrende Raute. Die Tags kommen aus drei Richtungen — aus der
+/// Umgebungsvariable, aus der Upstream-Antwort und aus der URL, wo sie
+/// prozentkodiert als `%23...` ankommen.
+pub fn clan_tag_normalisiert(tag: &str) -> String {
+    let t = tag.trim().to_uppercase();
+    let t = t
+        .strip_prefix("%23")
+        .or_else(|| t.strip_prefix('#'))
+        .unwrap_or(&t);
+    format!("#{}", t)
+}
+
+/// Geschlossene Clans sollen auf der Website gar nicht mehr auftauchen —
+/// weder in der Liste noch ueber einen Direktlink. Im Bot bleiben sie
+/// stehen, weil dort die Kickpunkte daran haengen.
+pub fn ist_geschlossen(geschlossene: &[String], tag: &str) -> bool {
+    let t = clan_tag_normalisiert(tag);
+    geschlossene.iter().any(|g| *g == t)
+}
+
+/// Fertige 404-Antwort fuer einen geschlossenen Clan, oder `None`.
+///
+/// Die Clanrouten laufen ueber zwei Wege: die einen ueber
+/// `forward_request_with_filter` (dort steht die Pruefung weiter unten), die
+/// anderen ueber eigene `*_impl`-Funktionen mit dem Supercell-Cache. Beide
+/// Wege muessen gesperrt sein, sonst bleibt die Seite eines geschlossenen
+/// Clans ueber ihren Direktlink erreichbar. Kommt eine neue Clanroute dazu,
+/// gehoert dieser Aufruf an ihren Anfang.
+pub fn gesperrter_clan(geschlossene: &[String], tag: &str) -> Option<HttpResponse> {
+    if ist_geschlossen(geschlossene, tag) {
+        return Some(HttpResponse::NotFound().json(ErrorResponse {
+            error: "Clan not found".into(),
+        }));
+    }
+    None
+}
+
 // Function to filter out specific fields from clan data
-pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Bytes {
+pub fn filter_clan_data(
+    body: Bytes,
+    game: GameType,
+    filter_fields: bool,
+    geschlossene_clans: &[String],
+) -> Bytes {
     if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
         let mut modified = false;
 
@@ -281,6 +324,18 @@ pub fn filter_clan_data(body: Bytes, game: GameType, filter_fields: bool) -> Byt
         ];
 
         if let Some(clans) = value.as_array_mut() {
+            // Geschlossene Clans raus, fuer alle und in jedem Spiel.
+            if !geschlossene_clans.is_empty() {
+                let old_len = clans.len();
+                clans.retain(|c| {
+                    let tag = c.get("tag").and_then(|t| t.as_str()).unwrap_or("");
+                    !ist_geschlossen(geschlossene_clans, tag)
+                });
+                if clans.len() != old_len {
+                    modified = true;
+                }
+            }
+
             // Filter out "Warteliste" for Clash Royale (always, for everyone)
             if game == GameType::ClashRoyale {
                 let old_len = clans.len();
@@ -757,6 +812,20 @@ pub async fn forward_request_with_filter(
     user_role: Option<&str>,
     exempt_tags: &[String],
 ) -> HttpResponse {
+    // Ein geschlossener Clan verschwindet nicht nur aus der Liste: auch der
+    // Direktlink auf seine Seite und seine Mitglieder soll ins Leere laufen.
+    // Sonst waere er weiterhin erreichbar, nur ohne Verweis darauf.
+    let teile: Vec<&str> = url_path.split('/').collect();
+    if teile.len() >= 4
+        && teile[1] == "api"
+        && teile[2] == "clans"
+        && ist_geschlossen(&data.geschlossene_clans, teile[3])
+    {
+        return HttpResponse::NotFound().json(ErrorResponse {
+            error: "Clan not found".into(),
+        });
+    }
+
     let prefix = get_cache_prefix(game);
     // Map /members-lite request to /members cache key
     let stripped_path = url_path.replace("/members-lite", "/members");
@@ -791,6 +860,7 @@ pub async fn forward_request_with_filter(
                     body,
                     game,
                     !crate::auth::has_required_role(user_role, "MEMBER"),
+                    &data.geschlossene_clans,
                 );
                 // Enrich clan list with badge data from Supercell API cache
                 body = enrich_clan_badges(body, &data.db_pool, game).await;
@@ -873,5 +943,61 @@ pub async fn update_supercell_cache(
             }
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clan_tag_normalisiert, filter_clan_data, ist_geschlossen};
+    use crate::models::GameType;
+    use bytes::Bytes;
+
+    #[test]
+    fn tags_kommen_in_drei_schreibweisen_an() {
+        // aus der URL, aus der .env, aus der Upstream-Antwort
+        for eingabe in ["%232rujpg9jc", "2RUJPG9JC", "#2RUJPG9JC", " #2rujpg9jc "] {
+            assert_eq!(clan_tag_normalisiert(eingabe), "#2RUJPG9JC");
+        }
+    }
+
+    #[test]
+    fn geschlossen_erkennt_unabhaengig_von_der_raute() {
+        let geschlossene = vec!["#2RUJPG9JC".to_string()];
+        assert!(ist_geschlossen(&geschlossene, "#2RUJPG9JC"));
+        assert!(ist_geschlossen(&geschlossene, "%232RUJPG9JC"));
+        assert!(!ist_geschlossen(&geschlossene, "#2YVPC20UY"));
+        assert!(!ist_geschlossen(&[], "#2RUJPG9JC"));
+    }
+
+    #[test]
+    fn geschlossener_clan_faellt_aus_der_liste() {
+        let liste = br##"[{"tag":"#2YVPC20UY","nameDB":"LOST 6"},{"tag":"#2RUJPG9JC","nameDB":"LOST 8"}]"##;
+        let raus = filter_clan_data(
+            Bytes::from_static(liste),
+            GameType::ClashOfClans,
+            false,
+            &["#2RUJPG9JC".to_string()],
+        );
+        let wert: serde_json::Value = serde_json::from_slice(&raus).unwrap();
+        let tags: Vec<&str> = wert
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["tag"].as_str().unwrap())
+            .collect();
+        assert_eq!(tags, vec!["#2YVPC20UY"]);
+    }
+
+    #[test]
+    fn ohne_eintrag_bleibt_die_liste_vollstaendig() {
+        let liste = br##"[{"tag":"#2YVPC20UY","nameDB":"LOST 6"},{"tag":"#2RUJPG9JC","nameDB":"LOST 8"}]"##;
+        let raus = filter_clan_data(
+            Bytes::from_static(liste),
+            GameType::ClashOfClans,
+            false,
+            &[],
+        );
+        let wert: serde_json::Value = serde_json::from_slice(&raus).unwrap();
+        assert_eq!(wert.as_array().unwrap().len(), 2);
     }
 }

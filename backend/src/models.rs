@@ -32,6 +32,10 @@ pub struct AppState {
     pub upstream_ticket_url: Option<String>,
     pub ticket_api_token: Option<String>,
     pub db_pool: PgPool,
+    // Clans, die es nicht mehr gibt. Sie stehen weiter in der Datenbank des
+    // Bots — daran haengen Kickpunkte und Mitgliederverlauf —, sollen auf der
+    // Website aber nirgends mehr erscheinen. Gepflegt ueber GESCHLOSSENE_CLANS.
+    pub geschlossene_clans: Vec<String>,
     pub oauth_client: DiscordOAuthClient,
     pub jwt_secret: String,
     pub frontend_url: String,
