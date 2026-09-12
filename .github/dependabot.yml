@@ -7,7 +7,6 @@ version: 2
 updates:
     - package-ecosystem: 'npm' # See documentation for possible values
       directory: '/website/' # Location of package manifests
-      target-branch: 'dev'
       schedule:
           interval: 'weekly'
 
@@ -15,7 +14,6 @@ updates:
     - package-ecosystem: 'cargo'
       # Look for a `Cargo.toml` in the `/backend/` directory
       directory: '/backend/'
-      target-branch: 'dev'
       # Check for updates once a week
       schedule:
           interval: 'weekly'
@@ -24,7 +22,6 @@ updates:
     - package-ecosystem: 'docker'
       # Look for a `Dockerfile` in the `/backend/` directory
       directory: '/backend/'
-      target-branch: 'dev'
       # Check for updates once a week
       schedule:
           interval: 'weekly'
@@ -33,7 +30,12 @@ updates:
     - package-ecosystem: 'docker'
       # Look for a `Dockerfile` in the `/website/` directory
       directory: '/website/'
-      target-branch: 'dev'
       # Check for updates once a week
       schedule:
           interval: 'weekly'
+
+# Kein target-branch mehr: Updates gehen gegen den Standardbranch main.
+# Vorher zeigten alle vier Eintraege auf 'dev'. Der Branch wird seit dem
+# 11.03.2026 nicht mehr gepflegt, lag inhaltlich hinter main und ist am
+# 12.09.2026 geloescht worden — sechs Updates hatten sich dort gestapelt,
+# wo sie niemand mehr mergen konnte.
