@@ -309,6 +309,7 @@ async fn main() -> std::io::Result<()> {
             )
             // CR Routes
             .route("/api/cr/clans", web::get().to(get_cr_clans))
+            .route("/api/cr/coleaders", web::get().to(get_cr_coleaders))
             .route("/api/cr/clans/{tag}", web::get().to(get_cr_clan_info))
             .route(
                 "/api/cr/clans/{tag}/config",

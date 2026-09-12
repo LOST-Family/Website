@@ -210,6 +210,30 @@ pub async fn get_cr_clan_info(
     get_clan_info_impl(&data, &tag, GameType::ClashRoyale).await
 }
 
+/// Die Clanfuehrung ueber alle CR-Clans hinweg (Issue #24).
+///
+/// Warum das noetig ist: In Clash Royale verwalten Vize und Anfuehrer alle
+/// Clans gemeinsam. Die Mitgliederliste eines einzelnen Clans zeigt aber nur,
+/// welcher ihrer Accounts zufaellig dort steht — bei LOST CR 4 etwa ein
+/// Viertaccount als "Anfuehrer". Der CR-Manager beantwortet die Frage richtig:
+/// er geht ueber die Discord-Rollen und nennt je Person ihren hoechsten
+/// Account.
+///
+/// Angemeldet sein ist Pflicht, denn die Antwort nennt Discord-IDs. Das ist
+/// dieselbe Schwelle wie bei den Mitgliederlisten, die den Discord-Bezug
+/// ebenfalls nur Angemeldeten zeigen.
+pub async fn get_cr_coleaders(
+    data: web::Data<AppState>,
+    opt_user: OptionalAuthenticatedUser,
+) -> impl Responder {
+    if opt_user.user.is_none() {
+        return HttpResponse::Unauthorized().json(ErrorResponse {
+            error: "Anmeldung erforderlich".into(),
+        });
+    }
+    forward_request(&data, GameType::ClashRoyale, "/api/coleaders").await
+}
+
 // 2b. Get CR Clan Config
 pub async fn get_cr_clan_config(
     data: web::Data<AppState>,

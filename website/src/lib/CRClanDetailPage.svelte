@@ -101,6 +101,16 @@
     let playerDetailsLoading = false;
     let enrichedTags = new Set<string>();
 
+    // Die Clanfuehrung gilt in Clash Royale ueber alle Clans hinweg (Issue #24).
+    // Sie kommt aus den Discord-Rollen und nicht aus der Mitgliederliste
+    // dieses Clans — dort steht je nach Clan ein Zweit- oder Viertaccount.
+    interface CrLeitung {
+        userId: string;
+        highestAccountTag: string;
+        highestAccountName: string;
+    }
+    let crLeitung: CrLeitung[] = [];
+
     function normalizeTag(tag: string | undefined | null): string {
         return (tag || '').trim().replace(/^#/, '').toUpperCase();
     }
@@ -226,6 +236,27 @@
             );
             if (!clanRes.ok) throw new Error('Clan nicht gefunden');
             clan = await clanRes.json();
+
+            // Nur fuer Angemeldete, und ein Fehlschlag darf die Seite nicht
+            // kosten: die Mitgliederliste ist das Wesentliche, die Fuehrung
+            // die Ergaenzung.
+            if ($user) {
+                fetch(`${apiBaseUrl}/api/cr/coleaders`, {
+                    credentials: 'include',
+                })
+                    .then((r) => (r.ok ? r.json() : []))
+                    .then((d) => {
+                        crLeitung = Array.isArray(d) ? d : [];
+                        crLeitung.sort((a, b) =>
+                            (a.highestAccountName || '').localeCompare(
+                                b.highestAccountName || '',
+                            ),
+                        );
+                    })
+                    .catch(() => {
+                        crLeitung = [];
+                    });
+            }
 
             const membersRes = await fetch(
                 `${apiBaseUrl}/api/cr/clans/${encodedTag}/members`,
@@ -614,6 +645,32 @@
 
                 <!-- Members Section -->
                 <main class="members-main">
+                    {#if crLeitung.length > 0}
+                        <section class="leitung">
+                            <div class="title-group">
+                                <h2>Clanführung</h2>
+                                <p class="subtitle">
+                                    Gilt für alle CR-Clans gemeinsam — aus den
+                                    Discord-Rollen, nicht aus dieser
+                                    Mitgliederliste. Genannt ist je Person ihr
+                                    höchster Account.
+                                </p>
+                            </div>
+                            <ul class="leitung-liste">
+                                {#each crLeitung as l (l.userId)}
+                                    <li>
+                                        <span class="leitung-name"
+                                            >{l.highestAccountName ||
+                                                'Unbekannt'}</span
+                                        >
+                                        <span class="leitung-tag"
+                                            >{l.highestAccountTag}</span
+                                        >
+                                    </li>
+                                {/each}
+                            </ul>
+                        </section>
+                    {/if}
                     <div class="section-header-row">
                         <div class="title-group">
                             <h2>Clan Mitglieder</h2>
@@ -1783,6 +1840,41 @@
     /* Members Section */
     .members-main {
         min-height: 100vh;
+    }
+
+    .leitung {
+        margin-bottom: 1.5rem;
+        padding: 1rem 1.25rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .leitung-liste {
+        list-style: none;
+        margin: 0.75rem 0 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .leitung-liste li {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .leitung-name {
+        font-weight: 600;
+    }
+
+    .leitung-tag {
+        font-size: 0.8em;
+        opacity: 0.65;
     }
 
     .section-header-row {
