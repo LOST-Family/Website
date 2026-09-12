@@ -6,19 +6,29 @@ export const ROLE_ORDER: Record<string, number> = {
     member: 4,
 };
 
-export function getRoleDisplay(role: string): string {
+export function getRoleDisplay(
+    role: string | undefined,
+    gameType: 'coc' | 'cr' = 'coc',
+): string {
     switch (role?.toLowerCase()) {
         case 'leader':
             return 'Anführer';
         case 'coleader':
             return 'Vize-Anführer';
-        case 'admin':
         case 'elder':
             return 'Ältester';
+        case 'admin':
+            // In Clash of Clans heisst der Aeltesten-Rang in der API "admin",
+            // ein "elder" existiert dort nicht. In Clash Royale gibt es
+            // beides: "elder" ist der echte Rang, "admin" dagegen die
+            // Dummy-Marke aus dem Bot, damit ein Platzhalter nicht als
+            // normales Mitglied zaehlt. Ihn als "Ältester" anzuzeigen war
+            // falsch (Issue #23).
+            return gameType === 'cr' ? 'Mitglied' : 'Ältester';
         case 'member':
             return 'Mitglied';
         default:
-            return role;
+            return role ?? '';
     }
 }
 

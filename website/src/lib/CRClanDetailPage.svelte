@@ -72,11 +72,8 @@
         activeKickpointsSum?: number;
         activeKickpoints?: any[];
         // Mixed API Data
-        userId?: string;
         username?: string;
         global_name?: string;
-        nickname?: string;
-        avatar?: string;
         in_supercell?: boolean;
         in_upstream?: boolean;
         is_diff?: boolean;
@@ -713,11 +710,12 @@
                                                     member.upstream_role,
                                                 )}
                                             >
-                                                {getRoleDisplay(member.role)}
+                                                {getRoleDisplay(member.role, 'cr')}
                                                 {#if crIsRoleWrong(member.role, member.upstream_role)}
                                                     <span class="role-expected"
                                                         >• Upstream: {getRoleDisplay(
                                                             member.upstream_role,
+                                                            'cr',
                                                         )}</span
                                                     >
                                                 {/if}
@@ -895,6 +893,7 @@
                                                                 >
                                                                     {getRoleDisplay(
                                                                         m.role,
+                                                                        'cr',
                                                                     )}
                                                                     {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                         <span
@@ -903,6 +902,7 @@
                                                                             Upstream:
                                                                             {getRoleDisplay(
                                                                                 m.upstream_role,
+                                                                                'cr',
                                                                             )}</span
                                                                         >
                                                                     {/if}
@@ -1017,6 +1017,7 @@
                                                                 >
                                                                     {getRoleDisplay(
                                                                         m.role,
+                                                                        'cr',
                                                                     )}
                                                                     {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                         <span
@@ -1025,6 +1026,7 @@
                                                                             Upstream:
                                                                             {getRoleDisplay(
                                                                                 m.upstream_role,
+                                                                                'cr',
                                                                             )}</span
                                                                         >
                                                                     {/if}
@@ -1133,6 +1135,7 @@
                                                             >
                                                                 {getRoleDisplay(
                                                                     m.role,
+                                                                    'cr',
                                                                 )}
                                                                 {#if crIsRoleWrong(m.role, m.upstream_role)}
                                                                     <span
@@ -1141,6 +1144,7 @@
                                                                         Upstream:
                                                                         {getRoleDisplay(
                                                                             m.upstream_role,
+                                                                            'cr',
                                                                         )}</span
                                                                     >
                                                                 {/if}
@@ -1194,12 +1198,14 @@
                                                                     class="change-val-new"
                                                                     >{getRoleDisplay(
                                                                         m.role,
+                                                                        'cr',
                                                                     )}</span
                                                                 >
                                                                 <span
                                                                     class="change-val-old"
                                                                     >{getRoleDisplay(
                                                                         m.upstream_role,
+                                                                        'cr',
                                                                     )}</span
                                                                 >
                                                             </div>

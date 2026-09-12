@@ -50,6 +50,10 @@
         role: string;
         townHallLevel: number;
         expLevel: number;
+        // Kommen aus der CoC-API und wurden hier benutzt, ohne je deklariert
+        // zu sein — trophies beim Sortieren, warStars beim Zusammenfuehren.
+        trophies?: number;
+        warStars?: number;
         league?: {
             iconUrls: { large?: string; medium: string; small: string };
             name: string;
