@@ -65,6 +65,7 @@
             {gameType}
             bind:clanCount
             bind:playerCount
+            on:navigate
         />
     </div>
 </section>

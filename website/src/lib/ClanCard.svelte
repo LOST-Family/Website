@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { createEventDispatcher } from 'svelte';
+
     import { onMount } from 'svelte';
     import { fade, slide } from 'svelte/transition';
     import type { GameType } from './auth';
@@ -30,6 +32,19 @@
         clanDB: string | null;
         nameDB: string;
         isHidden: boolean;
+    }
+
+    const dispatch = createEventDispatcher();
+
+    /**
+     * Klick auf ein Mitglied fuehrt zu seinem Profil (Issue #19).
+     *
+     * Nur wer verknuepft ist, hat eines — bei allen anderen bleibt die Zeile
+     * bewusst ein Text und kein toter Knopf.
+     */
+    function zeigeProfil(player: Player) {
+        if (!player.userId) return;
+        dispatch('navigate', `profile/${player.userId}`);
     }
 
     interface ClanWithMembers extends Clan {
@@ -587,9 +602,26 @@
 
                                             <div class="members-list">
                                                 {#each players as player}
-                                                    <div
+                                                    <!-- Ein echter Knopf, kein
+                                                    div mit Klickhandler: wer
+                                                    nicht verknuepft ist, hat
+                                                    kein Profil, und ein
+                                                    deaktivierter Knopf ist
+                                                    dann auch nicht
+                                                    anspringbar. -->
+                                                    <button
+                                                        type="button"
                                                         class="member-item"
+                                                        class:anklickbar={!!player.userId}
+                                                        disabled={!player.userId}
                                                         transition:fade
+                                                        title={player.userId
+                                                            ? 'Profil öffnen'
+                                                            : getPlayerName(
+                                                                  player,
+                                                              )}
+                                                        on:click={() =>
+                                                            zeigeProfil(player)}
                                                     >
                                                         <div
                                                             class="member-status-line"
@@ -611,7 +643,7 @@
                                                                 player,
                                                             )}
                                                         </span>
-                                                    </div>
+                                                    </button>
                                                 {/each}
                                             </div>
                                         </div>
@@ -954,6 +986,14 @@
     }
 
     .member-item {
+        /* Seit Issue #19 ist das ein echter <button>. Die Voreinstellungen
+           des Browsers muessen weg, aber nur die — background und border
+           stehen weiter unten mit Absicht. */
+        appearance: none;
+        font: inherit;
+        text-align: left;
+        width: 100%;
+        color: inherit;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -970,6 +1010,14 @@
     .card-container.light .member-item {
         background: rgba(0, 0, 0, 0.015);
         border: 1px solid rgba(0, 0, 0, 0.03);
+    }
+
+    .member-item.anklickbar {
+        cursor: pointer;
+    }
+
+    .member-item:disabled {
+        cursor: default;
     }
 
     .member-item:hover {

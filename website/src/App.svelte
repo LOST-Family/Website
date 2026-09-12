@@ -156,6 +156,7 @@
                 {theme}
                 {apiBaseUrl}
                 gameType="coc"
+                on:navigate={handleNavigate}
                 title="Clash of Clans"
                 description="Unsere Clans in Clash of Clans"
             />
@@ -164,6 +165,7 @@
                 {theme}
                 {apiBaseUrl}
                 gameType="cr"
+                on:navigate={handleNavigate}
                 title="Clash Royale"
                 description="Unsere Clans in Clash Royale"
             />
