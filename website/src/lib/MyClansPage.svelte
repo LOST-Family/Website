@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, createEventDispatcher } from 'svelte';
     import { fade } from 'svelte/transition';
-    import { user } from './auth';
+    import { user, type GameType } from './auth';
     import {
         getClanBanner,
         getClanColor,
@@ -19,10 +19,14 @@
         index: number;
         badgeUrl: string;
         badgeUrls?: { large: string; medium: string; small: string };
-        gameType?: 'coc' | 'cr';
+        gameType?: GameType;
     }
 
-    let userClans: { coc: Clan[]; cr: Clan[] } = { coc: [], cr: [] };
+    let userClans: { coc: Clan[]; cr: Clan[]; bs: Clan[] } = {
+        coc: [],
+        cr: [],
+        bs: [],
+    };
     let loading = true;
     let error: string | null = null;
 
@@ -35,13 +39,15 @@
         loading = true;
         error = null;
         try {
-            const [accountsRes, cocClansRes, crClansRes] = await Promise.all([
-                fetch(`${apiBaseUrl}/api/me/accounts`, {
-                    credentials: 'include',
-                }),
-                fetch(`${apiBaseUrl}/api/coc/clans`),
-                fetch(`${apiBaseUrl}/api/cr/clans`),
-            ]);
+            const [accountsRes, cocClansRes, crClansRes, bsClansRes] =
+                await Promise.all([
+                    fetch(`${apiBaseUrl}/api/me/accounts`, {
+                        credentials: 'include',
+                    }),
+                    fetch(`${apiBaseUrl}/api/coc/clans`),
+                    fetch(`${apiBaseUrl}/api/cr/clans`),
+                    fetch(`${apiBaseUrl}/api/bs/clans`),
+                ]);
 
             if (!accountsRes.ok) {
                 throw new Error('Fehler beim Laden der Accounts');
@@ -54,12 +60,20 @@
             const allCrClans: Clan[] = crClansRes.ok
                 ? await crClansRes.json()
                 : [];
+            // 503, wenn der BS-Bot nicht konfiguriert ist — dann bleibt die
+            // Liste einfach leer.
+            const allBsClans: Clan[] = bsClansRes.ok
+                ? await bsClansRes.json()
+                : [];
 
             const officialCocTags = new Set(
                 allCocClans.map((c) => c.tag.toUpperCase()),
             );
             const officialCrTags = new Set(
                 allCrClans.map((c) => c.tag.toUpperCase()),
+            );
+            const officialBsTags = new Set(
+                allBsClans.map((c) => c.tag.toUpperCase()),
             );
 
             const cocAccountClans = new Set<string>();
@@ -97,6 +111,26 @@
                 }
             });
 
+            const bsAccountClans = new Set<string>();
+            const bsAccounts = accounts.bs || [];
+            bsAccounts.forEach((acc: any) => {
+                // In Brawl Stars heisst der Clan "club". Das Backend schreibt
+                // die Bot-Antwort auf clanDB um, die Supercell-Antwort behaelt
+                // ihr eigenes Feld.
+                const club =
+                    acc.upstream_club && acc.upstream_club.tag
+                        ? acc.upstream_club
+                        : acc.club && acc.club.tag
+                          ? acc.club
+                          : acc.clanDB && acc.clanDB.tag
+                            ? acc.clanDB
+                            : null;
+
+                if (club && officialBsTags.has(club.tag.toUpperCase())) {
+                    bsAccountClans.add(club.tag.toUpperCase());
+                }
+            });
+
             userClans = {
                 coc: allCocClans
                     .filter((c) => cocAccountClans.has(c.tag.toUpperCase()))
@@ -105,6 +139,10 @@
                 cr: allCrClans
                     .filter((c) => crAccountClans.has(c.tag.toUpperCase()))
                     .map((c) => ({ ...c, gameType: 'cr' as const }))
+                    .sort((a, b) => (a.index || 0) - (b.index || 0)),
+                bs: allBsClans
+                    .filter((c) => bsAccountClans.has(c.tag.toUpperCase()))
+                    .map((c) => ({ ...c, gameType: 'bs' as const }))
                     .sort((a, b) => (a.index || 0) - (b.index || 0)),
             };
         } catch (e) {
@@ -129,6 +167,7 @@
 
     $: cocClans = userClans.coc;
     $: crClans = userClans.cr;
+    $: bsClans = userClans.bs;
 </script>
 
 <div class="my-clans-page" class:light={theme === 'light'}>
@@ -171,7 +210,7 @@
                     >Erneut versuchen</button
                 >
             </div>
-        {:else if cocClans.length === 0 && crClans.length === 0}
+        {:else if cocClans.length === 0 && crClans.length === 0 && bsClans.length === 0}
             <div class="empty-state" in:fade>
                 <div class="empty-icon">🏰</div>
                 <h3>Keine Clans gefunden</h3>
@@ -311,6 +350,77 @@
                                                 class="game-tag"
                                                 class:cr={clan.gameType ===
                                                     'cr'}
+                                                >{clan.gameType?.toUpperCase() ||
+                                                    'CoC'}</span
+                                            >
+                                            {#if clan.index > 0}
+                                                <span class="clan-index-badge"
+                                                    >#{clan.index}</span
+                                                >
+                                            {/if}
+                                        </div>
+                                    </div>
+                                </button>
+                            {/each}
+                        </div>
+                    </section>
+                {/if}
+
+                {#if bsClans.length > 0}
+                    <section class="game-section">
+                        <div class="section-header-inline">
+                            <div class="game-icon bs">⭐</div>
+                            <h2 class="section-subtitle">Brawl Stars</h2>
+                        </div>
+                        <div class="clan-grid">
+                            {#each bsClans as clan}
+                                <button
+                                    class="clan-selector-card"
+                                    on:click={() => navigateToClan(clan)}
+                                    style="--clan-color: {getClanColor(
+                                        clan.nameDB,
+                                        clan.index,
+                                    )}"
+                                >
+                                    <div class="card-banner">
+                                        <img
+                                            src={getClanBanner(
+                                                clan.nameDB,
+                                                clan.gameType,
+                                            )}
+                                            alt="Banner"
+                                        />
+                                        <div class="banner-overlay"></div>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="clan-badge">
+                                            {#if getClanBadgeUrl(clan)}
+                                                <img
+                                                    src={getClanBadgeUrl(clan)}
+                                                    alt={clan.nameDB ||
+                                                        clan.tag}
+                                                />
+                                            {:else}
+                                                <div class="badge-placeholder">
+                                                    {(
+                                                        clan.nameDB || 'C'
+                                                    ).charAt(0)}
+                                                </div>
+                                            {/if}
+                                        </div>
+                                        <div class="clan-info">
+                                            <span class="clan-name"
+                                                >{clan.nameDB || clan.tag}</span
+                                            >
+                                            <span class="clan-tag"
+                                                >{clan.tag}</span
+                                            >
+                                        </div>
+                                        <div class="clan-meta">
+                                            <span
+                                                class="game-tag"
+                                                class:bs={clan.gameType ===
+                                                    'bs'}
                                                 >{clan.gameType?.toUpperCase() ||
                                                     'CoC'}</span
                                             >
@@ -641,6 +751,11 @@
 
     .game-tag.cr {
         background: #5865f2;
+    }
+
+    .game-tag.bs {
+        background: #f1b019;
+        color: #1a1a1a;
     }
 
     .clan-index-badge {

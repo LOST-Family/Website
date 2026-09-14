@@ -22,6 +22,7 @@ fn get_cache_prefix(game: GameType) -> &'static str {
     match game {
         GameType::ClashOfClans => "coc",
         GameType::ClashRoyale => "cr",
+        GameType::BrawlStars => "bs",
     }
 }
 
@@ -39,6 +40,7 @@ pub fn get_supercell_api_url(game: GameType) -> &'static str {
     use std::sync::OnceLock;
     static COC: OnceLock<String> = OnceLock::new();
     static CR: OnceLock<String> = OnceLock::new();
+    static BS: OnceLock<String> = OnceLock::new();
     match game {
         GameType::ClashOfClans => COC
             .get_or_init(|| {
@@ -52,6 +54,76 @@ pub fn get_supercell_api_url(game: GameType) -> &'static str {
                     .unwrap_or_else(|_| "https://api.clashroyale.com/v1".to_string())
             })
             .as_str(),
+        GameType::BrawlStars => BS
+            .get_or_init(|| {
+                std::env::var("BS_API_BASE_URL")
+                    .unwrap_or_else(|_| "https://api.brawlstars.com/v1".to_string())
+            })
+            .as_str(),
+    }
+}
+
+/// Brawl Stars nennt einen Clan "Club" — im Bot wie in der Supercell-API.
+///
+/// Innerhalb der Website bleibt es durchgaengig bei "clans", auch in den
+/// Cache-Schluesseln; uebersetzt wird ausschliesslich die Adresse, die
+/// tatsaechlich hinausgeht. Andernfalls muesste jede Pfadauswertung und jeder
+/// Cache-Schluessel wissen, um welches Spiel es geht.
+fn aussen_pfad(game: GameType, url_path: &str) -> String {
+    match game {
+        GameType::BrawlStars => url_path.replacen("/clans", "/clubs", 1),
+        _ => url_path.to_string(),
+    }
+}
+
+/// Die Supercell-Antwort eines Brawl-Stars-Clubs auf die Form bringen, die der
+/// Rest der Website von Clash of Clans und Clash Royale kennt.
+///
+/// Dort traegt ein Clan-Objekt die Mitgliederliste unter `memberList` und die
+/// blosse Anzahl unter `members`. Brawl Stars legt die Liste selbst unter
+/// `members` ab. Ohne diese Umformung findet `get_clan_members_impl` keine
+/// Mitglieder und haelt jeden fuer ausgetreten.
+fn vereinheitliche_supercell_club(wert: &mut serde_json::Value) {
+    let Some(obj) = wert.as_object_mut() else {
+        return;
+    };
+    let Some(liste) = obj.get("members").filter(|v| v.is_array()).cloned() else {
+        return;
+    };
+    let anzahl = liste.as_array().map(|a| a.len()).unwrap_or(0);
+    obj.insert("memberList".to_string(), liste);
+    obj.insert("members".to_string(), serde_json::json!(anzahl));
+}
+
+/// Dieselbe Uebersetzung in der Gegenrichtung, fuer die Antwort des BS-Bots.
+///
+/// Das ist nicht bloss Kosmetik: `filter_member_data` entfernt das interne Feld
+/// `clanDB`, bevor eine Mitgliederliste an jemanden ohne Vize-Rang geht. Hiesse
+/// das Feld weiterhin `clubDB`, ginge der Filter daran vorbei und die
+/// Kickpunkt-Konfiguration des Clubs laege offen.
+fn vereinheitliche_feldnamen(wert: &mut serde_json::Value) {
+    match wert {
+        serde_json::Value::Array(arr) => {
+            for eintrag in arr {
+                vereinheitliche_feldnamen(eintrag);
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            for (von, nach) in [
+                ("roleInClub", "roleInClan"),
+                ("clubDB", "clanDB"),
+                ("clubTag", "clanTag"),
+                ("clubs", "clans"),
+            ] {
+                if let Some(v) = obj.remove(von) {
+                    obj.insert(nach.to_string(), v);
+                }
+            }
+            for (_, v) in obj.iter_mut() {
+                vereinheitliche_feldnamen(v);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -59,6 +131,7 @@ fn get_upstream_url(data: &AppState, game: GameType) -> &str {
     match game {
         GameType::ClashOfClans => &data.upstream_coc_url,
         GameType::ClashRoyale => &data.upstream_cr_url,
+        GameType::BrawlStars => data.upstream_bs_url.as_deref().unwrap_or(""),
     }
 }
 
@@ -66,6 +139,7 @@ fn get_upstream_token(data: &AppState, game: GameType) -> &str {
     match game {
         GameType::ClashOfClans => &data.coc_api_token,
         GameType::ClashRoyale => &data.cr_api_token,
+        GameType::BrawlStars => data.bs_api_token.as_deref().unwrap_or(""),
     }
 }
 
@@ -73,12 +147,22 @@ fn get_supercell_token(data: &AppState, game: GameType) -> &str {
     match game {
         GameType::ClashOfClans => &data.clash_of_clans_api_token,
         GameType::ClashRoyale => &data.clash_royale_api_token,
+        GameType::BrawlStars => &data.brawl_stars_api_token,
     }
 }
 
 /// Given a Clash Royale badgeId (e.g. 16000000), return a fallback badge URL
 /// from the RoyaleAPI GitHub assets repository.
-pub fn badge_url_from_id(badge_id: i64) -> Option<String> {
+///
+/// Brawl Stars hat einen eigenen Nummernkreis (8000000 aufwaerts) und keine
+/// Namensliste — dort ist die Nummer selbst schon der Dateiname bei Brawlify.
+pub fn badge_url_from_id(badge_id: i64, game: GameType) -> Option<String> {
+    if game == GameType::BrawlStars {
+        return Some(format!(
+            "https://cdn.brawlify.com/club-badges/regular/{}.png",
+            badge_id
+        ));
+    }
     let name = match badge_id {
         16000000 => "Flame_01",
         16000001 => "Flame_02",
@@ -336,8 +420,8 @@ pub fn filter_clan_data(
                 }
             }
 
-            // Filter out "Warteliste" for Clash Royale (always, for everyone)
-            if game == GameType::ClashRoyale {
+            // Filter out "Warteliste" for Clash Royale and Brawl Stars (always, for everyone)
+            if matches!(game, GameType::ClashRoyale | GameType::BrawlStars) {
                 let old_len = clans.len();
                 clans.retain(|c| {
                     let name = c.get("name").and_then(|n| n.as_str()).unwrap_or("");
@@ -372,7 +456,7 @@ pub fn filter_clan_data(
                     // Fallback: construct badgeUrls from badgeId if still missing
                     if !obj.contains_key("badgeUrls") {
                         if let Some(badge_id) = obj.get("badgeId").and_then(|v| v.as_i64()) {
-                            if let Some(url) = badge_url_from_id(badge_id) {
+                            if let Some(url) = badge_url_from_id(badge_id, game) {
                                 obj.insert(
                                     "badgeUrls".to_string(),
                                     serde_json::json!({
@@ -412,7 +496,7 @@ pub fn filter_clan_data(
             // Fallback: construct badgeUrls from badgeId if still missing
             if !obj.contains_key("badgeUrls") {
                 if let Some(badge_id) = obj.get("badgeId").and_then(|v| v.as_i64()) {
-                    if let Some(url) = badge_url_from_id(badge_id) {
+                    if let Some(url) = badge_url_from_id(badge_id, game) {
                         obj.insert(
                             "badgeUrls".to_string(),
                             serde_json::json!({
@@ -485,7 +569,7 @@ async fn enrich_clan_badges(body: Bytes, pool: &sqlx::PgPool, game: GameType) ->
             if let Ok(sc_json) = serde_json::from_slice::<serde_json::Value>(&sc_body) {
                 // Prefer badgeId -> GitHub URL (clean square images)
                 if let Some(badge_id) = sc_json.get("badgeId").and_then(|v| v.as_i64()) {
-                    if let Some(url) = badge_url_from_id(badge_id) {
+                    if let Some(url) = badge_url_from_id(badge_id, game) {
                         obj.insert(
                             "badgeUrls".to_string(),
                             serde_json::json!({
@@ -678,7 +762,7 @@ pub async fn update_upstream_cache(
     let prefix = get_cache_prefix(game);
     let upstream_url = get_upstream_url(data, game);
     let token = get_upstream_token(data, game);
-    let full_url = format_url(upstream_url, url_path);
+    let full_url = format_url(upstream_url, &aussen_pfad(game, url_path));
 
     match data
         .client
@@ -689,7 +773,18 @@ pub async fn update_upstream_cache(
     {
         Ok(res) => {
             let status = res.status().as_u16();
-            let body = res.bytes().await.map_err(|e| e.to_string())?;
+            let mut body = res.bytes().await.map_err(|e| e.to_string())?;
+
+            // Die Antwort des BS-Bots auf die Clan-Sprache umschreiben, bevor sie in
+            // den Cache geht. Ab hier sieht der Rest der Website ueberall dasselbe.
+            if game == GameType::BrawlStars
+                && let Ok(mut wert) = serde_json::from_slice::<serde_json::Value>(&body)
+            {
+                vereinheitliche_feldnamen(&mut wert);
+                if let Ok(neu) = serde_json::to_vec(&wert) {
+                    body = Bytes::from(neu);
+                }
+            }
 
             if status == 200 {
                 let timestamp = std::time::SystemTime::now()
@@ -899,7 +994,7 @@ pub async fn update_supercell_cache(
     let prefix = get_cache_prefix(game);
     let api_url = get_supercell_api_url(game);
     let token = get_supercell_token(data, game);
-    let full_url = format!("{}{}", api_url, url_path);
+    let full_url = format!("{}{}", api_url, aussen_pfad(game, url_path));
 
     match data
         .client
@@ -910,7 +1005,18 @@ pub async fn update_supercell_cache(
     {
         Ok(res) => {
             let status = res.status().as_u16();
-            let body = res.bytes().await.map_err(|e| e.to_string())?;
+            let mut body = res.bytes().await.map_err(|e| e.to_string())?;
+
+            // Brawl-Stars-Clubs auf die Clan-Form bringen, bevor sie in den
+            // Cache gehen — danach ist die Herkunft nirgends mehr zu merken.
+            if game == GameType::BrawlStars
+                && let Ok(mut wert) = serde_json::from_slice::<serde_json::Value>(&body)
+            {
+                vereinheitliche_supercell_club(&mut wert);
+                if let Ok(neu) = serde_json::to_vec(&wert) {
+                    body = Bytes::from(neu);
+                }
+            }
 
             if status == 200 {
                 let timestamp = std::time::SystemTime::now()

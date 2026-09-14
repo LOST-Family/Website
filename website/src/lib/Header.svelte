@@ -63,29 +63,39 @@
     async function fetchUserClans() {
         if (!$user) return;
         try {
-            const [accountsRes, cocClansRes, crClansRes] = await Promise.all([
-                fetch(`${apiBaseUrl}/api/me/accounts`, {
-                    credentials: 'include',
-                }),
-                fetch(`${apiBaseUrl}/api/coc/clans`, {
-                    credentials: 'include',
-                }),
-                fetch(`${apiBaseUrl}/api/cr/clans`, {
-                    credentials: 'include',
-                }),
-            ]);
+            const [accountsRes, cocClansRes, crClansRes, bsClansRes] =
+                await Promise.all([
+                    fetch(`${apiBaseUrl}/api/me/accounts`, {
+                        credentials: 'include',
+                    }),
+                    fetch(`${apiBaseUrl}/api/coc/clans`, {
+                        credentials: 'include',
+                    }),
+                    fetch(`${apiBaseUrl}/api/cr/clans`, {
+                        credentials: 'include',
+                    }),
+                    fetch(`${apiBaseUrl}/api/bs/clans`, {
+                        credentials: 'include',
+                    }),
+                ]);
 
             const accounts = accountsRes.ok
                 ? await accountsRes.json()
-                : { coc: [], cr: [] };
+                : { coc: [], cr: [], bs: [] };
             const cocClans = cocClansRes.ok ? await cocClansRes.json() : [];
             const crClans = crClansRes.ok ? await crClansRes.json() : [];
+            // Ist der BS-Bot nicht konfiguriert, meldet die Route 503 — dann
+            // bleibt die Liste leer und der Rest der Kopfzeile unberuehrt.
+            const bsClans = bsClansRes.ok ? await bsClansRes.json() : [];
 
             const officialCocTags = new Set(
                 cocClans.map((c: any) => c.tag.toUpperCase()),
             );
             const officialCrTags = new Set(
                 crClans.map((c: any) => c.tag.toUpperCase()),
+            );
+            const officialBsTags = new Set(
+                bsClans.map((c: any) => c.tag.toUpperCase()),
             );
 
             const badgeMap = new Map<string, string>();
@@ -94,6 +104,10 @@
             });
             crClans.forEach((c: any) => {
                 if (c.badgeUrl) badgeMap.set(c.tag.toUpperCase(), c.badgeUrl);
+            });
+            bsClans.forEach((c: any) => {
+                const url = c.badgeUrl || c.badgeUrls?.small;
+                if (url) badgeMap.set(c.tag.toUpperCase(), url);
             });
 
             const clansMap = new Map<
@@ -151,6 +165,36 @@
                             name: clan.name,
                             gameType: 'cr',
                             index: clanData?.index || 0,
+                        });
+                    }
+                }
+            });
+
+            // Process Brawl Stars accounts
+            const bsAccounts = accounts.bs || [];
+            bsAccounts.forEach((acc: any) => {
+                // Brawl Stars nennt es "club" — das Backend schreibt die
+                // Bot-Antwort auf clanDB um, die Supercell-Antwort nicht.
+                const club =
+                    acc.upstream_club && acc.upstream_club.tag
+                        ? acc.upstream_club
+                        : acc.club && acc.club.tag
+                          ? acc.club
+                          : acc.clanDB && acc.clanDB.tag
+                            ? acc.clanDB
+                            : null;
+
+                if (club) {
+                    const tag = club.tag.toUpperCase();
+                    if (officialBsTags.has(tag)) {
+                        const clubData = bsClans.find(
+                            (c: any) => c.tag.toUpperCase() === tag,
+                        );
+                        clansMap.set(`bs-${tag}`, {
+                            tag: club.tag,
+                            name: club.name,
+                            gameType: 'bs',
+                            index: clubData?.index || 0,
                         });
                     }
                 }
@@ -245,6 +289,31 @@
                         class="dropdown-item"
                         on:click|preventDefault={() => navigate('cr/clans')}
                         >Clans</a
+                    >
+                </div>
+            </div>
+
+            <div class="nav-item dropdown">
+                <button class="nav-link">
+                    Brawl Stars
+                    <svg
+                        class="dropdown-arrow"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                    >
+                        <path
+                            fill-rule="evenodd"
+                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                            clip-rule="evenodd"
+                        />
+                    </svg>
+                </button>
+                <div class="dropdown-menu">
+                    <a
+                        href="/bs/clans"
+                        class="dropdown-item"
+                        on:click|preventDefault={() => navigate('bs/clans')}
+                        >Clubs</a
                     >
                 </div>
             </div>
@@ -666,6 +735,16 @@
                     class="drawer-sub-link"
                     on:click|preventDefault={() => navigate('cr/clans')}
                     >Clans</a
+                >
+            </div>
+
+            <div class="drawer-nav-group">
+                <div class="group-header">Brawl Stars</div>
+                <a
+                    href="/bs/clans"
+                    class="drawer-sub-link"
+                    on:click|preventDefault={() => navigate('bs/clans')}
+                    >Clubs</a
                 >
             </div>
         </div>

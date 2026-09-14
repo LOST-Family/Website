@@ -1,21 +1,35 @@
+import type { GameType } from './auth';
+
 export const ROLE_ORDER: Record<string, number> = {
     leader: 1,
+    // Brawl Stars nennt dieselben Raenge anders, und zwar zweimal verschieden:
+    // die Supercell-API sagt president / vicePresident / senior, der bsmanager
+    // sagt PRESIDENT / COPRESIDENT / SENIOR. Beide kommen im Frontend an — die
+    // Spielrolle aus der API, die Sollrolle aus dem Bot.
+    president: 1,
     coLeader: 2,
+    vicePresident: 2,
+    copresident: 2,
     admin: 3,
     elder: 3,
+    senior: 3,
     member: 4,
 };
 
 export function getRoleDisplay(
     role: string | undefined,
-    gameType: 'coc' | 'cr' = 'coc',
+    gameType: GameType = 'coc',
 ): string {
     switch (role?.toLowerCase()) {
         case 'leader':
+        case 'president':
             return 'Anführer';
         case 'coleader':
+        case 'vicepresident':
+        case 'copresident':
             return 'Vize-Anführer';
         case 'elder':
+        case 'senior':
             return 'Ältester';
         case 'admin':
             // In Clash of Clans heisst der Aeltesten-Rang in der API "admin",
@@ -23,8 +37,10 @@ export function getRoleDisplay(
             // beides: "elder" ist der echte Rang, "admin" dagegen die
             // Dummy-Marke aus dem Bot, damit ein Platzhalter nicht als
             // normales Mitglied zaehlt. Ihn als "Ältester" anzuzeigen war
-            // falsch (Issue #23).
-            return gameType === 'cr' ? 'Mitglied' : 'Ältester';
+            // falsch (Issue #23). In Brawl Stars ist es dasselbe: der
+            // bsmanager setzt ADMIN, wenn der verknuepfte Nutzer Bot-Admin
+            // ist, und ueberschreibt damit den echten Clubrang.
+            return gameType === 'coc' ? 'Ältester' : 'Mitglied';
         case 'member':
             return 'Mitglied';
         default:
@@ -50,15 +66,18 @@ export function isRoleWrong(
 
     const normalize = (r: string) => {
         if (cocMode && r === 'admin') return 'elder';
-        if (r === 'elder' || r === 'ältester') return 'elder';
+        if (r === 'elder' || r === 'ältester' || r === 'senior') return 'elder';
         if (
             r === 'coleader' ||
             r === 'co-leader' ||
+            r === 'vicepresident' ||
+            r === 'copresident' ||
             r === 'vize-anführer' ||
             r === 'vize'
         )
             return 'coleader';
-        if (r === 'leader' || r === 'anführer') return 'leader';
+        if (r === 'leader' || r === 'president' || r === 'anführer')
+            return 'leader';
         if (r === 'member' || r === 'mitglied') return 'member';
         return r;
     };

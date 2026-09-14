@@ -54,6 +54,21 @@ pub fn spawn_background_task(data: AppState) {
         }
     });
 
+    // 3b. Task for BS Cache Refresh (offset by 30 seconds)
+    if data.upstream_bs_url.is_some() {
+        let bs_cache_data = data.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            let mut ticker = interval(Duration::from_secs(
+                bs_cache_data.background_refresh_interval * 60,
+            ));
+            loop {
+                ticker.tick().await;
+                refresh_clans(&bs_cache_data, GameType::BrawlStars).await;
+            }
+        });
+    }
+
     // 4. Task for Side Clans CWL Refresh (Every 1 hour)
     let side_clans_data = data.clone();
     tokio::spawn(async move {
@@ -216,6 +231,7 @@ async fn refresh_clans(data: &AppState, game: GameType) {
     let game_name = match game {
         GameType::ClashOfClans => "CoC",
         GameType::ClashRoyale => "CR",
+        GameType::BrawlStars => "BS",
     };
 
     info!("Background Refresh [{}]: Starting...", game_name);

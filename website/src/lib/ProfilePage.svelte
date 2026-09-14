@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { fade, scale, slide } from 'svelte/transition';
     import { quintOut } from 'svelte/easing';
-    import { user, loading, fetchUser } from './auth';
+    import { user, loading, fetchUser, getApiPrefix } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
     import type { GameType } from './auth';
     import { getClanBadgeUrl } from './clanDisplay';
@@ -13,6 +13,7 @@
 
     let cocPlayerAccounts: any[] = [];
     let crPlayerAccounts: any[] = [];
+    let bsPlayerAccounts: any[] = [];
     let accountsLoading = false;
     let accountsError: string | null = null;
     let userError: string | null = null;
@@ -57,14 +58,16 @@
             });
             if (response.ok) {
                 const data = await response.json();
-                // Backend now returns { coc: [...], cr: [...] }
+                // Backend now returns { coc: [...], cr: [...], bs: [...] }
                 if (data && typeof data === 'object' && !Array.isArray(data)) {
                     cocPlayerAccounts = data.coc || [];
                     crPlayerAccounts = data.cr || [];
+                    bsPlayerAccounts = data.bs || [];
                 } else {
                     // Fallback for old format (array = CoC accounts)
                     cocPlayerAccounts = Array.isArray(data) ? data : [];
                     crPlayerAccounts = [];
+                    bsPlayerAccounts = [];
                 }
 
                 // If viewing own accounts, refresh global user state to get updated linked_players
@@ -89,7 +92,7 @@
 
         try {
             const encodedTag = encodeURIComponent(player.tag);
-            const apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
+            const apiPrefix = getApiPrefix(gameType);
 
             // Fetch identity and kickpoints in parallel for ALL games
             const [kpRes, idRes] = await Promise.all([
@@ -636,6 +639,126 @@
                         </div>
                     {/if}
                 </section>
+
+                <!-- BS Accounts Section -->
+                <section class="accounts-section bs-section">
+                    <div class="section-header">
+                        <div class="section-title-group">
+                            <div class="game-icon bs-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z"
+                                    />
+                                </svg>
+                            </div>
+                            <h2>Brawl Stars Accounts</h2>
+                        </div>
+                        <span class="account-count bs-count"
+                            >{bsPlayerAccounts.length} Accounts</span
+                        >
+                    </div>
+
+                    {#if accountsLoading}
+                        <div class="accounts-loading">
+                            <div class="loading-grid">
+                                {#each Array(2) as _}
+                                    <div class="skeleton-card"></div>
+                                {/each}
+                            </div>
+                        </div>
+                    {:else if bsPlayerAccounts.length === 0}
+                        <div class="empty-state">
+                            <div class="empty-icon">⭐</div>
+                            <p>Keine Brawl Stars Accounts verknüpft.</p>
+                            <p class="sub-text">
+                                Verknüpfe deine Accounts auf unserem Discord
+                                Server.
+                            </p>
+                        </div>
+                    {:else}
+                        <div class="accounts-grid">
+                            {#each bsPlayerAccounts as player}
+                                {@const activePoints =
+                                    player.activeKickpointsSum || 0}
+                                <div
+                                    class="account-card bs-card"
+                                    class:light={theme === 'light'}
+                                    on:click={() => openPlayerModal(player, 'bs')}
+                                    on:keydown={(e) =>
+                                        e.key === 'Enter' &&
+                                        openPlayerModal(player, 'bs')}
+                                    role="button"
+                                    tabindex="0"
+                                >
+                                    <div class="player-header">
+                                        <div class="player-rank">
+                                            {#if player.icon?.id}
+                                                <img
+                                                    src="https://cdn.brawlify.com/profile-icons/regular/{player
+                                                        .icon.id}.png"
+                                                    alt=""
+                                                    class="small-badge"
+                                                />
+                                            {/if}
+                                        </div>
+                                        <div class="player-names">
+                                            <h3>
+                                                {player.nameDB || player.name}
+                                            </h3>
+                                            <span class="player-tag"
+                                                >{player.tag}</span
+                                            >
+                                        </div>
+                                    </div>
+
+                                    <div class="player-stats">
+                                        <div class="stat-item">
+                                            <span class="stat-label"
+                                                >Aktive Kickpunkte</span
+                                            >
+                                            <span
+                                                class="stat-value"
+                                                class:danger={activePoints >=
+                                                    (player.clanDB
+                                                        ?.maxKickpoints || 9)}
+                                            >
+                                                {activePoints} / {player.clanDB
+                                                    ?.maxKickpoints || '-'}
+                                            </span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label"
+                                                >Trophäen</span
+                                            >
+                                            <span class="stat-value"
+                                                >{(
+                                                    player.trophies || 0
+                                                ).toLocaleString('de-DE')}</span
+                                            >
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label"
+                                                >Bestwert</span
+                                            >
+                                            <span class="stat-value"
+                                                >{(
+                                                    player.highestTrophies || 0
+                                                ).toLocaleString('de-DE')}</span
+                                            >
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Club</span>
+                                            <span class="stat-value"
+                                                >{player.club?.name ||
+                                                    'Kein Club'}</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+                </section>
             </div>
         {/if}
     </div>
@@ -784,6 +907,12 @@
         border: 1px solid rgba(59, 130, 246, 0.3);
     }
 
+    .bs-icon {
+        background: linear-gradient(135deg, #f1b019 0%, #c78d0b 100%);
+        color: white;
+        border: 1px solid rgba(241, 176, 25, 0.3);
+    }
+
     .game-icon svg {
         width: 28px;
         height: 28px;
@@ -930,6 +1059,12 @@
         border: 1px solid rgba(59, 130, 246, 0.2);
     }
 
+    .bs-count {
+        color: #f1b019;
+        background: rgba(241, 176, 25, 0.1);
+        border: 1px solid rgba(241, 176, 25, 0.2);
+    }
+
     .light .account-count {
         background: rgba(0, 0, 0, 0.05);
         border: none;
@@ -941,6 +1076,10 @@
 
     .light .cr-count {
         color: #2563eb;
+    }
+
+    .light .bs-count {
+        color: #a8780a;
     }
 
     .accounts-grid {
@@ -975,6 +1114,11 @@
     .account-card.cr-card:hover {
         border-color: rgba(59, 130, 246, 0.3);
         box-shadow: 0 10px 30px rgba(59, 130, 246, 0.05);
+    }
+
+    .account-card.bs-card:hover {
+        border-color: rgba(241, 176, 25, 0.3);
+        box-shadow: 0 10px 30px rgba(241, 176, 25, 0.05);
     }
 
     .account-card.light {

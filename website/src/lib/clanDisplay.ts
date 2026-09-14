@@ -22,6 +22,13 @@ import bannerCRPass from '../assets/Clans/Clash Royale/Lost_f2p-pass.png';
 export function getClanBanner(clanName: string, gameType?: GameType): string {
     const name = (clanName || '').toUpperCase();
 
+    // Fuer Brawl Stars gibt es (noch) keine eigenen Banner. Ohne diesen Zweig
+    // fiele ein Club namens "LOST Family 3" durch die Namensregeln unten und
+    // bekaeme das Clash-of-Clans-Banner von LOST 3.
+    if (gameType === 'bs') {
+        return bannerDefault;
+    }
+
     if (gameType === 'cr') {
         if (name === 'LOST') return bannerCR1;
         // Vor den Ziffern: "LOST F2P + Pass" enthaelt die 2 aus "F2P" und

@@ -46,9 +46,11 @@
             ? '/my-clans'
             : currentPath === '/cr/clans'
               ? '/cr/clans'
-              : currentPath === '/admin/clans'
-                ? '/admin/clans'
-                : '/coc/clans';
+              : currentPath === '/bs/clans'
+                ? '/bs/clans'
+                : currentPath === '/admin/clans'
+                  ? '/admin/clans'
+                  : '/coc/clans';
 
     const apiBaseUrl =
         import.meta.env.VITE_API_BASE_URL !== undefined
@@ -106,6 +108,7 @@
         if (
             newPath === '/coc/clans' ||
             newPath === '/cr/clans' ||
+            newPath === '/bs/clans' ||
             newPath === '/my-clans' ||
             newPath === '/admin/clans'
         ) {
@@ -170,6 +173,14 @@
                 description="Unsere Clans in Clash Royale"
             />
 
+            <ClansSection
+                {theme}
+                {apiBaseUrl}
+                gameType="bs"
+                title="Brawl Stars"
+                description="Unsere Clubs in Brawl Stars"
+            />
+
             <FeaturesSection
                 {theme}
                 {kothImage}
@@ -191,6 +202,13 @@
                 {theme}
                 {apiBaseUrl}
                 gameType="cr"
+                on:navigate={handleNavigate}
+            />
+        {:else if currentPath === '/bs/clans'}
+            <ClansPage
+                {theme}
+                {apiBaseUrl}
+                gameType="bs"
                 on:navigate={handleNavigate}
             />
         {:else if currentPath === '/my-clans'}
@@ -247,7 +265,11 @@
                     on:navigate={handleNavigate}
                 />
             {/if}
-        {:else if currentPath.startsWith('/cr/clan/')}
+        <!-- Clash Royale und Brawl Stars teilen sich diesen Zweig: die
+             Anmelde-Aufforderung ist dieselbe, nur das Spiel unterscheidet
+             sich. Ein dritter Abzug davon waere nur eine weitere Stelle zum
+             Auseinanderlaufen. -->
+        {:else if currentPath.startsWith('/cr/clan/') || currentPath.startsWith('/bs/clan/')}
             {#if $loading}
                 <div class="auth-message-container">
                     <div class="spinner"></div>
@@ -275,7 +297,7 @@
                 <ClansPage
                     {theme}
                     {apiBaseUrl}
-                    gameType="cr"
+                    gameType={currentPath.startsWith('/bs/') ? 'bs' : 'cr'}
                     clanTag={'#' + currentPath.split('/')[3]}
                     backPath={lastClansPath}
                     on:navigate={handleNavigate}

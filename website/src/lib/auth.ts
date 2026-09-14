@@ -10,6 +10,7 @@ export interface User {
     is_admin: boolean;
     linked_players: string[]; // CoC linked players
     linked_cr_players: string[]; // CR linked players
+    linked_bs_players: string[]; // BS linked players
 }
 
 const internalUser = writable<User | null>(null);
@@ -39,6 +40,7 @@ export const user = derived(
             // permissions still reflect the actual member relationship.
             linked_players: $internalUser.linked_players,
             linked_cr_players: $internalUser.linked_cr_players,
+            linked_bs_players: $internalUser.linked_bs_players,
         };
     },
 );
@@ -115,7 +117,7 @@ export async function logout() {
 }
 
 // API helper functions
-export type GameType = 'coc' | 'cr';
+export type GameType = 'coc' | 'cr' | 'bs';
 
 export function getApiPrefix(game: GameType): string {
     return `/api/${game}`;

@@ -3,7 +3,9 @@
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
-    export let gameType: 'coc' | 'cr';
+    import type { GameType } from './auth';
+
+    export let gameType: GameType;
     export let title: string;
     export let description: string;
     export let clansData: any[] | null = null;
@@ -12,6 +14,7 @@
     let playerCount = 0;
 
     const isCoc = gameType === 'coc';
+    const isBs = gameType === 'bs';
 </script>
 
 <section
@@ -25,12 +28,19 @@
                 <div
                     class="section-icon clan-icon"
                     class:coc={isCoc}
-                    class:cr={!isCoc}
+                    class:cr={!isCoc && !isBs}
+                    class:bs={isBs}
                 >
                     {#if isCoc}
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <path
                                 d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"
+                            />
+                        </svg>
+                    {:else if isBs}
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z"
                             />
                         </svg>
                     {:else}
@@ -48,11 +58,17 @@
             </div>
             {#if clanCount > 0}
                 <div class="section-stats">
-                    <span class="stat-badge" class:coc={isCoc} class:cr={!isCoc}
-                        >{clanCount} Clans</span
+                    <span
+                        class="stat-badge"
+                        class:coc={isCoc}
+                        class:cr={!isCoc && !isBs}
+                        class:bs={isBs}>{clanCount} {isBs ? 'Clubs' : 'Clans'}</span
                     >
-                    <span class="stat-badge" class:coc={isCoc} class:cr={!isCoc}
-                        >{playerCount} Mitglieder</span
+                    <span
+                        class="stat-badge"
+                        class:coc={isCoc}
+                        class:cr={!isCoc && !isBs}
+                        class:bs={isBs}>{playerCount} Mitglieder</span
                     >
                 </div>
             {/if}
@@ -146,6 +162,14 @@
         border: 1px solid rgba(88, 101, 242, 0.2);
     }
 
+    /* Brawl Stars in seinem Gelb, damit die drei Spiele auf einen Blick
+       auseinanderzuhalten sind. */
+    .stat-badge.bs {
+        background: rgba(241, 176, 25, 0.15);
+        color: #f1b019;
+        border: 1px solid rgba(241, 176, 25, 0.2);
+    }
+
     .content-section.light .stat-badge.coc {
         background: rgba(59, 165, 92, 0.1);
         color: #2d8049;
@@ -156,6 +180,12 @@
         background: rgba(88, 101, 242, 0.1);
         color: #4752c4;
         border: 1px solid rgba(88, 101, 242, 0.15);
+    }
+
+    .content-section.light .stat-badge.bs {
+        background: rgba(241, 176, 25, 0.1);
+        color: #a8780a;
+        border: 1px solid rgba(241, 176, 25, 0.15);
     }
 
     .section-icon {
@@ -177,6 +207,11 @@
     .section-icon.clan-icon.cr {
         background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
         box-shadow: 0 8px 24px rgba(88, 101, 242, 0.3);
+    }
+
+    .section-icon.clan-icon.bs {
+        background: linear-gradient(135deg, #f1b019 0%, #c78d0b 100%);
+        box-shadow: 0 8px 24px rgba(241, 176, 25, 0.3);
     }
 
     .section-icon svg {

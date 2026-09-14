@@ -3,7 +3,7 @@
 
     import { onMount } from 'svelte';
     import { fade, slide } from 'svelte/transition';
-    import type { GameType } from './auth';
+    import { getApiPrefix, type GameType } from './auth';
     import { getClanBanner, getClanBadgeUrl } from './clanDisplay';
 
     export let apiBaseUrl: string = '';
@@ -15,7 +15,7 @@
     export let clanCount: number = 0;
     export let playerCount: number = 0;
 
-    $: apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
+    $: apiPrefix = getApiPrefix(gameType);
 
     interface Clan {
         tag: string;
@@ -273,6 +273,15 @@
                                         'ELDER',
                                         'ADMIN',
                                         'MEMBER',
+                                        // Der bsmanager fuehrt dieselben Raenge
+                                        // unter eigenen Namen. Ohne diese drei
+                                        // faellt jedes BS-Mitglied durch und
+                                        // behaelt den rohen Bezeichner.
+                                        // (hiddencoleader faltet der Bot schon
+                                        // auf COPRESIDENT, das kommt hier nie an.)
+                                        'PRESIDENT',
+                                        'COPRESIDENT',
+                                        'SENIOR',
                                     ].includes(upperRole);
 
                                     const isCRStandard = [
@@ -336,7 +345,39 @@
                                         else if (clanNameUpper === 'LOST')
                                             clanIndex = 1;
 
-                                        if (gameType === 'cr') {
+                                        if (gameType === 'bs') {
+                                        // Die Discord-Rollen der BS-Clubs:
+                                        // Anfuehrer und Vize gibt es nur einmal
+                                        // fuer alle Clubs, Aeltester und
+                                        // Mitglied je Club mit Nummer — Club 1
+                                        // ohne. Nachgesehen an den Rollen-IDs
+                                        // in der bsmanager-Datenbank.
+                                        if (
+                                            upperRole === 'LEADER' ||
+                                            upperRole === 'PRESIDENT'
+                                        ) {
+                                            computedRole = 'ANFÜHRER BS';
+                                        } else if (
+                                            upperRole === 'COLEADER' ||
+                                            upperRole === 'CO-LEADER' ||
+                                            upperRole === 'COPRESIDENT'
+                                        ) {
+                                            computedRole = 'VIZE-ANFÜHRER BS';
+                                        } else if (
+                                            upperRole === 'ELDER' ||
+                                            upperRole === 'SENIOR'
+                                        ) {
+                                            computedRole =
+                                                clanIndex === 1
+                                                    ? 'ÄLTESTER BS'
+                                                    : `ÄLTESTER BS ${clanIndex}`;
+                                        } else if (upperRole === 'MEMBER') {
+                                            computedRole =
+                                                clanIndex === 1
+                                                    ? 'MITGLIED BS'
+                                                    : `MITGLIED BS ${clanIndex}`;
+                                        }
+                                    } else if (gameType === 'cr') {
                                             if (upperRole === 'LEADER') {
                                                 computedRole =
                                                     clanIndex === 1

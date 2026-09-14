@@ -307,6 +307,144 @@ pub async fn get_cr_player_kickpoints_details(
 }
 
 // ============================================================================
+// BRAWL STARS HANDLERS
+// ============================================================================
+
+/// Ist der Brawl-Stars-Bot nicht konfiguriert, sagen die BS-Routen das klar,
+/// statt eine leere Adresse anzurufen und mit einem Netzwerkfehler zu enden.
+fn bs_nicht_konfiguriert(data: &web::Data<AppState>) -> Option<HttpResponse> {
+    if data.upstream_bs_url.is_none() {
+        return Some(HttpResponse::ServiceUnavailable().json(ErrorResponse {
+            error: "Brawl Stars ist auf diesem Server nicht konfiguriert".into(),
+        }));
+    }
+    None
+}
+
+// 1. Get All BS Clubs
+pub async fn get_bs_clans(
+    data: web::Data<AppState>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    let user_role = opt_user
+        .user
+        .as_ref()
+        .and_then(|u| u.claims.role.as_deref());
+    forward_request_with_filter(&data, GameType::BrawlStars, "/api/clans", user_role, &[]).await
+}
+
+// 2. Get BS Club Info
+pub async fn get_bs_clan_info(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    _opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_clan_info_impl(&data, &tag, GameType::BrawlStars).await
+}
+
+// 2b. Get BS Club Config
+pub async fn get_bs_clan_config(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_clan_config_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 3. Get BS Club Members
+pub async fn get_bs_clan_members(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_clan_members_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 3b. Get BS Club Members Lite (No Supercell API data)
+pub async fn get_bs_clan_members_lite(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_clan_members_lite_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 4. Get BS Club Kickpoint Reasons
+pub async fn get_bs_clan_kickpoint_reasons(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    user: AuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_clan_kickpoint_reasons_impl(&data, &tag, user, GameType::BrawlStars).await
+}
+
+// 5. Get BS Player
+pub async fn get_bs_player(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_player_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 5b. Get BS Player Identity
+pub async fn get_bs_player_identity(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_player_identity_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 5c. Get BS Player Kickpoints
+pub async fn get_bs_player_kickpoints(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_player_kickpoints_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// 5d. Get BS Player Kickpoints Details
+pub async fn get_bs_player_kickpoints_details(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    opt_user: OptionalAuthenticatedUser,
+) -> HttpResponse {
+    if let Some(aus) = bs_nicht_konfiguriert(&data) {
+        return aus;
+    }
+    get_player_kickpoints_details_impl(&data, &tag, opt_user, GameType::BrawlStars).await
+}
+
+// ============================================================================
 // SHARED IMPLEMENTATION FUNCTIONS
 // ============================================================================
 
@@ -314,6 +452,7 @@ fn get_cache_prefix(game: GameType) -> &'static str {
     match game {
         GameType::ClashOfClans => "coc",
         GameType::ClashRoyale => "cr",
+        GameType::BrawlStars => "bs",
     }
 }
 
@@ -322,12 +461,10 @@ fn normalize_tag(tag: &str) -> String {
 }
 
 fn get_game_linked_tags(user: Option<&AuthenticatedUser>, game: GameType) -> &[String] {
-    user.map(|u| {
-        if game == GameType::ClashRoyale {
-            u.linked_cr_players.as_slice()
-        } else {
-            u.linked_players.as_slice()
-        }
+    user.map(|u| match game {
+        GameType::ClashRoyale => u.linked_cr_players.as_slice(),
+        GameType::BrawlStars => u.linked_bs_players.as_slice(),
+        GameType::ClashOfClans => u.linked_players.as_slice(),
     })
     .unwrap_or(&[])
 }
@@ -489,7 +626,7 @@ async fn get_clan_info_impl(data: &web::Data<AppState>, tag: &str, game: GameTyp
         && !obj.contains_key("badgeUrls")
         && let Some(badge_id) = obj.get("badgeId").and_then(|v| v.as_i64())
     {
-        if let Some(url) = crate::utils::badge_url_from_id(badge_id) {
+        if let Some(url) = crate::utils::badge_url_from_id(badge_id, game) {
             obj.insert(
                 "badgeUrls".to_string(),
                 serde_json::json!({
@@ -827,17 +964,7 @@ async fn get_clan_members_lite_impl(
         .user
         .as_ref()
         .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
+    let exempt_tags = get_game_linked_tags(opt_user.user.as_ref(), game);
 
     let upstream_url_path = format!("/api/clans/{}/members-lite", encoded_tag);
     forward_request_with_filter(data, game, &upstream_url_path, user_role, exempt_tags).await
@@ -938,17 +1065,7 @@ async fn get_player_identity_impl(
         .user
         .as_ref()
         .and_then(|u| u.claims.role.as_deref());
-    let exempt_tags = opt_user
-        .user
-        .as_ref()
-        .map(|u| {
-            if game == GameType::ClashRoyale {
-                u.linked_cr_players.as_slice()
-            } else {
-                u.linked_players.as_slice()
-            }
-        })
-        .unwrap_or(&[]);
+    let exempt_tags = get_game_linked_tags(opt_user.user.as_ref(), game);
     let tag_str = if tag.starts_with('#') {
         tag.to_string()
     } else {
@@ -1150,276 +1267,204 @@ pub async fn get_user(
 
     let url_path = format!("/api/users/{}", user_id);
 
-    // Update both caches
+    // Alle Bots auffrischen, die es gibt
     let _ = update_upstream_cache(&data, GameType::ClashOfClans, &url_path).await;
     let _ = update_upstream_cache(&data, GameType::ClashRoyale, &url_path).await;
+    if data.upstream_bs_url.is_some() {
+        let _ = update_upstream_cache(&data, GameType::BrawlStars, &url_path).await;
+    }
 
-    // Fetch both from cache
-    let coc_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(format!("coc:upstream:{}", url_path))
-        .fetch_optional(&data.db_pool)
-        .await;
+    // Reihenfolge ist Absicht: CoC ist die Grundlage, die anderen ergaenzen sie.
+    // Das Feld sagt, wohin die verknuepften Spieler des jeweiligen Bots gehoeren
+    // — die Tags der drei Spiele duerfen nicht in einen Topf.
+    let quellen = [
+        ("coc", "linkedPlayers"),
+        ("cr", "linkedPlayers"),
+        ("bs", "linkedBsPlayers"),
+    ];
 
-    let cr_res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
-        .bind(format!("cr:upstream:{}", url_path))
-        .fetch_optional(&data.db_pool)
-        .await;
+    let mut zusammen: Option<serde_json::Value> = None;
 
-    let coc_data: Option<serde_json::Value> = match coc_res {
-        Ok(Some((body,))) => serde_json::from_slice(&body).ok(),
-        _ => None,
-    };
+    for (prefix, konten_feld) in quellen {
+        let res = sqlx::query_as::<_, (Vec<u8>,)>("SELECT body FROM cache WHERE key = $1")
+            .bind(format!("{}:upstream:{}", prefix, url_path))
+            .fetch_optional(&data.db_pool)
+            .await;
 
-    let cr_data: Option<serde_json::Value> = match cr_res {
-        Ok(Some((body,))) => serde_json::from_slice(&body).ok(),
-        _ => None,
-    };
+        let Ok(Some((body,))) = res else { continue };
+        let Ok(wert) = serde_json::from_slice::<serde_json::Value>(&body) else {
+            continue;
+        };
 
-    match (coc_data, cr_data) {
-        (None, None) => HttpResponse::NotFound().json(ErrorResponse {
+        match zusammen.as_mut() {
+            None => zusammen = Some(wert),
+            Some(basis) => merge_user_metadata(basis, &wert, konten_feld),
+        }
+    }
+
+    match zusammen {
+        Some(wert) => HttpResponse::Ok().json(wert),
+        None => HttpResponse::NotFound().json(ErrorResponse {
             error: "User not found in any upstream bot".into(),
         }),
-        (Some(coc), None) => HttpResponse::Ok().json(coc),
-        (None, Some(cr)) => HttpResponse::Ok().json(cr),
-        (Some(mut coc), Some(cr)) => {
-            // Merge CR into CoC data
-            if let (Some(coc_obj), Some(cr_obj)) = (coc.as_object_mut(), cr.as_object()) {
-                // Admin: true if either is true
-                let coc_admin = coc_obj
-                    .get("admin")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let cr_admin = cr_obj
-                    .get("admin")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                coc_obj.insert(
-                    "admin".to_string(),
-                    serde_json::json!(coc_admin || cr_admin),
-                );
-
-                // Highest Role: max of both
-                let coc_role = coc_obj
-                    .get("highestRole")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("NOTMEMBER");
-                let cr_role = cr_obj
-                    .get("highestRole")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("NOTMEMBER");
-                if crate::auth::get_role_priority(cr_role)
-                    > crate::auth::get_role_priority(coc_role)
-                {
-                    coc_obj.insert("highestRole".to_string(), serde_json::json!(cr_role));
-                }
-
-                // Linked Players: merge and deduplicate
-                let mut coc_linked = coc_obj
-                    .get("linkedPlayers")
-                    .and_then(|v| v.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(cr_linked) = cr_obj.get("linkedPlayers").and_then(|v| v.as_array()) {
-                    for tag in cr_linked {
-                        if !coc_linked.contains(tag) {
-                            coc_linked.push(tag.clone());
-                        }
-                    }
-                }
-                coc_obj.insert("linkedPlayers".to_string(), serde_json::json!(coc_linked));
-
-                // Linked CR Players: merge and deduplicate
-                let mut coc_cr_linked = coc_obj
-                    .get("linkedCrPlayers")
-                    .and_then(|v| v.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(cr_cr_linked) = cr_obj.get("linkedCrPlayers").and_then(|v| v.as_array())
-                {
-                    for tag in cr_cr_linked {
-                        if !coc_cr_linked.contains(tag) {
-                            coc_cr_linked.push(tag.clone());
-                        }
-                    }
-                }
-                coc_obj.insert(
-                    "linkedCrPlayers".to_string(),
-                    serde_json::json!(coc_cr_linked),
-                );
-
-                // Nickname: prefer CoC but if null take CR
-                if coc_obj.get("nickname").is_none_or(|v| v.is_null())
-                    && let Some(cr_nick) = cr_obj.get("nickname")
-                {
-                    coc_obj.insert("nickname".to_string(), cr_nick.clone());
-                }
-            }
-            HttpResponse::Ok().json(coc)
-        }
     }
 }
 
-// Helper for Player Aggregation - now fetches both CoC and CR
+/// Fuehrt die Nutzerdaten eines weiteren Bots in die bereits vorhandenen ein.
+///
+/// `konten_feld` bestimmt, unter welchem Schluessel dessen verknuepfte Spieler
+/// landen. Fuer Clash Royale ist das wie bisher `linkedPlayers` — die Website
+/// hat CoC- und CR-Tags an dieser Stelle schon immer gemeinsam gefuehrt. Brawl
+/// Stars bekommt ein eigenes Feld, damit die Tags nicht vermischt werden.
+fn merge_user_metadata(
+    basis: &mut serde_json::Value,
+    weiterer: &serde_json::Value,
+    konten_feld: &str,
+) {
+    let (Some(b), Some(w)) = (basis.as_object_mut(), weiterer.as_object()) else {
+        return;
+    };
+
+    // Admin: wer es bei einem Bot ist, ist es hier
+    let admin = b.get("admin").and_then(|v| v.as_bool()).unwrap_or(false)
+        || w.get("admin").and_then(|v| v.as_bool()).unwrap_or(false);
+    b.insert("admin".to_string(), serde_json::json!(admin));
+
+    // Hoechste Rolle: das Maximum ueber alle Bots
+    let b_rolle = b
+        .get("highestRole")
+        .and_then(|v| v.as_str())
+        .unwrap_or("NOTMEMBER")
+        .to_string();
+    if let Some(w_rolle) = w.get("highestRole").and_then(|v| v.as_str())
+        && crate::auth::get_role_priority(w_rolle) > crate::auth::get_role_priority(&b_rolle)
+    {
+        b.insert("highestRole".to_string(), serde_json::json!(w_rolle));
+    }
+
+    // Verknuepfte Spieler zusammenfuehren, ohne Doppelte
+    for (quell_feld, ziel_feld) in [
+        ("linkedPlayers", konten_feld),
+        ("linkedCrPlayers", "linkedCrPlayers"),
+    ] {
+        let Some(weitere) = w.get(quell_feld).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        let mut konten = b
+            .get(ziel_feld)
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        for tag in weitere {
+            if !konten.contains(tag) {
+                konten.push(tag.clone());
+            }
+        }
+        b.insert(ziel_feld.to_string(), serde_json::json!(konten));
+    }
+
+    // Spitzname: der erste, der einen hat
+    if b.get("nickname").is_none_or(|v| v.is_null())
+        && let Some(nick) = w.get("nickname")
+    {
+        b.insert("nickname".to_string(), nick.clone());
+    }
+}
+
+/// Holt die Spielerdaten eines Spiels: Supercell-Stand plus das, was der Bot
+/// dazu weiss. Vorher stand dieser Block zweimal wortgleich da, einmal je Spiel
+/// — mit Brawl Stars waere er dreimal dagestanden.
+async fn spieler_konten(
+    data: &web::Data<AppState>,
+    game: GameType,
+    tags: Vec<String>,
+) -> Vec<serde_json::Value> {
+    let spiel_kuerzel = get_cache_prefix(game);
+    let mut futures = Vec::new();
+
+    for tag in tags {
+        let data = data.clone();
+        futures.push(async move {
+            let encoded_tag = encode_tag(&tag);
+            let supercell_url_path = format!("/players/{}", encoded_tag);
+            let upstream_url_path = format!("/api/players/{}", encoded_tag);
+
+            let supercell_res =
+                get_cached_or_update_supercell_cache(&data, game, &supercell_url_path, 300).await;
+            let upstream_res =
+                get_cached_or_update_upstream_cache(&data, game, &upstream_url_path, 300).await;
+
+            if let Ok(supercell_body) = supercell_res
+                && let Ok(mut player_json) =
+                    serde_json::from_slice::<serde_json::Value>(&supercell_body)
+            {
+                if let Some(player_obj) = player_json.as_object_mut() {
+                    player_obj.insert(
+                        "gameType".to_string(),
+                        serde_json::json!(spiel_kuerzel),
+                    );
+
+                    if let Ok(u_body) = upstream_res
+                        && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
+                        && let Some(u_obj) = u_json.as_object()
+                    {
+                        // Explicitly mark upstream clan to differentiate from supercell clan
+                        if let Some(upstream_clan) = u_obj.get("clan") {
+                            player_obj.insert("upstream_clan".to_string(), upstream_clan.clone());
+                        }
+
+                        for (k, v) in u_obj {
+                            if !player_obj.contains_key(k) {
+                                player_obj.insert(k.clone(), v.clone());
+                            } else if k != "tag" {
+                                player_obj.insert(format!("upstream_{}", k), v.clone());
+                            }
+                        }
+                        if let Some(akp) = player_obj
+                            .get("activeKickpoints")
+                            .and_then(|v| v.as_array())
+                        {
+                            let sum: i64 = akp
+                                .iter()
+                                .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
+                                .sum();
+                            player_obj.insert(
+                                "activeKickpointsCount".to_string(),
+                                serde_json::json!(akp.len()),
+                            );
+                            player_obj
+                                .insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
+                        }
+                    }
+                    return Some(player_json);
+                }
+            }
+            None
+        });
+    }
+
+    join_all(futures).await.into_iter().flatten().collect()
+}
+
+// Helper for Player Aggregation - CoC, CR und BS
 async fn fetch_aggregated_player_accounts(
     data: &web::Data<AppState>,
     coc_linked_players: Vec<String>,
     cr_linked_players: Vec<String>,
+    bs_linked_players: Vec<String>,
 ) -> serde_json::Value {
-    let mut coc_players_futures = Vec::new();
-    let mut cr_players_futures = Vec::new();
-
-    // Prepare CoC futures
-    for tag in coc_linked_players {
-        let data = data.clone();
-        coc_players_futures.push(async move {
-            let encoded_tag = encode_tag(&tag);
-            let supercell_url_path = format!("/players/{}", encoded_tag);
-            let upstream_url_path = format!("/api/players/{}", encoded_tag);
-
-            let supercell_res = get_cached_or_update_supercell_cache(
-                &data,
-                GameType::ClashOfClans,
-                &supercell_url_path,
-                300,
-            )
-            .await;
-            let upstream_res = get_cached_or_update_upstream_cache(
-                &data,
-                GameType::ClashOfClans,
-                &upstream_url_path,
-                300,
-            )
-            .await;
-
-            if let Ok(supercell_body) = supercell_res
-                && let Ok(mut player_json) =
-                    serde_json::from_slice::<serde_json::Value>(&supercell_body)
-            {
-                if let Some(player_obj) = player_json.as_object_mut() {
-                    player_obj.insert("gameType".to_string(), serde_json::json!("coc"));
-
-                    if let Ok(u_body) = upstream_res
-                        && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
-                        && let Some(u_obj) = u_json.as_object()
-                    {
-                        // Explicitly mark upstream clan to differentiate from supercell clan
-                        if let Some(upstream_clan) = u_obj.get("clan") {
-                            player_obj.insert("upstream_clan".to_string(), upstream_clan.clone());
-                        }
-
-                        for (k, v) in u_obj {
-                            if !player_obj.contains_key(k) {
-                                player_obj.insert(k.clone(), v.clone());
-                            } else if k != "tag" {
-                                player_obj.insert(format!("upstream_{}", k), v.clone());
-                            }
-                        }
-                        if let Some(akp) = player_obj
-                            .get("activeKickpoints")
-                            .and_then(|v| v.as_array())
-                        {
-                            let sum: i64 = akp
-                                .iter()
-                                .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
-                                .sum();
-                            player_obj.insert(
-                                "activeKickpointsCount".to_string(),
-                                serde_json::json!(akp.len()),
-                            );
-                            player_obj
-                                .insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
-                        }
-                    }
-                    return Some(player_json);
-                }
-            }
-            None
-        });
-    }
-
-    // Prepare CR futures
-    for tag in cr_linked_players {
-        let data = data.clone();
-        cr_players_futures.push(async move {
-            let encoded_tag = encode_tag(&tag);
-            let supercell_url_path = format!("/players/{}", encoded_tag);
-            let upstream_url_path = format!("/api/players/{}", encoded_tag);
-
-            let supercell_res = get_cached_or_update_supercell_cache(
-                &data,
-                GameType::ClashRoyale,
-                &supercell_url_path,
-                300,
-            )
-            .await;
-            let upstream_res = get_cached_or_update_upstream_cache(
-                &data,
-                GameType::ClashRoyale,
-                &upstream_url_path,
-                300,
-            )
-            .await;
-
-            if let Ok(supercell_body) = supercell_res
-                && let Ok(mut player_json) =
-                    serde_json::from_slice::<serde_json::Value>(&supercell_body)
-            {
-                if let Some(player_obj) = player_json.as_object_mut() {
-                    player_obj.insert("gameType".to_string(), serde_json::json!("cr"));
-
-                    if let Ok(u_body) = upstream_res
-                        && let Ok(u_json) = serde_json::from_slice::<serde_json::Value>(&u_body)
-                        && let Some(u_obj) = u_json.as_object()
-                    {
-                        // Explicitly mark upstream clan to differentiate from supercell clan
-                        if let Some(upstream_clan) = u_obj.get("clan") {
-                            player_obj.insert("upstream_clan".to_string(), upstream_clan.clone());
-                        }
-
-                        for (k, v) in u_obj {
-                            if !player_obj.contains_key(k) {
-                                player_obj.insert(k.clone(), v.clone());
-                            } else if k != "tag" {
-                                player_obj.insert(format!("upstream_{}", k), v.clone());
-                            }
-                        }
-                        if let Some(akp) = player_obj
-                            .get("activeKickpoints")
-                            .and_then(|v| v.as_array())
-                        {
-                            let sum: i64 = akp
-                                .iter()
-                                .filter_map(|kp| kp.get("amount").and_then(|a| a.as_i64()))
-                                .sum();
-                            player_obj.insert(
-                                "activeKickpointsCount".to_string(),
-                                serde_json::json!(akp.len()),
-                            );
-                            player_obj
-                                .insert("activeKickpointsSum".to_string(), serde_json::json!(sum));
-                        }
-                    }
-                    return Some(player_json);
-                }
-            }
-            None
-        });
-    }
-
-    let coc_players_data: Vec<serde_json::Value> = join_all(coc_players_futures)
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
-    let cr_players_data: Vec<serde_json::Value> = join_all(cr_players_futures)
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
+    let coc_players_data = spieler_konten(data, GameType::ClashOfClans, coc_linked_players).await;
+    let cr_players_data = spieler_konten(data, GameType::ClashRoyale, cr_linked_players).await;
+    let bs_players_data = if data.upstream_bs_url.is_some() {
+        spieler_konten(data, GameType::BrawlStars, bs_linked_players).await
+    } else {
+        Vec::new()
+    };
 
     serde_json::json!({
         "coc": coc_players_data,
-        "cr": cr_players_data
+        "cr": cr_players_data,
+        "bs": bs_players_data
     })
 }
 
@@ -1429,9 +1474,11 @@ async fn sync_user_accounts(
     discord_id: &str,
     current_coc: Vec<String>,
     current_cr: Vec<String>,
-) -> (Vec<String>, Vec<String>) {
+    current_bs: Vec<String>,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
     let mut coc_players = current_coc;
     let mut cr_players = current_cr;
+    let mut bs_players = current_bs;
     let mut modified = false;
 
     let url_path = format!("/api/users/{}", discord_id);
@@ -1441,6 +1488,23 @@ async fn sync_user_accounts(
         get_cached_or_update_upstream_cache(data, GameType::ClashOfClans, &url_path, 0).await;
     let cr_bot_res =
         get_cached_or_update_upstream_cache(data, GameType::ClashRoyale, &url_path, 0).await;
+    let bs_bot_res = if data.upstream_bs_url.is_some() {
+        get_cached_or_update_upstream_cache(data, GameType::BrawlStars, &url_path, 0).await
+    } else {
+        Err("Brawl Stars nicht konfiguriert".to_string())
+    };
+
+    /// Liest die Tags aus einem Feld der Bot-Antwort.
+    fn tags_aus(json: &serde_json::Value, feld: &str) -> Vec<String> {
+        json.get(feld)
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 
     let mut bot_a_coc = Vec::new();
     let mut bot_a_cr = Vec::new();
@@ -1449,24 +1513,8 @@ async fn sync_user_accounts(
     if let Ok(body) = coc_bot_res
         && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body)
     {
-        bot_a_coc = json
-            .get("linkedPlayers")
-            .and_then(|v| v.as_array())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        bot_a_cr = json
-            .get("linkedCrPlayers")
-            .and_then(|v| v.as_array())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        bot_a_coc = tags_aus(&json, "linkedPlayers");
+        bot_a_cr = tags_aus(&json, "linkedCrPlayers");
         bot_a_success = true;
     }
 
@@ -1477,13 +1525,8 @@ async fn sync_user_accounts(
         && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body)
     {
         // CR bot: both fields are typically CR players
-        let mut tags = Vec::new();
-        if let Some(arr) = json.get("linkedPlayers").and_then(|v| v.as_array()) {
-            tags.extend(arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())));
-        }
-        if let Some(arr) = json.get("linkedCrPlayers").and_then(|v| v.as_array()) {
-            tags.extend(arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())));
-        }
+        let mut tags = tags_aus(&json, "linkedPlayers");
+        tags.extend(tags_aus(&json, "linkedCrPlayers"));
         tags.sort();
         tags.dedup();
         bot_b_cr = tags;
@@ -1532,18 +1575,37 @@ async fn sync_user_accounts(
         }
     }
 
+    // 4. Brawl Stars: hier gibt es nur einen Bot, der davon weiss — er ist
+    // damit alleinige Wahrheit. Antwortet er nicht, bleibt der letzte Stand
+    // stehen, statt die Verknuepfungen zu loeschen.
+    if let Ok(body) = bs_bot_res
+        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body)
+    {
+        let mut bot_bs = tags_aus(&json, "linkedPlayers");
+        bot_bs.sort();
+
+        let mut sorted_current = bs_players.clone();
+        sorted_current.sort();
+
+        if sorted_current != bot_bs {
+            bs_players = bot_bs;
+            modified = true;
+        }
+    }
+
     if modified {
         let _ = sqlx::query(
-            "UPDATE users SET linked_players = $1, linked_cr_players = $2 WHERE discord_id = $3",
+            "UPDATE users SET linked_players = $1, linked_cr_players = $2, linked_bs_players = $3 WHERE discord_id = $4",
         )
         .bind(serde_json::to_string(&coc_players).unwrap_or_else(|_| "[]".to_string()))
         .bind(serde_json::to_string(&cr_players).unwrap_or_else(|_| "[]".to_string()))
+        .bind(serde_json::to_string(&bs_players).unwrap_or_else(|_| "[]".to_string()))
         .bind(discord_id)
         .execute(&data.db_pool)
         .await;
     }
 
-    (coc_players, cr_players)
+    (coc_players, cr_players, bs_players)
 }
 
 // Get My Player Accounts
@@ -1551,15 +1613,17 @@ pub async fn get_my_player_accounts(
     data: web::Data<AppState>,
     user: AuthenticatedUser,
 ) -> impl Responder {
-    let (coc_players, cr_players) = sync_user_accounts(
+    let (coc_players, cr_players, bs_players) = sync_user_accounts(
         &data,
         &user.claims.sub,
         user.linked_players.clone(),
         user.linked_cr_players.clone(),
+        user.linked_bs_players.clone(),
     )
     .await;
 
-    let players_data = fetch_aggregated_player_accounts(&data, coc_players, cr_players).await;
+    let players_data =
+        fetch_aggregated_player_accounts(&data, coc_players, cr_players, bs_players).await;
     HttpResponse::Ok().json(players_data)
 }
 
@@ -1578,29 +1642,32 @@ pub async fn get_user_player_accounts(
     let uid = user_id.into_inner();
 
     // Try local DB first
-    let user_db = sqlx::query_as::<_, (String, String)>(
-        "SELECT COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]') FROM users WHERE discord_id = $1",
+    let user_db = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT COALESCE(linked_players, '[]'), COALESCE(linked_cr_players, '[]'), COALESCE(linked_bs_players, '[]') FROM users WHERE discord_id = $1",
     )
     .bind(&uid)
     .fetch_optional(&data.db_pool)
     .await;
 
-    let (coc_linked, cr_linked): (Vec<String>, Vec<String>) = match user_db {
-        Ok(Some((lp_json, cr_json))) => (
+    let (coc_linked, cr_linked, bs_linked): (Vec<String>, Vec<String>, Vec<String>) = match user_db {
+        Ok(Some((lp_json, cr_json, bs_json))) => (
             serde_json::from_str(&lp_json).unwrap_or_default(),
             serde_json::from_str(&cr_json).unwrap_or_default(),
+            serde_json::from_str(&bs_json).unwrap_or_default(),
         ),
-        _ => (Vec::new(), Vec::new()),
+        _ => (Vec::new(), Vec::new(), Vec::new()),
     };
 
-    let (coc_linked, cr_linked) = sync_user_accounts(&data, &uid, coc_linked, cr_linked).await;
+    let (coc_linked, cr_linked, bs_linked) =
+        sync_user_accounts(&data, &uid, coc_linked, cr_linked, bs_linked).await;
 
-    if coc_linked.is_empty() && cr_linked.is_empty() {
+    if coc_linked.is_empty() && cr_linked.is_empty() && bs_linked.is_empty() {
         return HttpResponse::NotFound()
             .json(serde_json::json!({ "error": "User not found in local DB or any upstream" }));
     }
 
-    let players_data = fetch_aggregated_player_accounts(&data, coc_linked, cr_linked).await;
+    let players_data =
+        fetch_aggregated_player_accounts(&data, coc_linked, cr_linked, bs_linked).await;
     HttpResponse::Ok().json(players_data)
 }
 

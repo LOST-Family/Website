@@ -3,14 +3,14 @@
     import ClansSection from './ClansSection.svelte';
     import ClanDetailPage from './ClanDetailPage.svelte';
     import CRClanDetailPage from './CRClanDetailPage.svelte';
-    import type { GameType } from './auth';
+    import BSClubDetailPage from './BSClubDetailPage.svelte';
+    import { getApiPrefix, type GameType } from './auth';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let apiBaseUrl: string;
     export let clanTag: string | null = null;
     export let gameType: GameType = 'coc';
-    export let backPath: string =
-        gameType === 'coc' ? '/coc/clans' : '/cr/clans';
+    export let backPath: string = `/${gameType}/clans`;
 
     const dispatch = createEventDispatcher<{ navigate: string }>();
 
@@ -25,8 +25,7 @@
     let loading = true;
     let error: string | null = null;
 
-    $: apiPrefix = gameType === 'coc' ? '/api/coc' : '/api/cr';
-    $: gameName = gameType === 'coc' ? 'Clash of Clans' : 'Clash Royale';
+    $: apiPrefix = getApiPrefix(gameType);
 
     $: filteredClans = clanTag
         ? allClans.filter((c) => c.tag === clanTag)
@@ -105,6 +104,14 @@
                 {backPath}
                 on:navigate
             />
+        {:else if gameType === 'bs'}
+            <BSClubDetailPage
+                {theme}
+                {apiBaseUrl}
+                {clanTag}
+                {backPath}
+                on:navigate
+            />
         {:else}
             <CRClanDetailPage
                 {theme}
@@ -146,6 +153,24 @@
                 description="In diesen Clans sind alle Spieler willkommen. LOST 3 ist unser Push-Clan und versucht jede Saison Spitzenergebnisse zu erzielen."
                 clansData={normalClans}
             />
+        {/if}
+    {:else if gameType === 'bs'}
+        <!-- Brawl Stars clubs -->
+        {#if normalClans.length > 0}
+            <ClansSection
+                {theme}
+                {apiBaseUrl}
+                gameType="bs"
+                title="Brawl Stars Clubs"
+                description="Unsere Clubs in Brawl Stars. Tritt einem Club bei und sammelt gemeinsam Trophäen!"
+                clansData={normalClans}
+            />
+        {:else}
+            <div class="empty-state">
+                <div class="empty-icon">⭐</div>
+                <h3>Keine Brawl Stars Clubs</h3>
+                <p>Derzeit sind keine Brawl Stars Clubs verfügbar.</p>
+            </div>
         {/if}
     {:else}
         <!-- Clash Royale clans -->

@@ -32,11 +32,20 @@ async fn main() -> std::io::Result<()> {
     let upstream_cr_url = env::var("UPSTREAM_CR_API_URL").expect("UPSTREAM_CR_API_URL must be set");
     let cr_api_token = env::var("CR_BOT_API_TOKEN").expect("CR_BOT_API_TOKEN must be set");
 
+    // BS Upstream API (optional — ohne diese beiden bleibt der Brawl-Stars-Bereich aus)
+    let upstream_bs_url = env::var("UPSTREAM_BS_API_URL").ok();
+    let bs_api_token = env::var("BS_BOT_API_TOKEN").ok();
+    if upstream_bs_url.is_none() {
+        println!("UPSTREAM_BS_API_URL nicht gesetzt — Brawl-Stars-Bereich bleibt aus");
+    }
+
     // Official Supercell API tokens
     let clash_of_clans_api_token =
         env::var("CLASH_OF_CLANS_API_TOKEN").expect("CLASH_OF_CLANS_API_TOKEN must be set");
     let clash_royale_api_token =
         env::var("CLASH_ROYALE_API_TOKEN").expect("CLASH_ROYALE_API_TOKEN must be set");
+    // Ohne Schluessel bleibt der Brawl-Stars-Bereich aus, statt den Start zu verhindern.
+    let brawl_stars_api_token = env::var("BRAWL_STARS_API_TOKEN").unwrap_or_default();
 
     // Ticket-Bot (optional — ohne diese beiden bleibt nur das Ticket-Dashboard aus)
     let upstream_ticket_url = env::var("UPSTREAM_TICKET_API_URL").ok();
@@ -143,6 +152,13 @@ async fn main() -> std::io::Result<()> {
     .execute(&pool)
     .await;
 
+    // Dasselbe fuer Brawl Stars
+    let _ = sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_bs_players TEXT DEFAULT '[]'",
+    )
+    .execute(&pool)
+    .await;
+
     // Create latency_measurements table if not exists
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS latency_measurements (
@@ -225,8 +241,11 @@ async fn main() -> std::io::Result<()> {
         coc_api_token,
         upstream_cr_url,
         cr_api_token,
+        upstream_bs_url,
+        bs_api_token,
         clash_of_clans_api_token,
         clash_royale_api_token,
+        brawl_stars_api_token,
         upstream_ticket_url,
         ticket_api_token,
         db_pool: pool,
@@ -339,6 +358,40 @@ async fn main() -> std::io::Result<()> {
             .route(
                 "/api/cr/players/{tag}/kickpoints/details",
                 web::get().to(get_cr_player_kickpoints_details),
+            )
+            // BS Routes
+            // Die Website spricht auch hier von "clans" — uebersetzt wird erst
+            // an der Grenze zum Bot, der "clubs" sagt.
+            .route("/api/bs/clans", web::get().to(get_bs_clans))
+            .route("/api/bs/clans/{tag}", web::get().to(get_bs_clan_info))
+            .route(
+                "/api/bs/clans/{tag}/config",
+                web::get().to(get_bs_clan_config),
+            )
+            .route(
+                "/api/bs/clans/{tag}/members",
+                web::get().to(get_bs_clan_members),
+            )
+            .route(
+                "/api/bs/clans/{tag}/members-lite",
+                web::get().to(get_bs_clan_members_lite),
+            )
+            .route(
+                "/api/bs/clans/{tag}/kickpoint-reasons",
+                web::get().to(get_bs_clan_kickpoint_reasons),
+            )
+            .route("/api/bs/players/{tag}", web::get().to(get_bs_player))
+            .route(
+                "/api/bs/players/{tag}/identity",
+                web::get().to(get_bs_player_identity),
+            )
+            .route(
+                "/api/bs/players/{tag}/kickpoints",
+                web::get().to(get_bs_player_kickpoints),
+            )
+            .route(
+                "/api/bs/players/{tag}/kickpoints/details",
+                web::get().to(get_bs_player_kickpoints_details),
             )
             // Common/Legacy Routes
             .route("/api/guild", web::get().to(get_guild_info))

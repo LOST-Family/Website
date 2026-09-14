@@ -78,6 +78,14 @@
                                     player.league?.name}
                                 class="league-icon-large"
                             />
+                        {:else if gameType === 'bs' && player.icon?.id}
+                            <img
+                                src="https://cdn.brawlify.com/profile-icons/regular/{player
+                                    .icon.id}.png"
+                                alt=""
+                                class="league-icon-large"
+                                on:error={hideOnError}
+                            />
                         {:else if player.arena}
                             <div class="arena-icon-container">
                                 <img
@@ -140,6 +148,10 @@
                                     BH {player.builderHallLevel}
                                 </div>
                             {/if}
+                        {:else if gameType === 'bs'}
+                            <div class="th-level cr-level">
+                                {player.rankedRankName || 'Ohne Rang'}
+                            </div>
                         {:else}
                             <div class="th-level cr-level">
                                 {player.arena?.name ||
@@ -171,6 +183,52 @@
                                 <span class="label">Erhaltene Spenden</span>
                                 <span class="value"
                                     >{player.donationsReceived || 0}</span
+                                >
+                            </div>
+                        {:else if gameType === 'bs'}
+                            <div class="stat-card">
+                                <span class="label">Trophäen</span>
+                                <span class="value"
+                                    >{(player.trophies || 0).toLocaleString(
+                                        'de-DE',
+                                    )}</span
+                                >
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">Bestwert</span>
+                                <span class="value"
+                                    >{(
+                                        player.highestTrophies || 0
+                                    ).toLocaleString('de-DE')}</span
+                                >
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">Siege 3 gegen 3</span>
+                                <span class="value"
+                                    >{(
+                                        player['3vs3Victories'] || 0
+                                    ).toLocaleString('de-DE')}</span
+                                >
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">Solo-Siege</span>
+                                <span class="value"
+                                    >{(player.soloVictories || 0).toLocaleString(
+                                        'de-DE',
+                                    )}</span
+                                >
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">Duo-Siege</span>
+                                <span class="value"
+                                    >{(player.duoVictories || 0).toLocaleString(
+                                        'de-DE',
+                                    )}</span
+                                >
+                            </div>
+                            <div class="stat-card">
+                                <span class="label">EXP Level</span>
+                                <span class="value">{player.expLevel || 0}</span
                                 >
                             </div>
                         {:else}
