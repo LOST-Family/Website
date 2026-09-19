@@ -47,6 +47,10 @@ pub struct AppState {
     pub jwt_secret: String,
     pub frontend_url: String,
     pub background_refresh_interval: u64,
+    // Discord-Webhook für das Protokoll der Schreibaktionen. Optional: fehlt
+    // er, laufen die Aktionen trotzdem und nur das Protokoll fällt aus. Ein
+    // nicht erreichbarer Log-Kanal darf keine Verwaltungsaktion verhindern.
+    pub log_webhook: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

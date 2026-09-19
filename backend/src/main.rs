@@ -6,6 +6,7 @@ use std::env;
 mod auth;
 mod background;
 mod handlers;
+mod manage;
 mod models;
 mod tickets;
 mod utils;
@@ -13,6 +14,7 @@ mod utils;
 use auth::*;
 use background::spawn_background_task;
 use handlers::*;
+use manage::manage_weiterleitung;
 use tickets::*;
 use models::AppState;
 
@@ -96,6 +98,13 @@ async fn main() -> std::io::Result<()> {
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
     let frontend_url =
         env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+    // Leer gesetzt heisst "nicht konfiguriert" — sonst würde eine leere Zeile
+    // in der .env zu einem Webhook-Aufruf gegen die leere Adresse führen.
+    let log_webhook = env::var("WEBSITE_LOG_WEBHOOK")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     let background_refresh_interval = env::var("BACKGROUND_REFRESH_INTERVAL_MINS")
         .unwrap_or_else(|_| "10".to_string())
         .parse::<u64>()
@@ -254,6 +263,7 @@ async fn main() -> std::io::Result<()> {
         jwt_secret,
         frontend_url,
         background_refresh_interval,
+        log_webhook,
     };
 
     // Vor dem Verschieben ins AppState sichern — CORS braucht die Adresse auch.
@@ -304,6 +314,12 @@ async fn main() -> std::io::Result<()> {
             .route("/auth/discord/callback", web::get().to(discord_callback))
             .route("/auth/me", web::get().to(get_me))
             .route("/auth/logout", web::post().to(logout))
+            // Der Schreibweg. Eine Route für alle Spiele und alle Aktionen —
+            // siehe manage.rs, warum das Absicht ist.
+            .route(
+                "/api/{spiel}/manage/{aktion:.*}",
+                web::post().to(manage_weiterleitung),
+            )
             .route("/api/me/accounts", web::get().to(get_my_player_accounts))
             .route("/api/users/{id}", web::get().to(get_user))
             .route(
