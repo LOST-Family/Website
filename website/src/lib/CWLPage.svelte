@@ -158,6 +158,7 @@
                     parentTag,
                     parentName: finalName,
                     index: mainClan ? mainClan.index || 999 : 999,
+                    isMainClan: !!mainClan || !!fallbackNames[tagFull],
                     clans: clans.sort((a, b) => {
                         // Priority 1: Main clan always first
                         const aTagRaw = a.clan.clan_tag.trim().toUpperCase();
@@ -191,12 +192,16 @@
                     }),
                 };
             })
-            // Clans ohne eigenen Hauptclan (Happy Village, Die %losen, Deutsch
-            // Aktiv, BitteAufgeben) standen bis zum 19.09.2026 nirgends auf der
-            // Seite: sie bilden jeweils eine eigene Gruppe, und die wurde
-            // verworfen, wenn kein Hauptclan an ihrer Spitze stand. Sie haben
-            // aber echte CWL-Ergebnisse und gehören dazu. Sortiert werden sie
-            // über index = 999 von selbst ans Ende.
+            // Nur Gruppen mit einem Hauptclan an der Spitze. Das ist Absicht und
+            // kein Versehen: die Seite zeigt die Clanfamilien — beide F2P
+            // gebündelt, LOST 3 bis 7, LOST GP und Anthrazit, jeweils mit ihren
+            // Ablegern. Ein Clan, der keinem Hauptclan zugeordnet ist (Die
+            // %losen, Deutsch Aktiv, BitteAufgeben #U8L9QQP), gehört in keine
+            // dieser Familien und steht deshalb auch nicht auf der Seite.
+            // Am 19.09.2026 einmal entfernt und auf Jonas' Ansage wieder
+            // eingesetzt — wer einen Clan vermisst, ordnet ihn in sideclans
+            // einem Hauptclan zu, statt diesen Filter anzufassen.
+            .filter((group) => group.isMainClan)
             .sort((a, b) => a.index - b.index);
     })();
 
