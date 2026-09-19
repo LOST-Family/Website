@@ -276,6 +276,91 @@
         }
     }
 
+    /// Die Antworten der Bots sind englisch und an Entwickler gerichtet. Was
+    /// wiederkehrt, bekommt hier einen deutschen Satz; alles andere wird
+    /// unverändert durchgereicht, damit keine Begründung verschluckt wird.
+    function verstaendlich(status: number, grund: string): string {
+        const g = grund.toLowerCase();
+        if (g.includes('must be admin to assign leader'))
+            return 'Einen Anführer ernennen darf nur ein Admin.';
+        if (g.includes('must be admin or leader to assign'))
+            return 'Einen Vize ernennen darf nur ein Admin oder der Anführer.';
+        if (g.includes('must be admin to modify a leader'))
+            return 'Den Rang eines Anführers ändern darf nur ein Admin.';
+        if (g.includes('must be admin or leader to modify a coleader'))
+            return 'Den Rang eines Vize ändern darf nur ein Admin oder der Anführer.';
+        if (g.includes('insufficient permissions'))
+            return 'Dazu fehlen dir die Rechte in diesem Clan — nötig ist Vize oder höher.';
+        if (g.includes('player is not linked'))
+            return 'Dieser Spieler ist mit keinem Discord-Konto verknüpft.';
+        if (g.includes('player is not in a clan'))
+            return 'Dieser Spieler steht in keinem Clan.';
+        if (g.includes('invalid role'))
+            return 'Diesen Rang gibt es nicht.';
+        if (status === 502 || status === 503)
+            return 'Der Bot ist gerade nicht erreichbar. Bitte später erneut versuchen.';
+        return grund;
+    }
+
+    /// Rang eines Mitglieds ändern. Die Website entscheidet hier nichts — sie
+    /// schickt die Absicht an die Weiterleitung, und der Bot prüft, ob der
+    /// Angemeldete das in genau diesem Clan darf. Seine Antwort wird
+    /// unverändert angezeigt, auch die Ablehnung.
+    async function rangAendern(
+        spieler: Player,
+        rolle: string,
+    ): Promise<{ ok: boolean; text: string }> {
+        try {
+            const res = await fetch(`${apiBaseUrl}/api/coc/manage/members/edit`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerTag: spieler.tag, role: rolle }),
+            });
+
+            let daten: any = null;
+            try {
+                daten = await res.json();
+            } catch {
+                // Der Bot antwortet immer mit JSON; bleibt es aus, ist etwas
+                // auf dem Weg dorthin schiefgegangen.
+            }
+
+            if (!res.ok) {
+                const grund =
+                    daten?.error ?? daten?.message ?? `Fehlgeschlagen (${res.status})`;
+                return { ok: false, text: verstaendlich(res.status, grund) };
+            }
+
+            // Erst nach dem Erfolg die Anzeige nachziehen. Der Rang kommt aus
+            // der Mitgliederliste des Bots, nicht aus der Antwort.
+            const vorher = spieler.role;
+            members = members.map((m) =>
+                m.tag === spieler.tag ? { ...m, role: rolle } : m,
+            );
+            if (selectedPlayer && selectedPlayer.tag === spieler.tag) {
+                selectedPlayer = { ...selectedPlayer, role: rolle };
+            }
+
+            let text = `${getRoleDisplay(vorher)} → ${getRoleDisplay(rolle)} übernommen.`;
+            const wechsel = daten?.roleChanges;
+            if (Array.isArray(wechsel) && wechsel.length > 0) {
+                const zu = wechsel.filter((w: any) => w.type === 'added').length;
+                const weg = wechsel.filter((w: any) => w.type === 'removed').length;
+                if (zu > 0) text += ' Die Ältesten-Rolle in Discord wurde vergeben.';
+                if (weg > 0) text += ' Die Ältesten-Rolle in Discord wurde entzogen.';
+            }
+            return { ok: true, text };
+        } catch (e: any) {
+            // Netzwerkfehler tragen Meldungen wie „Failed to fetch", die
+            // niemandem weiterhelfen.
+            return {
+                ok: false,
+                text: 'Die Anfrage kam nicht durch — Verbindung prüfen und erneut versuchen.',
+            };
+        }
+    }
+
     async function selectPlayer(player: Player) {
         selectedPlayer = player;
         playerDetailsLoading = true;
@@ -669,8 +754,6 @@
                                             {/if}
                                         </h4>
                                         <div class="m-sub-info">
-                                            <!-- log member -->
-                                            {console.log(member)}
                                             <span
                                                 class="m-role-label"
                                                 class:role-error={isRoleWrong(
@@ -1161,6 +1244,10 @@
         onNavigateToProfile={(userId) =>
             dispatch('navigate', `profile/${userId}`)}
         onSelectOtherAccount={selectPlayer}
+        canManageRoles={hasPrivilegedAccess}
+        onChangeRole={selectedPlayer
+            ? (rolle) => rangAendern(selectedPlayer as Player, rolle)
+            : null}
     />
 
     {#if selectedPlayer && playerDetailsLoading}

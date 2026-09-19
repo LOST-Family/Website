@@ -8,6 +8,7 @@ export const ROLE_ORDER: Record<string, number> = {
     // Spielrolle aus der API, die Sollrolle aus dem Bot.
     president: 1,
     coLeader: 2,
+    hiddencoleader: 2,
     vicePresident: 2,
     copresident: 2,
     admin: 3,
@@ -28,6 +29,11 @@ export function getRoleDisplay(
         case 'vicepresident':
         case 'copresident':
             return 'Vize-Anführer';
+        // Ein Vize ohne die Discord-Rolle: er hat die Rechte, taucht in der
+        // Mitgliederliste aber nicht als Vize auf. Stand bisher roh als
+        // „hiddencoleader" da, weil ihn niemand setzen konnte.
+        case 'hiddencoleader':
+            return 'Vize (versteckt)';
         case 'elder':
         case 'senior':
             return 'Ältester';

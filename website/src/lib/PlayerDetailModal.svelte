@@ -20,6 +20,51 @@
     export let isAdmin: boolean = false;
     export let onNavigateToProfile: ((userId: string) => void) | null = null;
     export let onSelectOtherAccount: ((acc: any) => void) | null = null;
+    /// Nur ein Vorfilter für die Oberfläche: Knöpfe zeigen statt den Nutzer in
+    /// ein 403 laufen zu lassen. Die verbindliche Entscheidung trifft der Bot,
+    /// und zwar gegen die echten Discord-Rollen in genau diesem Clan.
+    export let canManageRoles: boolean = false;
+    export let onChangeRole:
+        | ((rolle: string) => Promise<{ ok: boolean; text: string }>)
+        | null = null;
+
+    // Die Rangnamen sind die des Bots, nicht die der Anzeige. „hiddencoleader"
+    // ist kein Tippfehler: ein Vize ohne die Discord-Rolle, damit er die Rechte
+    // hat, ohne in der Mitgliederliste als Vize aufzutauchen.
+    const RANGE: Array<{ wert: string; anzeige: string; hinweis?: string }> = [
+        { wert: 'leader', anzeige: 'Anführer' },
+        { wert: 'coLeader', anzeige: 'Vize-Anführer' },
+        {
+            wert: 'hiddencoleader',
+            anzeige: 'Vize (versteckt)',
+            hinweis: 'Vize-Rechte, ohne die Discord-Rolle zu bekommen',
+        },
+        { wert: 'admin', anzeige: 'Ältester' },
+        { wert: 'member', anzeige: 'Mitglied' },
+    ];
+
+    let rangLaeuft: string | null = null;
+    let rangMeldung: { ok: boolean; text: string } | null = null;
+
+    // Beim Wechsel auf einen anderen Spieler die alte Meldung wegräumen, sonst
+    // klebt sie am nächsten Namen.
+    $: if (player) {
+        rangMeldung = null;
+        rangLaeuft = null;
+    }
+
+    async function rangSetzen(rolle: string) {
+        if (!onChangeRole || rangLaeuft) return;
+        rangLaeuft = rolle;
+        rangMeldung = null;
+        try {
+            rangMeldung = await onChangeRole(rolle);
+        } catch (e: any) {
+            rangMeldung = { ok: false, text: e?.message ?? 'Unbekannter Fehler' };
+        } finally {
+            rangLaeuft = null;
+        }
+    }
 
     function handleKeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') onClose();
@@ -324,6 +369,49 @@
                                     {/if}
                                 {/each}
                             </div>
+                        </div>
+                    {/if}
+
+                    <!-- Rang im Clan ändern. Vorerst nur Clash of Clans:
+                         Clash Royale und Brawl Stars kennen andere Rangnamen,
+                         und dieser Weg soll erst an einem Spiel stehen. -->
+                    {#if canManageRoles && onChangeRole && gameType === 'coc' && player.tag}
+                        <div
+                            class="detail-section"
+                            in:slide={{ duration: 300, delay: 350 }}
+                        >
+                            <h3>Rang im Clan</h3>
+                            <div class="rang-knoepfe">
+                                {#each RANGE as r}
+                                    <button
+                                        class="rang-knopf"
+                                        class:aktuell={player.role === r.wert}
+                                        disabled={rangLaeuft !== null ||
+                                            player.role === r.wert}
+                                        title={r.hinweis ?? ''}
+                                        on:click={() => rangSetzen(r.wert)}
+                                    >
+                                        {#if rangLaeuft === r.wert}
+                                            <span class="rang-spinner"></span>
+                                        {/if}
+                                        {r.anzeige}
+                                    </button>
+                                {/each}
+                            </div>
+                            {#if rangMeldung}
+                                <p
+                                    class="rang-meldung"
+                                    class:fehler={!rangMeldung.ok}
+                                    transition:slide={{ duration: 200 }}
+                                >
+                                    {rangMeldung.text}
+                                </p>
+                            {/if}
+                            <p class="rang-fusszeile">
+                                Ob du das darfst, entscheidet der Bot anhand
+                                deiner Discord-Rollen in diesem Clan. Jede
+                                Änderung wird protokolliert.
+                            </p>
                         </div>
                     {/if}
 
@@ -890,6 +978,99 @@
 
     .detail-section {
         margin-top: 1.5rem;
+    }
+
+    /* Rang im Clan ändern */
+    .rang-knoepfe {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .rang-knopf {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 1rem;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.92);
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition:
+            background 0.18s ease,
+            border-color 0.18s ease,
+            transform 0.18s ease;
+    }
+
+    .rang-knopf:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.13);
+        border-color: rgba(255, 255, 255, 0.28);
+        transform: translateY(-1px);
+    }
+
+    /* Der aktuelle Rang bleibt sichtbar, ist aber nicht anklickbar — sonst
+       müsste man raten, was gerade gilt. */
+    .rang-knopf.aktuell {
+        background: rgba(99, 179, 237, 0.22);
+        border-color: rgba(99, 179, 237, 0.55);
+        color: #cfe8ff;
+    }
+
+    .rang-knopf:disabled {
+        cursor: default;
+        opacity: 0.75;
+    }
+
+    .rang-spinner {
+        width: 0.85rem;
+        height: 0.85rem;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        animation: rang-dreht 0.7s linear infinite;
+    }
+
+    @keyframes rang-dreht {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .rang-meldung {
+        margin: 0.85rem 0 0;
+        padding: 0.6rem 0.85rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        background: rgba(46, 204, 113, 0.16);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+        color: #b8f0cf;
+    }
+
+    .rang-meldung.fehler {
+        background: rgba(231, 76, 60, 0.16);
+        border-color: rgba(231, 76, 60, 0.42);
+        color: #ffc9c2;
+    }
+
+    .rang-fusszeile {
+        margin: 0.7rem 0 0;
+        font-size: 0.8rem;
+        line-height: 1.45;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    :global(.modal-content.light) .rang-knopf {
+        border-color: rgba(0, 0, 0, 0.12);
+        background: rgba(0, 0, 0, 0.04);
+        color: rgba(0, 0, 0, 0.85);
+    }
+
+    :global(.modal-content.light) .rang-fusszeile {
+        color: rgba(0, 0, 0, 0.5);
     }
 
     .detail-section h3 {
