@@ -158,7 +158,6 @@
                     parentTag,
                     parentName: finalName,
                     index: mainClan ? mainClan.index || 999 : 999,
-                    isMainClan: !!mainClan || !!fallbackNames[tagFull],
                     clans: clans.sort((a, b) => {
                         // Priority 1: Main clan always first
                         const aTagRaw = a.clan.clan_tag.trim().toUpperCase();
@@ -192,7 +191,12 @@
                     }),
                 };
             })
-            .filter((group) => group.isMainClan)
+            // Clans ohne eigenen Hauptclan (Happy Village, Die %losen, Deutsch
+            // Aktiv, BitteAufgeben) standen bis zum 19.09.2026 nirgends auf der
+            // Seite: sie bilden jeweils eine eigene Gruppe, und die wurde
+            // verworfen, wenn kein Hauptclan an ihrer Spitze stand. Sie haben
+            // aber echte CWL-Ergebnisse und gehören dazu. Sortiert werden sie
+            // über index = 999 von selbst ans Ende.
             .sort((a, b) => a.index - b.index);
     })();
 
@@ -216,19 +220,30 @@
         return 'same';
     }
 
+    // Die Abzeichen kommen ausschließlich aus dem eigenen Ordner. Das Feld
+    // league_badge_url aus dem Backend ist als Rückfall unbrauchbar: die dort
+    // hinterlegten api-assets-Adressen liefern allesamt dasselbe rot-weiße
+    // Platzhalterschild (am 19.09.2026 für alle 13 vorkommenden Adressen
+    // nachgemessen, identische Prüfsumme). Ein fehlendes Abzeichen bleibt
+    // deshalb leer, statt eine falsche Liga vorzutäuschen.
     function getLocalBadgeUrl(leagueName: string | null) {
         if (!leagueName || leagueName === 'Unranked') return null;
 
         // Map "Bronze League III" to "Bronze_3", etc.
         const name = leagueName.replace(' League', '').trim();
         const parts = name.split(' ');
-        if (parts.length !== 2) return null;
+        if (parts.length > 2) return null;
 
         const tier = parts[0]; // e.g., "Bronze"
         const rankRoman = parts[1]; // e.g., "III"
 
+        // Seit dem CWL-Umbau gibt es mit "Legend League" eine Liga ohne
+        // Stufenzahl. Sie liegt als _1 im Ordner, damit das Muster
+        // Icon_HV_CWL_<Stufe>_<Zahl>.png geschlossen bleibt — Vite löst den
+        // Pfad unten über genau dieses Muster auf.
         let rankNumber = '';
-        if (rankRoman === 'I') rankNumber = '1';
+        if (rankRoman === undefined) rankNumber = '1';
+        else if (rankRoman === 'I') rankNumber = '1';
         else if (rankRoman === 'II') rankNumber = '2';
         else if (rankRoman === 'III') rankNumber = '3';
         else return null;
@@ -312,12 +327,6 @@
                                                         alt={current.league_name}
                                                         class="league-badge"
                                                     />
-                                                {:else if current.league_badge_url}
-                                                    <img
-                                                        src={current.league_badge_url}
-                                                        alt={current.league_name}
-                                                        class="league-badge"
-                                                    />
                                                 {:else}
                                                     <div class="no-badge"></div>
                                                 {/if}
@@ -378,12 +387,6 @@
                                                                         src={getLocalBadgeUrl(
                                                                             stat.league_name,
                                                                         )}
-                                                                        alt=""
-                                                                        class="table-badge"
-                                                                    />
-                                                                {:else if stat.league_badge_url}
-                                                                    <img
-                                                                        src={stat.league_badge_url}
                                                                         alt=""
                                                                         class="table-badge"
                                                                     />
