@@ -256,17 +256,45 @@ async fn main() -> std::io::Result<()> {
         background_refresh_interval,
     };
 
+    // Vor dem Verschieben ins AppState sichern — CORS braucht die Adresse auch.
+    let frontend_url_fuer_cors = app_state.frontend_url.clone();
+
     // Spawn the background refresh task
     spawn_background_task(app_state.clone());
 
     println!("Starting server on port {}", port);
 
+    // Erlaubte Herkünfte. Bis zum 19.09.2026 stand hier allow_any_origin()
+    // zusammen mit supports_credentials() — die Kombination lässt actix-cors
+    // jede anfragende Herkunft zurückspiegeln, womit jede fremde Website
+    // Anfragen mit dem Anmeldekeks des Besuchers stellen konnte. Das Frontend
+    // braucht CORS gar nicht: nginx reicht /api/ und /auth/ unter derselben
+    // Herkunft weiter. Offen bleibt deshalb nur die eigene Adresse, erweiterbar
+    // über CORS_ORIGINS (kommagetrennt) für die Entwicklung.
+    let erlaubte_herkuenfte: Vec<String> = {
+        let mut v = vec![frontend_url_fuer_cors.clone()];
+        if let Ok(zusatz) = env::var("CORS_ORIGINS") {
+            v.extend(
+                zusatz
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
+            );
+        }
+        v.sort();
+        v.dedup();
+        v
+    };
+    println!("Erlaubte CORS-Herkünfte: {}", erlaubte_herkuenfte.join(", "));
+
     HttpServer::new(move || {
-        let cors = actix_cors::Cors::default()
-            .allow_any_origin()
+        let mut cors = actix_cors::Cors::default()
             .allow_any_method()
             .allow_any_header()
             .supports_credentials(); // Important for cookies
+        for herkunft in &erlaubte_herkuenfte {
+            cors = cors.allowed_origin(herkunft);
+        }
 
         App::new()
             .wrap(cors)
@@ -398,7 +426,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))
             .route("/api/sideclans", web::get().to(get_side_clans))
-            // Ticket-Dashboard. Die spezifischen Pfade muessen VOR /{id}
+            // Ticket-Dashboard. Die spezifischen Pfade müssen VOR /{id}
             // stehen, sonst schluckt der Platzhalter "stats" und "panels".
             .route("/api/tickets/guilds", web::get().to(get_ticket_guilds))
             .route("/api/tickets/stats", web::get().to(get_ticket_stats))

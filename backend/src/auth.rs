@@ -1,7 +1,7 @@
 use crate::models::{AppState, ErrorResponse};
 use actix_web::{
     HttpRequest, HttpResponse, Responder,
-    cookie::{Cookie, time::Duration},
+    cookie::{Cookie, SameSite, time::Duration},
     web,
 };
 use chrono::{Duration as ChronoDuration, Utc};
@@ -329,10 +329,18 @@ pub async fn discord_callback(
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
 
+    // secure hängt an der Adresse der Website: in Produktion läuft sie über
+    // HTTPS, lokal nicht — ein fest gesetztes secure würde die Anmeldung in der
+    // Entwicklung unmöglich machen, ein fest ausgeschaltetes den Keks im Betrieb
+    // auch über HTTP preisgeben. SameSite=Lax hält ihn aus Anfragen fremder
+    // Seiten heraus, lässt aber den gewöhnlichen Klick von außen auf die Seite
+    // (etwa aus Discord heraus) angemeldet — Strict würde dort abmelden.
+    let ueber_https = data.frontend_url.starts_with("https://");
     let cookie = Cookie::build("auth_token", token_str)
         .path("/")
-        //.secure(true) // Uncomment in production with HTTPS
+        .secure(ueber_https)
         .http_only(true)
+        .same_site(SameSite::Lax)
         .max_age(Duration::days(7))
         .finish();
 
@@ -372,9 +380,16 @@ pub async fn get_me(data: web::Data<AppState>, user: AuthenticatedUser) -> impl 
     }
 }
 
-pub async fn logout() -> impl Responder {
+pub async fn logout(data: web::Data<AppState>) -> impl Responder {
+    // Zum Löschen müssen Pfad, secure und SameSite mit dem gesetzten Keks
+    // übereinstimmen — sonst legt der Browser einen zweiten daneben und der
+    // alte bleibt gültig.
+    let ueber_https = data.frontend_url.starts_with("https://");
     let cookie = Cookie::build("auth_token", "")
         .path("/")
+        .secure(ueber_https)
+        .http_only(true)
+        .same_site(SameSite::Lax)
         .max_age(Duration::seconds(0))
         .finish();
 
