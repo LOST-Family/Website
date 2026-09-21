@@ -43,8 +43,91 @@
         { wert: 'member', anzeige: 'Mitglied' },
     ];
 
+    export let canManageKickpoints: boolean = false;
+    export let kickpointReasons: Array<{ name: string; amount?: number }> = [];
+    export let onKickpointAction:
+        | ((
+              aktion: 'add' | 'edit' | 'remove',
+              koerper: Record<string, unknown>,
+          ) => Promise<{ ok: boolean; text: string }>)
+        | null = null;
+
     let rangLaeuft: string | null = null;
     let rangMeldung: { ok: boolean; text: string } | null = null;
+
+    // --- Kickpunkte ---
+    let kpGrund = '';
+    let kpAnzahl = 1;
+    let kpDatum = heuteAlsFeld();
+    let kpFormularOffen = false;
+    let kpLaeuft = false;
+    let kpMeldung: { ok: boolean; text: string } | null = null;
+    // Welcher bestehende Kickpunkt gerade bearbeitet wird (dessen id), und
+    // welcher auf die Löschbestätigung wartet.
+    let kpBearbeitet: number | null = null;
+    let kpEntwurf = { reason: '', amount: 1, date: '' };
+    let kpLoeschFrage: number | null = null;
+
+    function heuteAlsFeld(): string {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    /// Der Bot erwartet dd.MM.yyyy, das Eingabefeld liefert yyyy-MM-dd.
+    function feldZuBot(wert: string): string {
+        const [j, m, t] = wert.split('-');
+        return `${t}.${m}.${j}`;
+    }
+
+    /// Umgekehrt für das Bearbeiten: der Bot liefert einen Zeitstempel.
+    function botZuFeld(wert: string | undefined): string {
+        if (!wert) return heuteAlsFeld();
+        const d = new Date(wert);
+        if (Number.isNaN(d.getTime())) return heuteAlsFeld();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function grundGewaehlt(name: string) {
+        kpGrund = name;
+        // Die hinterlegte Punktzahl als Vorschlag übernehmen; ändern darf man
+        // sie trotzdem, dafür ist das Feld daneben da.
+        const r = kickpointReasons.find((x) => x.name === name);
+        if (r && typeof r.amount === 'number') kpAnzahl = r.amount;
+    }
+
+    $: if (player) {
+        kpFormularOffen = false;
+        kpMeldung = null;
+        kpBearbeitet = null;
+        kpLoeschFrage = null;
+        kpGrund = '';
+        kpAnzahl = 1;
+        kpDatum = heuteAlsFeld();
+    }
+
+    async function kpAusfuehren(
+        aktion: 'add' | 'edit' | 'remove',
+        koerper: Record<string, unknown>,
+    ) {
+        if (!onKickpointAction || kpLaeuft) return;
+        kpLaeuft = true;
+        kpMeldung = null;
+        try {
+            kpMeldung = await onKickpointAction(aktion, koerper);
+            if (kpMeldung.ok) {
+                kpFormularOffen = false;
+                kpBearbeitet = null;
+                kpLoeschFrage = null;
+                kpGrund = '';
+                kpAnzahl = 1;
+                kpDatum = heuteAlsFeld();
+            }
+        } catch (e: any) {
+            kpMeldung = { ok: false, text: e?.message ?? 'Unbekannter Fehler' };
+        } finally {
+            kpLaeuft = false;
+        }
+    }
 
     // Beim Wechsel auf einen anderen Spieler die alte Meldung wegräumen, sonst
     // klebt sie am nächsten Namen.
@@ -416,7 +499,7 @@
                     {/if}
 
                     <!-- Kickpoints History -->
-                    {#if hasKickpointAccess && ((player.kickpoints && player.kickpoints.length > 0) || (player.activeKickpoints && player.activeKickpoints.length > 0))}
+                    {#if hasKickpointAccess && ((player.kickpoints && player.kickpoints.length > 0) || (player.activeKickpoints && player.activeKickpoints.length > 0) || (canManageKickpoints && onKickpointAction && gameType === 'coc'))}
                         <div
                             class="detail-section"
                             in:slide={{ duration: 300, delay: 400 }}
@@ -425,35 +508,210 @@
                             <div class="kickpoints-list">
                                 {#each player.kickpoints || player.activeKickpoints || [] as kp}
                                     <div class="kp-item">
-                                        <div class="kp-header">
-                                            <span class="kp-reason"
-                                                >{kp.reason}</span
-                                            >
-                                            <span
-                                                class="kp-amount {kp.amount > 0
-                                                    ? 'positive'
-                                                    : 'negative'}"
-                                            >
-                                                {kp.amount > 0
-                                                    ? '+'
-                                                    : ''}{kp.amount}
-                                            </span>
-                                        </div>
-                                        <div class="kp-footer">
-                                            <span class="kp-date"
-                                                >{new Date(
-                                                    kp.date || kp.createdAt,
-                                                ).toLocaleDateString()}</span
-                                            >
-                                            {#if kp.description}
-                                                <span class="kp-desc"
-                                                    >{kp.description}</span
+                                        {#if kpBearbeitet === kp.id}
+                                            <!-- Bearbeiten an Ort und Stelle -->
+                                            <div class="kp-formular">
+                                                <input
+                                                    class="kp-feld"
+                                                    type="text"
+                                                    bind:value={kpEntwurf.reason}
+                                                    placeholder="Grund"
+                                                />
+                                                <input
+                                                    class="kp-feld kp-feld-schmal"
+                                                    type="number"
+                                                    bind:value={kpEntwurf.amount}
+                                                />
+                                                <input
+                                                    class="kp-feld"
+                                                    type="date"
+                                                    bind:value={kpEntwurf.date}
+                                                />
+                                                <button
+                                                    class="kp-knopf kp-knopf-haupt"
+                                                    disabled={kpLaeuft ||
+                                                        !kpEntwurf.reason.trim()}
+                                                    on:click={() =>
+                                                        kpAusfuehren('edit', {
+                                                            id: kp.id,
+                                                            reason: kpEntwurf.reason.trim(),
+                                                            amount: Number(kpEntwurf.amount),
+                                                            date: feldZuBot(kpEntwurf.date),
+                                                        })}>Speichern</button
                                                 >
-                                            {/if}
-                                        </div>
+                                                <button
+                                                    class="kp-knopf"
+                                                    disabled={kpLaeuft}
+                                                    on:click={() => (kpBearbeitet = null)}
+                                                    >Abbrechen</button
+                                                >
+                                            </div>
+                                        {:else}
+                                            <div class="kp-header">
+                                                <!-- Der Grund steht im Feld
+                                                     description; ein reason
+                                                     liefert die API nicht. -->
+                                                <span class="kp-reason"
+                                                    >{kp.description ??
+                                                        kp.reason ??
+                                                        'Ohne Grund'}</span
+                                                >
+                                                <span
+                                                    class="kp-amount {kp.amount > 0
+                                                        ? 'positive'
+                                                        : 'negative'}"
+                                                >
+                                                    {kp.amount > 0
+                                                        ? '+'
+                                                        : ''}{kp.amount}
+                                                </span>
+                                            </div>
+                                            <div class="kp-footer">
+                                                <span class="kp-date"
+                                                    >{new Date(
+                                                        kp.date || kp.givenDate || kp.createdAt,
+                                                    ).toLocaleDateString('de-DE')}</span
+                                                >
+                                                {#if kp.expirationDate}
+                                                    <span class="kp-desc"
+                                                        >verfällt {new Date(
+                                                            kp.expirationDate,
+                                                        ).toLocaleDateString('de-DE')}</span
+                                                    >
+                                                {/if}
+                                                {#if canManageKickpoints && onKickpointAction && gameType === 'coc' && kp.id}
+                                                    <span class="kp-aktionen">
+                                                        {#if kpLoeschFrage === kp.id}
+                                                            <button
+                                                                class="kp-knopf kp-knopf-warnung"
+                                                                disabled={kpLaeuft}
+                                                                on:click={() =>
+                                                                    kpAusfuehren('remove', {
+                                                                        id: kp.id,
+                                                                    })}
+                                                                >Wirklich löschen</button
+                                                            >
+                                                            <button
+                                                                class="kp-knopf"
+                                                                disabled={kpLaeuft}
+                                                                on:click={() =>
+                                                                    (kpLoeschFrage = null)}
+                                                                >Nein</button
+                                                            >
+                                                        {:else}
+                                                            <button
+                                                                class="kp-knopf"
+                                                                disabled={kpLaeuft}
+                                                                on:click={() => {
+                                                                    kpBearbeitet = kp.id;
+                                                                    kpLoeschFrage = null;
+                                                                    kpEntwurf = {
+                                                                        reason:
+                                                                            kp.description ??
+                                                                            kp.reason ??
+                                                                            '',
+                                                                        amount: kp.amount,
+                                                                        date: botZuFeld(
+                                                                            kp.date ??
+                                                                                kp.givenDate,
+                                                                        ),
+                                                                    };
+                                                                }}>Ändern</button
+                                                            >
+                                                            <button
+                                                                class="kp-knopf"
+                                                                disabled={kpLaeuft}
+                                                                on:click={() =>
+                                                                    (kpLoeschFrage = kp.id)}
+                                                                >Löschen</button
+                                                            >
+                                                        {/if}
+                                                    </span>
+                                                {/if}
+                                            </div>
+                                        {/if}
                                     </div>
                                 {/each}
                             </div>
+
+                            {#if canManageKickpoints && onKickpointAction && gameType === 'coc'}
+                                {#if kpFormularOffen}
+                                    <div class="kp-neu" transition:slide={{ duration: 200 }}>
+                                        {#if kickpointReasons.length > 0}
+                                            <div class="kp-gruende">
+                                                {#each kickpointReasons as r}
+                                                    <button
+                                                        class="kp-grund"
+                                                        class:gewaehlt={kpGrund === r.name}
+                                                        disabled={kpLaeuft}
+                                                        on:click={() => grundGewaehlt(r.name)}
+                                                    >
+                                                        {r.name}
+                                                        {#if typeof r.amount === 'number'}
+                                                            <span class="kp-grund-punkte"
+                                                                >{r.amount}</span
+                                                            >
+                                                        {/if}
+                                                    </button>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                        <div class="kp-formular">
+                                            <input
+                                                class="kp-feld"
+                                                type="text"
+                                                bind:value={kpGrund}
+                                                placeholder="Grund"
+                                            />
+                                            <input
+                                                class="kp-feld kp-feld-schmal"
+                                                type="number"
+                                                bind:value={kpAnzahl}
+                                                title="Punkte"
+                                            />
+                                            <input
+                                                class="kp-feld"
+                                                type="date"
+                                                bind:value={kpDatum}
+                                            />
+                                            <button
+                                                class="kp-knopf kp-knopf-haupt"
+                                                disabled={kpLaeuft || !kpGrund.trim()}
+                                                on:click={() =>
+                                                    kpAusfuehren('add', {
+                                                        reason: kpGrund.trim(),
+                                                        amount: Number(kpAnzahl),
+                                                        date: feldZuBot(kpDatum),
+                                                    })}>Eintragen</button
+                                            >
+                                            <button
+                                                class="kp-knopf"
+                                                disabled={kpLaeuft}
+                                                on:click={() => (kpFormularOffen = false)}
+                                                >Abbrechen</button
+                                            >
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <button
+                                        class="kp-knopf kp-knopf-haupt kp-oeffnen"
+                                        on:click={() => {
+                                            kpFormularOffen = true;
+                                            kpMeldung = null;
+                                        }}>Kickpunkt geben</button
+                                    >
+                                {/if}
+
+                                {#if kpMeldung}
+                                    <p
+                                        class="rang-meldung"
+                                        class:fehler={!kpMeldung.ok}
+                                        transition:slide={{ duration: 200 }}
+                                    >
+                                        {kpMeldung.text}
+                                    </p>
+                                {/if}
+                            {/if}
                         </div>
                     {/if}
 
@@ -1054,6 +1312,132 @@
         background: rgba(231, 76, 60, 0.16);
         border-color: rgba(231, 76, 60, 0.42);
         color: #ffc9c2;
+    }
+
+    /* Kickpunkte verwalten */
+    .kp-aktionen {
+        margin-left: auto;
+        display: inline-flex;
+        gap: 0.4rem;
+    }
+
+    .kp-knopf {
+        padding: 0.3rem 0.7rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+            background 0.18s ease,
+            border-color 0.18s ease;
+    }
+
+    .kp-knopf:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.13);
+        border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    .kp-knopf:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .kp-knopf-haupt {
+        background: rgba(99, 179, 237, 0.22);
+        border-color: rgba(99, 179, 237, 0.5);
+        color: #cfe8ff;
+    }
+
+    /* Löschen fragt einmal nach; die Bestätigung ist rot, damit sie sich vom
+       ersten Klick unterscheidet. */
+    .kp-knopf-warnung {
+        background: rgba(231, 76, 60, 0.22);
+        border-color: rgba(231, 76, 60, 0.5);
+        color: #ffc9c2;
+    }
+
+    .kp-oeffnen {
+        margin-top: 1rem;
+        padding: 0.55rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .kp-neu {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .kp-gruende {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .kp-grund {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .kp-grund.gewaehlt {
+        background: rgba(99, 179, 237, 0.2);
+        border-color: rgba(99, 179, 237, 0.5);
+        color: #cfe8ff;
+    }
+
+    .kp-grund-punkte {
+        opacity: 0.7;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .kp-formular {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .kp-feld {
+        flex: 1 1 8rem;
+        min-width: 0;
+        padding: 0.45rem 0.7rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(0, 0, 0, 0.25);
+        color: white;
+        font-size: 0.88rem;
+    }
+
+    .kp-feld-schmal {
+        flex: 0 0 4.5rem;
+    }
+
+    :global(.modal-content.light) .kp-feld {
+        background: white;
+        border-color: rgba(0, 0, 0, 0.14);
+        color: #1a202c;
+    }
+
+    :global(.modal-content.light) .kp-knopf,
+    :global(.modal-content.light) .kp-grund {
+        border-color: rgba(0, 0, 0, 0.12);
+        background: rgba(0, 0, 0, 0.04);
+        color: rgba(0, 0, 0, 0.85);
     }
 
     .rang-fusszeile {

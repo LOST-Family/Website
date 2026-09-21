@@ -276,6 +276,92 @@
         }
     }
 
+    /// Kickpunkte des angezeigten Spielers frisch holen. Nach jeder Änderung
+    /// nötig: die Liste kommt aus dem Bot, nicht aus der Antwort der Aktion,
+    /// und die Summen hängen an der Verfallsfrist des Clans.
+    async function kickpunkteNachladen(tag: string) {
+        try {
+            const res = await fetch(
+                `${apiBaseUrl}/api/coc/players/${encodeURIComponent(tag)}/kickpoints/details`,
+                { credentials: 'include' },
+            );
+            if (!res.ok) return;
+            const liste = await res.json();
+            const summe = (Array.isArray(liste) ? liste : []).reduce(
+                (n: number, k: any) => n + toNumber(k.amount),
+                0,
+            );
+            if (selectedPlayer && selectedPlayer.tag === tag) {
+                selectedPlayer = {
+                    ...selectedPlayer,
+                    activeKickpoints: liste,
+                    activeKickpointsSum: summe,
+                    activeKickpointsCount: liste.length,
+                };
+            }
+            // Die Kachel in der Mitgliederliste zeigt dieselbe Summe.
+            members = members.map((m) =>
+                m.tag === tag
+                    ? {
+                          ...m,
+                          activeKickpoints: liste,
+                          activeKickpointsSum: summe,
+                          activeKickpointsCount: liste.length,
+                      }
+                    : m,
+            );
+        } catch {
+            // Schlägt das Nachladen fehl, steht die Anzeige eben kurz auf dem
+            // alten Stand — die Änderung selbst ist längst durch.
+        }
+    }
+
+    /// Eine Kickpunkt-Aktion an den Bot geben. Alle drei Aktionen laufen durch
+    /// dieselbe Weiterleitung; unterschiedlich ist nur der Körper.
+    async function kickpunktAktion(
+        aktion: 'add' | 'edit' | 'remove',
+        koerper: Record<string, unknown>,
+        tag: string,
+    ): Promise<{ ok: boolean; text: string }> {
+        try {
+            const res = await fetch(
+                `${apiBaseUrl}/api/coc/manage/kickpoints/${aktion}`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(koerper),
+                },
+            );
+            let daten: any = null;
+            try {
+                daten = await res.json();
+            } catch {
+                // siehe rangAendern
+            }
+            if (!res.ok) {
+                const grund =
+                    daten?.error ?? daten?.message ?? `Fehlgeschlagen (${res.status})`;
+                return { ok: false, text: verstaendlich(res.status, grund) };
+            }
+            await kickpunkteNachladen(tag);
+            return {
+                ok: true,
+                text:
+                    aktion === 'add'
+                        ? 'Kickpunkt eingetragen.'
+                        : aktion === 'edit'
+                          ? 'Kickpunkt geändert.'
+                          : 'Kickpunkt gelöscht.',
+            };
+        } catch {
+            return {
+                ok: false,
+                text: 'Die Anfrage kam nicht durch — Verbindung prüfen und erneut versuchen.',
+            };
+        }
+    }
+
     /// Die Antworten der Bots sind englisch und an Entwickler gerichtet. Was
     /// wiederkehrt, bekommt hier einen deutschen Satz; alles andere wird
     /// unverändert durchgereicht, damit keine Begründung verschluckt wird.
@@ -297,6 +383,16 @@
             return 'Dieser Spieler steht in keinem Clan.';
         if (g.includes('invalid role'))
             return 'Diesen Rang gibt es nicht.';
+        if (g.includes('clan config must be set first'))
+            return 'Für diesen Clan sind noch keine Kickpunkt-Regeln hinterlegt — erst /clanconfig setzen.';
+        if (g.includes('kickpoint not found'))
+            return 'Diesen Kickpunkt gibt es nicht mehr — vermutlich hat ihn jemand anderes gerade gelöscht.';
+        if (g.includes('invalid date format'))
+            return 'Das Datum konnte nicht gelesen werden.';
+        if (g.includes('player of this kickpoint is not in a clan'))
+            return 'Der Spieler steht in keinem Clan — diesen Kickpunkt kann nur ein Admin anfassen.';
+        if (g.includes('player not found or not in a clan'))
+            return 'Dieser Spieler steht in keinem Clan.';
         if (status === 502 || status === 503)
             return 'Der Bot ist gerade nicht erreichbar. Bitte später erneut versuchen.';
         return grund;
@@ -1247,6 +1343,18 @@
         canManageRoles={hasPrivilegedAccess}
         onChangeRole={selectedPlayer
             ? (rolle) => rangAendern(selectedPlayer as Player, rolle)
+            : null}
+        canManageKickpoints={hasPrivilegedAccess}
+        kickpointReasons={clanConfig?.kickpointReasons ??
+            clan?.kickpointReasons ??
+            []}
+        onKickpointAction={selectedPlayer
+            ? (aktion, koerper) =>
+                  kickpunktAktion(
+                      aktion,
+                      { ...koerper, playerTag: (selectedPlayer as Player).tag },
+                      (selectedPlayer as Player).tag,
+                  )
             : null}
     />
 
