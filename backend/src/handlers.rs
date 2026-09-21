@@ -71,6 +71,50 @@ pub async fn get_coc_clan_kickpoint_reasons(
     get_clan_kickpoint_reasons_impl(&data, &tag, user, GameType::ClashOfClans).await
 }
 
+/// Die Listening Events eines Clans, samt denen seiner Nebenclans.
+///
+/// Bewusst ohne Zwischenspeicher: der Bot rechnet für jedes Event aus, wann es
+/// das nächste Mal feuert, und das dauert rund zwei Sekunden für einen ganzen
+/// Clan. Ein Zwischenspeicher würde das auf null drücken und dafür nach jeder
+/// Änderung den alten Stand zeigen — genau in dem Moment, in dem jemand
+/// hinsieht, um zu prüfen, ob seine Änderung angekommen ist.
+pub async fn get_coc_clan_listening_events(
+    data: web::Data<AppState>,
+    tag: web::Path<String>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    if !has_required_role(user.claims.role.as_deref(), "COLEADER") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires COLEADER or higher role".into(),
+        });
+    }
+
+    let encoded_tag = encode_tag(&tag);
+    // Absichtlich am Zwischenspeicher vorbei: `forward_request` liest nur, was
+    // der Hintergrundlauf abgelegt hat, und der holt diese Adresse gar nicht.
+    // Wichtiger ist aber der Inhalt — der Bot rechnet für jedes Event aus, wann
+    // es das nächste Mal feuert, und ein zwischengespeicherter Stand zeigte
+    // genau dann alte Zeiten, wenn jemand nachsieht, ob seine Änderung
+    // angekommen ist. Zwei Sekunden pro Aufruf sind der Preis dafür.
+    match update_upstream_cache(
+        &data,
+        GameType::ClashOfClans,
+        &format!("/api/clans/{}/listeningevents", encoded_tag),
+    )
+    .await
+    {
+        Ok(body) => HttpResponse::Ok()
+            .content_type("application/json")
+            .body(body),
+        Err(e) => {
+            log::error!("Listening Events für {} nicht abrufbar: {}", tag, e);
+            HttpResponse::BadGateway().json(ErrorResponse {
+                error: "Der Bot ist gerade nicht erreichbar".into(),
+            })
+        }
+    }
+}
+
 // 5. Get CoC Clan War Members
 pub async fn get_coc_clan_war_members(
     data: web::Data<AppState>,
@@ -1676,6 +1720,32 @@ pub async fn get_user_player_accounts(
 // ============================================================================
 
 // Get Guild Info
+/// Die Kanäle, in die der Bot schreiben kann — für die Kanalauswahl der
+/// Listening Events. Nur ab Vize, weil die Liste die komplette Kanalstruktur
+/// des Discords offenlegt, einschließlich interner Kanäle.
+pub async fn get_guild_channels(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    if !has_required_role(user.claims.role.as_deref(), "COLEADER") {
+        return HttpResponse::Forbidden().json(ErrorResponse {
+            error: "Access denied: Requires COLEADER or higher role".into(),
+        });
+    }
+
+    match update_upstream_cache(&data, GameType::ClashOfClans, "/api/guild/channels").await {
+        Ok(body) => HttpResponse::Ok()
+            .content_type("application/json")
+            .body(body),
+        Err(e) => {
+            log::error!("Kanalliste nicht abrufbar: {}", e);
+            HttpResponse::BadGateway().json(ErrorResponse {
+                error: "Der Bot ist gerade nicht erreichbar".into(),
+            })
+        }
+    }
+}
+
 pub async fn get_guild_info(
     data: web::Data<AppState>,
     opt_user: OptionalAuthenticatedUser,

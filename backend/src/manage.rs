@@ -28,6 +28,12 @@ use crate::models::{AppState, GameType};
 ///   Speicher. Neustarts laufen über `lostmanager-neustart.sh`.
 /// * `verify` — der Spiel-API-Token, den Supercell dafür ausgibt, hat im
 ///   Browser nichts verloren.
+///
+/// `listeningevents/*` gibt es nur bei Clash of Clans; die anderen beiden Bots
+/// kennen keine Listening Events. Die Liste führt die Aktion trotzdem ohne
+/// Spielunterscheidung: wer sie bei CR oder BS aufruft, bekommt vom dortigen
+/// Bot ein 404 — dieselbe Antwort, die eine Sonderregel hier auch geben würde,
+/// nur ohne eine zweite Stelle, an der man sie pflegen muss.
 const ERLAUBTE_AKTIONEN: &[&str] = &[
     "members/add",
     "members/edit",
@@ -39,6 +45,9 @@ const ERLAUBTE_AKTIONEN: &[&str] = &[
     "kickpoint-reasons/add",
     "kickpoint-reasons/edit",
     "kickpoint-reasons/remove",
+    "listeningevents/add",
+    "listeningevents/edit",
+    "listeningevents/remove",
     "clanconfig",
     "links/link",
     "links/relink",

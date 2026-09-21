@@ -346,6 +346,10 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(get_coc_clan_kickpoint_reasons),
             )
             .route(
+                "/api/coc/clans/{tag}/listeningevents",
+                web::get().to(get_coc_clan_listening_events),
+            )
+            .route(
                 "/api/coc/clans/{tag}/war-members",
                 web::get().to(get_coc_clan_war_members),
             )
@@ -438,6 +442,7 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(get_bs_player_kickpoints_details),
             )
             // Common/Legacy Routes
+            .route("/api/guild/channels", web::get().to(get_guild_channels))
             .route("/api/guild", web::get().to(get_guild_info))
             .route("/api/admin/status", web::get().to(get_admin_status))
             .route("/api/admin/latency", web::get().to(get_latency_history))

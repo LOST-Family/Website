@@ -4,6 +4,7 @@
     import { quintOut } from 'svelte/easing';
     import { user, userOverride, hasRequiredRole } from './auth';
     import PlayerDetailModal from './PlayerDetailModal.svelte';
+    import ListeningEventsSection from './ListeningEventsSection.svelte';
     import {
         ROLE_ORDER,
         getRoleDisplay,
@@ -1324,6 +1325,21 @@
                     {/if}
                 </main>
             </div>
+
+            <!-- Automatische Erinnerungen. Sichtbar ab Vize: der Abschnitt
+                 listet Kanalnamen des Discords und die Kickpunktregeln des
+                 Clans, beides nichts für Gäste. -->
+            {#if hasPrivilegedAccess}
+                <ListeningEventsSection
+                    {apiBaseUrl}
+                    {clanTag}
+                    {theme}
+                    canManage={hasPrivilegedAccess}
+                    kickpointReasons={clanConfig?.kickpointReasons ??
+                        clan?.kickpointReasons ??
+                        []}
+                />
+            {/if}
         </div>
     {/if}
 
