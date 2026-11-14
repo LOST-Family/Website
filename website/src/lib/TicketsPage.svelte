@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { user, loading as authLoading, login } from './auth';
+    import TicketVerwaltung from './TicketVerwaltung.svelte';
     import {
         ticketGuilds,
         ladeTicketGuilds,
@@ -9,6 +10,7 @@
         ladeTickets,
         ladeDetail,
         ladeLegacy,
+        ladeVerwaltungGuilds,
         zeit,
         datum,
         groesse,
@@ -19,6 +21,7 @@
         type TicketRow,
         type TicketDetail,
         type LegacyRow,
+        type VerwaltungGuild,
     } from './tickets';
 
     export let theme: 'dark' | 'light' = 'dark';
@@ -27,7 +30,12 @@
     const PRO_SEITE = 25;
 
     let guild: TicketGuild | null = null;
-    let reiter: 'offen' | 'alle' | 'altdaten' = 'offen';
+    let reiter: 'offen' | 'alle' | 'altdaten' | 'verwaltung' = 'offen';
+
+    // Server, deren Panels/Menüs der Nutzer verwalten darf. Eigene Liste,
+    // weil Verwalten und Lesen beim Bot getrennte Rechte sind.
+    let verwaltungGuilds: VerwaltungGuild[] = [];
+    let verwaltungGeladen = false;
 
     let stats: TicketStats | null = null;
     let panels: TicketPanel[] = [];
@@ -53,8 +61,13 @@
     $: status = reiter === 'offen' ? 'open' : '';
 
     onMount(async () => {
-        await ladeTicketGuilds(apiBaseUrl);
-        const liste = $ticketGuilds ?? [];
+        const [, vw] = await Promise.all([
+            ladeTicketGuilds(apiBaseUrl),
+            ladeVerwaltungGuilds(apiBaseUrl),
+        ]);
+        verwaltungGuilds = vw;
+        verwaltungGeladen = true;
+        const liste = alleGuilds($ticketGuilds, verwaltungGuilds);
         if (liste.length > 0) {
             await serverWechseln(liste[0]);
         } else {
@@ -62,11 +75,38 @@
         }
     });
 
+    /** Lesbare Server zuerst, danach solche, die man nur verwalten darf. */
+    function alleGuilds(
+        lesbar: TicketGuild[] | null,
+        verwaltbar: VerwaltungGuild[],
+    ): TicketGuild[] {
+        const liste = [...(lesbar ?? [])];
+        for (const v of verwaltbar) {
+            if (!liste.some((g) => g.id === v.id)) liste.push({ ...v, panels: 0 });
+        }
+        return liste;
+    }
+
+    function nurVerwalten(g: TicketGuild | null): boolean {
+        return !!g && !($ticketGuilds ?? []).some((t) => t.id === g.id);
+    }
+
     async function serverWechseln(g: TicketGuild) {
         guild = g;
         detail = null;
         seite = 0;
         altdatenSeite = 0;
+        fehler = null;
+        const verwalten = verwaltungGuilds.some((v) => v.id === g.id);
+        if (nurVerwalten(g)) {
+            // Lesen darf er hier nicht; die Ticket-Abfragen endeten nur in 403.
+            reiter = 'verwaltung';
+            stats = null;
+            panels = [];
+            laedt = false;
+            return;
+        }
+        if (reiter === 'verwaltung' && !verwalten) reiter = 'offen';
         await alles();
     }
 
@@ -124,6 +164,7 @@
     async function reiterWechseln(neu: typeof reiter) {
         reiter = neu;
         detail = null;
+        if (neu === 'verwaltung') return;
         if (neu === 'altdaten') {
             altdatenSeite = 0;
             await listeAltdaten();
@@ -177,6 +218,10 @@
             ? Math.ceil(altdatenGesamt / PRO_SEITE)
             : Math.ceil(gesamt / PRO_SEITE);
     $: aktuelleSeite = reiter === 'altdaten' ? altdatenSeite : seite;
+
+    $: serverListe = alleGuilds($ticketGuilds, verwaltungGuilds);
+    $: darfVerwalten = !!guild && verwaltungGuilds.some((v) => v.id === guild?.id);
+    $: nurVerwaltung = nurVerwalten(guild);
 </script>
 
 <div class="tickets-page" class:light={theme === 'light'}>
@@ -196,7 +241,7 @@
                 </button>
             </div>
         </div>
-    {:else if $ticketGuilds !== null && $ticketGuilds.length === 0}
+    {:else if $ticketGuilds !== null && $ticketGuilds.length === 0 && verwaltungGeladen && verwaltungGuilds.length === 0}
         <div class="mitte">
             <div class="karte-leer">
                 <div class="icon">🎫</div>
@@ -218,9 +263,9 @@
                 </p>
             </div>
 
-            {#if ($ticketGuilds ?? []).length > 1}
+            {#if serverListe.length > 1}
                 <div class="server-wahl">
-                    {#each $ticketGuilds ?? [] as g (g.id)}
+                    {#each serverListe as g (g.id)}
                         <button
                             class="server"
                             class:aktiv={guild?.id === g.id}
@@ -355,7 +400,7 @@
             </div>
         {:else}
             <!-- Übersicht -->
-            {#if stats?.visible}
+            {#if reiter !== 'verwaltung' && stats?.visible}
                 <div class="kennzahlen">
                     <div class="zahl">
                         <span class="wert">{stats.open}</span>
@@ -397,7 +442,7 @@
                 {/if}
             {/if}
 
-            {#if panels.length > 0}
+            {#if reiter !== 'verwaltung' && panels.length > 0}
                 <section class="block">
                     <h3>Bereiche</h3>
                     <div class="panel-gitter">
@@ -418,21 +463,30 @@
 
             <section class="block">
                 <div class="reiter">
-                    <button
-                        class:aktiv={reiter === 'offen'}
-                        on:click={() => reiterWechseln('offen')}>Offen</button
-                    >
-                    <button
-                        class:aktiv={reiter === 'alle'}
-                        on:click={() => reiterWechseln('alle')}>Alle</button
-                    >
-                    <button
-                        class:aktiv={reiter === 'altdaten'}
-                        on:click={() => reiterWechseln('altdaten')}
-                        >Aus Ticket Tool</button
-                    >
+                    {#if !nurVerwaltung}
+                        <button
+                            class:aktiv={reiter === 'offen'}
+                            on:click={() => reiterWechseln('offen')}>Offen</button
+                        >
+                        <button
+                            class:aktiv={reiter === 'alle'}
+                            on:click={() => reiterWechseln('alle')}>Alle</button
+                        >
+                        <button
+                            class:aktiv={reiter === 'altdaten'}
+                            on:click={() => reiterWechseln('altdaten')}
+                            >Aus Ticket Tool</button
+                        >
+                    {/if}
+                    {#if darfVerwalten}
+                        <button
+                            class:aktiv={reiter === 'verwaltung'}
+                            on:click={() => reiterWechseln('verwaltung')}
+                            >Verwaltung</button
+                        >
+                    {/if}
 
-                    {#if reiter !== 'altdaten'}
+                    {#if reiter !== 'altdaten' && reiter !== 'verwaltung'}
                         <form class="suche" on:submit|preventDefault={suchen}>
                             <input
                                 type="search"
@@ -444,7 +498,9 @@
                     {/if}
                 </div>
 
-                {#if reiter === 'altdaten'}
+                {#if reiter === 'verwaltung' && guild}
+                    <TicketVerwaltung {apiBaseUrl} guildId={guild.id} {theme} />
+                {:else if reiter === 'altdaten'}
                     <p class="hinweis">
                         Diese Transcripts stammen aus Ticket Tool und liegen
                         weiterhin als Datei im jeweiligen Log-Kanal. Der Bot
@@ -542,7 +598,7 @@
                     {/if}
                 {/if}
 
-                {#if seitenZahl > 1}
+                {#if reiter !== 'verwaltung' && seitenZahl > 1}
                     <div class="blaettern">
                         <button
                             disabled={aktuelleSeite === 0}

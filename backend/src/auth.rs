@@ -402,6 +402,9 @@ use std::future::ready;
 
 pub struct AuthenticatedUser {
     pub claims: Claims,
+    /// Website-Admin laut Datenbank, bei jeder Anfrage frisch gelesen — nicht
+    /// aus dem Token, das bis zu seinem Ablauf einen alten Stand trüge.
+    pub is_admin: bool,
     pub linked_players: Vec<String>,
     pub linked_cr_players: Vec<String>,
     pub linked_bs_players: Vec<String>,
@@ -462,6 +465,7 @@ impl FromRequest for AuthenticatedUser {
 
                     Ok(AuthenticatedUser {
                         claims,
+                        is_admin,
                         linked_players,
                         linked_cr_players,
                         linked_bs_players,
@@ -529,6 +533,7 @@ impl FromRequest for OptionalAuthenticatedUser {
                     Ok(OptionalAuthenticatedUser {
                         user: Some(AuthenticatedUser {
                             claims,
+                            is_admin,
                             linked_players,
                             linked_cr_players,
                             linked_bs_players,

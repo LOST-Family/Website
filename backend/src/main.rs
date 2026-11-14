@@ -449,6 +449,15 @@ async fn main() -> std::io::Result<()> {
             .route("/api/sideclans", web::get().to(get_side_clans))
             // Ticket-Dashboard. Die spezifischen Pfade müssen VOR /{id}
             // stehen, sonst schluckt der Platzhalter "stats" und "panels".
+            .route(
+                "/api/tickets/verwaltung/guilds",
+                web::get().to(get_verwaltung_guilds),
+            )
+            .route("/api/tickets/verwaltung", web::get().to(get_verwaltung))
+            .route(
+                "/api/tickets/verwaltung/{aktion:.*}",
+                web::post().to(post_verwaltung),
+            )
             .route("/api/tickets/guilds", web::get().to(get_ticket_guilds))
             .route("/api/tickets/stats", web::get().to(get_ticket_stats))
             .route("/api/tickets/panels", web::get().to(get_ticket_panels))

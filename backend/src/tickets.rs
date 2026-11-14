@@ -18,12 +18,29 @@ use crate::models::{AppState, ErrorResponse};
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use log::error;
 
-/// Baut die Zieladresse und holt die Antwort.
+/// Baut die Zieladresse und holt die Antwort (nur lesend).
 async fn durchreichen(
     data: &AppState,
     user: &AuthenticatedUser,
     pfad: &str,
     query: &str,
+) -> HttpResponse {
+    weiterleiten(data, user, pfad, query, None, false).await
+}
+
+/// Der eigentliche Weg zum Ticket-Bot, lesend (GET) oder schreibend (POST).
+///
+/// `admin_mitsenden` nur für die Verwaltung: dort zählt ein Website-Admin wie
+/// jemand mit „Server verwalten“. Bei den Ticket-Lesepfaden geht die Kopfzeile
+/// bewusst NICHT mit — wer welche Tickets lesen darf, entscheidet allein der
+/// Bot anhand der Discord-Rollen (Orga-Tickets).
+async fn weiterleiten(
+    data: &AppState,
+    user: &AuthenticatedUser,
+    pfad: &str,
+    query: &str,
+    koerper: Option<String>,
+    admin_mitsenden: bool,
 ) -> HttpResponse {
     let (basis, token) = match (&data.upstream_ticket_url, &data.ticket_api_token) {
         (Some(b), Some(t)) if !b.is_empty() => (b, t),
@@ -36,15 +53,23 @@ async fn durchreichen(
 
     let url = ziel_url(basis, pfad, query);
 
-    let antwort = data
-        .client
-        .get(&url)
+    let anfrage = match &koerper {
+        Some(k) => data
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(k.clone()),
+        None => data.client.get(&url),
+    };
+    let mut anfrage = anfrage
         .header("Authorization", format!("Bearer {}", token))
         // Die einzige Stelle, an der die Identitaet gesetzt wird — aus den
         // signierten Claims, nicht aus der Anfrage des Browsers.
-        .header("X-Discord-User", user.claims.sub.clone())
-        .send()
-        .await;
+        .header("X-Discord-User", user.claims.sub.clone());
+    if admin_mitsenden && user.is_admin {
+        anfrage = anfrage.header("X-Website-Admin", "1");
+    }
+    let antwort = anfrage.send().await;
 
     match antwort {
         Ok(res) => {
@@ -139,9 +164,96 @@ pub async fn get_ticket_legacy(
     durchreichen(&data, &user, "/api/legacy", req.query_string()).await
 }
 
+// ---------------------------------------------------------------------------
+// Verwaltung: Panels, Menüs, Rollen, Fragen
+// ---------------------------------------------------------------------------
+
+/// Schreibaktionen, die über die Website erreichbar sind — eine Positivliste.
+/// Was hier nicht steht, kommt gar nicht erst beim Bot an.
+const VERWALTUNG_AKTIONEN: &[&str] = &[
+    "panel/erstellen",
+    "panel/setzen",
+    "panel/rolle",
+    "panel/fragen",
+    "menu/erstellen",
+    "menu/text",
+    "menu/stil",
+    "menu/kanal",
+    "menu/eintrag",
+    "menu/eintrag-entfernen",
+    "menu/reihenfolge",
+    "menu/posten",
+    "menu/loeschen",
+    "menus/abgleichen",
+    "config/limit",
+    "sperre/hinzufuegen",
+    "sperre/entfernen",
+];
+
+fn verwaltung_erlaubt(aktion: &str) -> bool {
+    VERWALTUNG_AKTIONEN.contains(&aktion)
+}
+
+pub async fn get_verwaltung_guilds(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+) -> impl Responder {
+    weiterleiten(&data, &user, "/api/verwaltung/guilds", "", None, true).await
+}
+
+pub async fn get_verwaltung(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+    req: HttpRequest,
+) -> impl Responder {
+    weiterleiten(&data, &user, "/api/verwaltung", req.query_string(), None, true).await
+}
+
+/// Eine Änderung an den Bot weiterreichen. Wer handelt, setzt der Bot aus
+/// `X-Discord-User` — ein Feld im Körper hat dafür keine Bedeutung. Das
+/// Protokoll in `💻┋ticket-bot-log` schreibt der Bot selbst.
+pub async fn post_verwaltung(
+    data: web::Data<AppState>,
+    user: AuthenticatedUser,
+    aktion: web::Path<String>,
+    koerper: web::Json<serde_json::Value>,
+) -> impl Responder {
+    let aktion = aktion.into_inner();
+    if !verwaltung_erlaubt(&aktion) {
+        return HttpResponse::NotFound().json(ErrorResponse {
+            error: "Diese Aktion gibt es nicht".into(),
+        });
+    }
+    if !koerper.is_object() {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: "Der Anfragekörper muss ein JSON-Objekt sein".into(),
+        });
+    }
+    log::info!("Ticket-Verwaltung: {} → {}", user.claims.sub, aktion);
+    weiterleiten(
+        &data,
+        &user,
+        &format!("/api/verwaltung/{}", aktion),
+        "",
+        Some(koerper.into_inner().to_string()),
+        true,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ziel_url;
+    use super::{verwaltung_erlaubt, ziel_url};
+
+    #[test]
+    fn verwaltung_positivliste() {
+        assert!(verwaltung_erlaubt("panel/setzen"));
+        assert!(verwaltung_erlaubt("menu/posten"));
+        assert!(!verwaltung_erlaubt("panel/loeschen"));
+        assert!(!verwaltung_erlaubt("../tickets"));
+        assert!(!verwaltung_erlaubt("guilds"));
+        assert!(!verwaltung_erlaubt(""));
+    }
 
     #[test]
     fn schraegstrich_am_ende_verdoppelt_sich_nicht() {

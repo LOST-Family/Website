@@ -177,6 +177,184 @@ export function ladeTickets(
 }
 
 // ---------------------------------------------------------------------------
+// Verwaltung (Panels, Menüs, Sperrliste)
+//
+// Auch hier prüft der Bot selbst, wer verwalten darf. Die Website reicht nur
+// durch; eine Aktion, die hier angeboten wird, kann dort trotzdem mit 403
+// abgelehnt werden — dann steht der Grund im `error`-Feld.
+// ---------------------------------------------------------------------------
+
+export interface VerwaltungGuild {
+    id: string;
+    name: string;
+    icon: string | null;
+}
+
+export interface VwFrage {
+    label: string;
+    placeholder: string | null;
+    lang: boolean;
+    pflicht: boolean;
+    max: number | null;
+}
+
+export interface VwPanel {
+    id: number;
+    name: string;
+    active: boolean;
+    category_opened: string | null;
+    category_closed: string | null;
+    name_pattern_open: string | null;
+    name_pattern_closed: string | null;
+    counter: number;
+    counter_padding: number;
+    welcome_text: string | null;
+    welcome_embed_title: string | null;
+    welcome_embed_text: string | null;
+    log_channel_id: string | null;
+    max_open_per_user: number;
+    cooldown_seconds: number;
+    close_on_owner_leave: boolean;
+    owner_leave_message: string | null;
+    dm_on_open: boolean;
+    dm_on_close: boolean;
+    next_name: string | null;
+    support: string[];
+    ping: string[];
+    fragen: VwFrage[];
+    open: number;
+    total: number;
+}
+
+export interface VwMenuEintrag {
+    panel_id: number;
+    label: string | null;
+    description: string | null;
+    emoji: string | null;
+    button_style: number;
+    position: number;
+}
+
+export interface VwMenu {
+    id: number;
+    channel_id: string;
+    channel_name: string | null;
+    message_id?: string | null;
+    posted: boolean;
+    style: 'knoepfe' | 'dropdown';
+    embed_title: string | null;
+    embed_text: string | null;
+    embed_color: number | null;
+    placeholder: string | null;
+    entries: VwMenuEintrag[];
+}
+
+export interface VwRolle {
+    id: string;
+    name: string;
+    color: number;
+    managed: boolean;
+}
+
+export interface VwKategorie {
+    id: string;
+    name: string;
+}
+
+export interface VwKanal {
+    id: string;
+    name: string;
+    kategorie_id: string | null;
+    kategorie: string | null;
+}
+
+export interface VwSperre {
+    subject_id: string;
+    is_role: boolean;
+    reason: string | null;
+    added_by: string | null;
+    added_at: string | null;
+    name: string | null;
+}
+
+export interface VwFeld {
+    name: string;
+    art: 'TEXT' | 'NUMBER' | 'BOOL';
+}
+
+export interface VerwaltungUebersicht {
+    guild: VerwaltungGuild;
+    config: { limit: number; panel_color: number; ticket_color: number };
+    panels: VwPanel[];
+    menus: VwMenu[];
+    rollen: VwRolle[];
+    kategorien: VwKategorie[];
+    kanaele: VwKanal[];
+    sperrliste: VwSperre[];
+    felder: VwFeld[];
+}
+
+/** Server, die der Nutzer verwalten darf. Jeder Fehler heißt: keine. */
+export async function ladeVerwaltungGuilds(
+    apiBaseUrl: string,
+): Promise<VerwaltungGuild[]> {
+    try {
+        const liste = await hole<Liste<VerwaltungGuild>>(
+            apiBaseUrl,
+            '/api/tickets/verwaltung/guilds',
+        );
+        return liste.items ?? [];
+    } catch {
+        return [];
+    }
+}
+
+export const ladeVerwaltung = (apiBaseUrl: string, guild: string) =>
+    hole<VerwaltungUebersicht>(
+        apiBaseUrl,
+        `/api/tickets/verwaltung?guild=${encodeURIComponent(guild)}`,
+    );
+
+/**
+ * Eine Verwaltungsaktion ausführen. `koerper` muss `guild` enthalten.
+ * Bei Fehlern wird der Text des Bots unverändert als Error geworfen — er ist
+ * für Menschen formuliert und soll so angezeigt werden.
+ */
+export async function verwaltungAktion(
+    apiBaseUrl: string,
+    aktion: string,
+    koerper: Record<string, unknown>,
+): Promise<{ ok: boolean; meldung: string }> {
+    const res = await fetch(`${apiBaseUrl}/api/tickets/verwaltung/${aktion}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(koerper),
+    });
+    const antwort = await res.json().catch(() => null);
+    if (!res.ok) {
+        if (antwort?.error) throw new Error(antwort.error);
+        if (res.status === 401) throw new Error('Nicht angemeldet');
+        if (res.status === 503)
+            throw new Error('Das Ticketsystem ist gerade nicht erreichbar');
+        throw new Error(`HTTP ${res.status}`);
+    }
+    return {
+        ok: antwort?.ok ?? true,
+        meldung: antwort?.meldung ?? 'Gespeichert.',
+    };
+}
+
+/**
+ * Discord-Farbwert als #rrggbb. `null`, 0 und JDAs "keine Farbe"
+ * (0x1FFFFFFF, alles über 0xFFFFFF) ergeben `null`.
+ */
+export function farbeHex(wert: number | null | undefined): string | null {
+    if (wert == null || wert <= 0 || wert > 0xffffff) return null;
+    return '#' + wert.toString(16).padStart(6, '0');
+}
+
+// ---------------------------------------------------------------------------
 // Darstellung
 // ---------------------------------------------------------------------------
 
