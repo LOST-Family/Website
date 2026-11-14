@@ -104,6 +104,13 @@ export const ticketGuilds = writable<TicketGuild[] | null>(null);
 
 let geladen = false;
 
+/**
+ * Darf der Nutzer irgendwo die Ticket-Verwaltung öffnen? Für die Navigation:
+ * ein Website-Admin ohne Discord-Rolle sieht keine Tickets, soll den Reiter
+ * „Verwaltung“ aber trotzdem finden.
+ */
+export const verwaltungVerfuegbar = writable(false);
+
 async function hole<T>(apiBaseUrl: string, pfad: string): Promise<T> {
     const res = await fetch(`${apiBaseUrl}${pfad}`, {
         credentials: 'include',
@@ -128,6 +135,10 @@ export async function ladeTicketGuilds(apiBaseUrl: string): Promise<void> {
             '/api/tickets/guilds',
         );
         ticketGuilds.set(liste.items);
+        if (liste.items.length === 0) {
+            const vw = await ladeVerwaltungGuilds(apiBaseUrl);
+            verwaltungVerfuegbar.set(vw.length > 0);
+        }
     } catch {
         // Kein Zugriff, nicht eingeloggt, Bot aus — in allen Fällen gibt es
         // für diesen Nutzer kein Dashboard, und ein Fehler in der Navigation
@@ -139,6 +150,7 @@ export async function ladeTicketGuilds(apiBaseUrl: string): Promise<void> {
 export function vergissTicketGuilds(): void {
     geladen = false;
     ticketGuilds.set(null);
+    verwaltungVerfuegbar.set(false);
 }
 
 export const ladeStats = (apiBaseUrl: string, guild: string) =>

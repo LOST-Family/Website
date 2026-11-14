@@ -2,7 +2,7 @@
     import ThemeToggle from './ThemeToggle.svelte';
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { user, loading, login, logout } from './auth';
-    import { ticketGuilds } from './tickets';
+    import { ticketGuilds, verwaltungVerfuegbar } from './tickets';
 
     export let theme: 'dark' | 'light' = 'dark';
     export let logo: string;
@@ -495,7 +495,7 @@
                         <!-- Tickets sieht, wer in Discord eine Team-Rolle
                              traegt — das ist nicht dasselbe wie is_admin auf
                              der Website, und der Bot entscheidet es. -->
-                        {#if ($ticketGuilds ?? []).length > 0}
+                        {#if ($ticketGuilds ?? []).length > 0 || $verwaltungVerfuegbar}
                             <a
                                 href="/tickets"
                                 class="dropdown-item"
@@ -822,7 +822,7 @@
                     </a>
                 {/if}
 
-                {#if ($ticketGuilds ?? []).length > 0}
+                {#if ($ticketGuilds ?? []).length > 0 || $verwaltungVerfuegbar}
                     <a
                         href="/tickets"
                         class="drawer-nav-link"
