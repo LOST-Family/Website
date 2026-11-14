@@ -247,6 +247,12 @@ async fn refresh_clans(data: &AppState, game: GameType) {
         _ => vec![],
     };
 
+    // Nebenclans kennt der Bot nur unter /api/sideclans, nicht unter
+    // /api/clans/{tag} – dort antwortet er für sie immer 404. Für sie also nur
+    // den Supercell-Cache auffrischen; sonst schreibt jeder Durchlauf
+    // 5 Fehlerzeilen je Nebenclan (≈1100/h) und fragt den Bot umsonst.
+    let anzahl_upstream = clans.len();
+
     // Add side clans to the refresh list
     if game == GameType::ClashOfClans {
         if let Ok(side_clans) =
@@ -292,7 +298,9 @@ async fn refresh_clans(data: &AppState, game: GameType) {
             );
 
             // Upstream endpoints
-            let upstream_endpoints = if game == GameType::ClashOfClans {
+            let upstream_endpoints = if i >= anzahl_upstream {
+                vec![]
+            } else if game == GameType::ClashOfClans {
                 vec![
                     format!("/api/clans/{}", encoded_tag),
                     format!("/api/clans/{}/members", encoded_tag),
