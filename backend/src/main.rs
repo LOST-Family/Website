@@ -78,6 +78,15 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
         .unwrap();
+    // Auf welcher Adresse das Backend lauscht. Vorgabe 0.0.0.0, weil das
+    // docker-compose.yml im Repo mit Portweiterleitung in den Container arbeitet.
+    // Der Homeserver laeuft mit network_mode: host hinter Caddy und setzt
+    // SERVER_BIND=127.0.0.1, damit 8888 nicht im ganzen Heimnetz offen steht.
+    let bind_adresse = env::var("SERVER_BIND")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+    println!("Backend lauscht auf {}:{}", bind_adresse, port);
     let database_url = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:password@localhost/website".to_string());
 
@@ -465,7 +474,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/tickets", web::get().to(get_ticket_list))
             .route("/api/tickets/{id}", web::get().to(get_ticket_detail))
     })
-    .bind(("0.0.0.0", port))?
+    .bind((bind_adresse.as_str(), port))?
     .run()
     .await
 }

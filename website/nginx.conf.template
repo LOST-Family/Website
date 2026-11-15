@@ -1,5 +1,8 @@
 server {
-    listen 5173;
+    # Vorgabe 5173 (alle Adressen) aus dem Dockerfile; der Homeserver setzt
+    # NGINX_LISTEN=127.0.0.1:5173. Das nginx-Abbild ersetzt beim Start nur
+    # gesetzte Umgebungsvariablen, $uri und Co. bleiben stehen.
+    listen ${NGINX_LISTEN};
     server_name localhost;
 
     # Disable access logs for every request to reduce noise, keep errors

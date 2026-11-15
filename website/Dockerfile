@@ -18,8 +18,10 @@ RUN npm run build
 # Runtime stage
 FROM nginx:alpine
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# nginx-Konfiguration als Vorlage: der Einstiegspunkt des nginx-Abbilds macht
+# daraus beim Start /etc/nginx/conf.d/default.conf und setzt NGINX_LISTEN ein.
+ENV NGINX_LISTEN=5173
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copy build artifacts from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
