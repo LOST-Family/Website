@@ -545,3 +545,69 @@ impl FromRequest for OptionalAuthenticatedUser {
         })
     }
 }
+
+#[cfg(test)]
+mod jwt_tests {
+    // Dieselben Aufrufe wie beim Anmelden (encode) und in den Extraktoren (decode).
+    // Sie sichern Wechsel der jsonwebtoken-Hauptversion ab: ausgegebene Kekse
+    // müssen danach weiter gelten, falsche weiter scheitern.
+    use super::Claims;
+    use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+
+    const GEHEIM: &[u8] = b"probe-geheimnis";
+
+    fn pruefen(token: &str, geheim: &[u8]) -> Option<Claims> {
+        decode::<Claims>(token, &DecodingKey::from_secret(geheim), &Validation::default())
+            .ok()
+            .map(|d| d.claims)
+    }
+
+    fn ausstellen(exp: i64) -> String {
+        let c = Claims { sub: "123".into(), role: Some("ADMIN".into()), exp: exp as usize };
+        encode(&Header::default(), &c, &EncodingKey::from_secret(GEHEIM)).unwrap()
+    }
+
+    #[test]
+    fn ausgestellter_keks_gilt() {
+        let t = ausstellen(chrono::Utc::now().timestamp() + 3600);
+        let c = pruefen(&t, GEHEIM).expect("frischer Keks muss gelten");
+        assert_eq!(c.sub, "123");
+        assert_eq!(c.role.as_deref(), Some("ADMIN"));
+    }
+
+    #[test]
+    fn von_hand_signierter_keks_gilt() {
+        // HS256 per HMAC unabhängig von der Bibliothek gebaut (exp 2100-01-01):
+        // so sieht ein Keks aus, den eine frühere Fassung ausgestellt hat.
+        let t = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMiLCJyb2xlIjoiQURNSU4iLCJleHAiOjQxMDI0NDQ4MDB9.9Vj7oY-4UXujSmKqix0R2zeIHoAO3vG-wz6YSO7ogxY";
+        assert_eq!(pruefen(t, GEHEIM).expect("muss gelten").sub, "123");
+    }
+
+    #[test]
+    fn abgelaufener_keks_scheitert() {
+        let t = ausstellen(chrono::Utc::now().timestamp() - 3600);
+        assert!(pruefen(&t, GEHEIM).is_none());
+    }
+
+    #[test]
+    fn falsches_geheimnis_scheitert() {
+        let t = ausstellen(chrono::Utc::now().timestamp() + 3600);
+        assert!(pruefen(&t, b"anderes-geheimnis").is_none());
+    }
+
+    #[test]
+    fn veraenderter_inhalt_scheitert() {
+        let t = ausstellen(chrono::Utc::now().timestamp() + 3600);
+        let teile: Vec<&str> = t.split('.').collect();
+        // Rolle auf ADMIN gesetzt, Signatur der alten Fassung behalten.
+        let falsch = "eyJzdWIiOiI5OTkiLCJyb2xlIjoiQURNSU4iLCJleHAiOjQxMDI0NDQ4MDB9";
+        assert!(pruefen(&format!("{}.{}.{}", teile[0], falsch, teile[2]), GEHEIM).is_none());
+    }
+
+    #[test]
+    fn alg_none_scheitert() {
+        // {"alg":"none","typ":"JWT"} ohne Signatur
+        let t = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjMiLCJyb2xlIjoiQURNSU4iLCJleHAiOjQxMDI0NDQ4MDB9.";
+        assert!(pruefen(t, GEHEIM).is_none());
+    }
+}
