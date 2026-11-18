@@ -9,10 +9,28 @@ server {
     access_log off;
     error_log /dev/stderr warn;
 
+    root /usr/share/nginx/html;
+    index index.html;
+
     location / {
-        root /usr/share/nginx/html;
-        index index.html;
         try_files $uri $uri/ /index.html;
+    }
+
+    # Die Einstiegsseite nennt die Bündel mit Prüfsumme im Namen. Ohne diese
+    # Kopfzeile schätzt der Browser selbst, wie lange er sie behalten darf,
+    # und fragt nach einem Deploy noch Stunden nach Bündeln, die es nicht mehr
+    # gibt. "no-cache" heißt: behalten, aber vor jedem Gebrauch nachfragen.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Gebündelte Dateien: der Name ändert sich mit dem Inhalt, also dürfen sie
+    # ewig im Cache liegen. Eine fehlende Datei ist ein echtes 404 – vorher kam
+    # dafür die Einstiegsseite mit 200 zurück, und der Browser zeigte nach einem
+    # Deploy eine weiße Seite ("MIME type text/html" statt Skript).
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
     # Proxy API requests to the backend
