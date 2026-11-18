@@ -364,6 +364,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
     let sync_url = format!("{}/api/sideclans", data.upstream_coc_url);
     let mut side_clans_to_sync: Vec<crate::models::SideClan> = Vec::new();
 
+    let mut hauptclans_ok = false;
     // First, try to fetch main clans to include them as well
     let clans_url = format!("{}/api/clans", data.upstream_coc_url);
     if let Ok(clans_resp) = data
@@ -376,6 +377,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
         if clans_resp.status().is_success() {
             if let Ok(clans_bytes) = clans_resp.bytes().await {
                 if let Ok(main_clans) = serde_json::from_slice::<Vec<Clan>>(&clans_bytes) {
+                    hauptclans_ok = !main_clans.is_empty();
                     for clan in main_clans {
                         if crate::utils::ist_geschlossen(&data.geschlossene_clans, &clan.tag) {
                             continue;
@@ -414,6 +416,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                 side_clans_to_sync.len()
                             );
 
+                            let nebenclans_leer = side_clans.is_empty();
                             // Merge side clans, replacing main clan entries if they exist in side clans (to keep belongs_to)
                             for sc in side_clans {
                                 // Mit dem Hauptclan verschwinden auch seine
@@ -440,10 +443,24 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                 .iter()
                                 .map(|c| c.clan_tag.clone())
                                 .collect();
-                            let _ = sqlx::query("DELETE FROM side_clans WHERE clan_tag != ALL($1)")
+                            // Gelöscht wird nur mit vollständiger Liste. An
+                            // side_clans hängt per ON DELETE CASCADE die ganze
+                            // CWL-Historie: fiel /api/clans einmal aus (etwa
+                            // beim Neustart des Bots), flogen die Hauptclans
+                            // raus und mit ihnen alle ihre Saisons.
+                            if hauptclans_ok && !nebenclans_leer {
+                                let _ = sqlx::query(
+                                    "DELETE FROM side_clans WHERE clan_tag != ALL($1)",
+                                )
                                 .bind(&tags_to_keep)
                                 .execute(&data.db_pool)
                                 .await;
+                            } else {
+                                info!(
+                                    "Background Refresh [Side Clans CWL]: Liste unvollständig (Hauptclans ok: {}, Nebenclans leer: {}) – nichts gelöscht.",
+                                    hauptclans_ok, nebenclans_leer
+                                );
+                            }
 
                             for clan in side_clans_to_sync {
                                 let _ = sqlx::query(
@@ -502,7 +519,7 @@ async fn refresh_side_clans_cwl(data: &AppState) {
     let season = now.format("%Y-%m").to_string();
 
     // Collect leaguegroup data during the main loop for cross-population of ranks afterward
-    let mut collected_leaguegroups: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+    let mut collected_leaguegroups: Vec<(String, Vec<String>)> = Vec::new();
 
     for row in clans {
         use sqlx::Row;
@@ -584,52 +601,31 @@ async fn refresh_side_clans_cwl(data: &AppState) {
                                             .get("season")
                                             .and_then(|v: &serde_json::Value| v.as_str())
                                         {
-                                            leaguegroup_season = Some(s.to_string());
+                                            // Supercell schreibt inzwischen "2026-11-01";
+                                            // gespeichert wird der Monat. Ohne das traf
+                                            // seit Juli 2026 kein Rang mehr eine Zeile.
+                                            leaguegroup_season =
+                                                Some(crate::cwl::saison_monat(s));
                                         }
 
-                                        if let Some(clans_arr) = lg_json
-                                            .get("clans")
-                                            .and_then(|v: &serde_json::Value| v.as_array())
+                                        // Die Gruppe selbst nennt keine Sterne; die
+                                        // Platzierung kommt aus den einzelnen Kriegen.
+                                        if let Some(kriege) = cwl_kriege_holen(data, &lg_json).await
                                         {
-                                            let mut sorted_clans = clans_arr.clone();
-                                            sorted_clans.sort_by(|a, b| {
-                                                let a_stars = a
-                                                    .get("stars")
-                                                    .and_then(|v: &serde_json::Value| v.as_i64())
-                                                    .unwrap_or(0);
-                                                let b_stars = b
-                                                    .get("stars")
-                                                    .and_then(|v: &serde_json::Value| v.as_i64())
-                                                    .unwrap_or(0);
-                                                let a_dest = a
-                                                    .get("destructionPercentage")
-                                                    .and_then(|v: &serde_json::Value| v.as_f64())
-                                                    .unwrap_or(0.0);
-                                                let b_dest = b
-                                                    .get("destructionPercentage")
-                                                    .and_then(|v: &serde_json::Value| v.as_f64())
-                                                    .unwrap_or(0.0);
-
-                                                b_stars.cmp(&a_stars).then_with(|| {
-                                                    b_dest
-                                                        .partial_cmp(&a_dest)
-                                                        .unwrap_or(std::cmp::Ordering::Equal)
-                                                })
-                                            });
-
-                                            // Case-insensitive tag matching for robustness
-                                            if let Some(pos) = sorted_clans.iter().position(|c| {
-                                                c.get("tag")
-                                                    .and_then(|v: &serde_json::Value| v.as_str())
-                                                    .map(|t| t.eq_ignore_ascii_case(&clan_tag))
-                                                    .unwrap_or(false)
-                                            }) {
+                                            let tabelle = crate::cwl::tabelle(&lg_json, &kriege);
+                                            if let Some(pos) = tabelle
+                                                .iter()
+                                                .position(|t| t.eq_ignore_ascii_case(&clan_tag))
+                                            {
                                                 rank = Some((pos + 1) as i32);
                                             }
 
                                             // Store for cross-population after all clans are processed
                                             if let Some(ref lg_s) = leaguegroup_season {
-                                                collected_leaguegroups.push((lg_s.clone(), sorted_clans));
+                                                if !tabelle.is_empty() {
+                                                    collected_leaguegroups
+                                                        .push((lg_s.clone(), tabelle));
+                                                }
                                             }
                                         }
                                     }
@@ -718,21 +714,72 @@ async fn refresh_side_clans_cwl(data: &AppState) {
     // Second pass: cross-populate ranks from leaguegroup data.
     // When we fetched leaguegroup for clan A, the response contained ALL clans in that group.
     // Now that all clan rows exist, fill in any missing ranks from those group responses.
-    for (lg_season, sorted_clans) in &collected_leaguegroups {
-        for (idx, group_clan) in sorted_clans.iter().enumerate() {
-            if let Some(group_tag) = group_clan.get("tag").and_then(|v| v.as_str()) {
-                let group_rank = (idx + 1) as i32;
-                let _ = sqlx::query(
-                    "UPDATE side_clans_cwl_stats SET rank = $1 WHERE clan_tag = $2 AND season = $3 AND rank IS NULL",
-                )
-                .bind(group_rank)
-                .bind(group_tag)
-                .bind(lg_season)
-                .execute(&data.db_pool)
-                .await;
-            }
+    for (lg_season, tabelle) in &collected_leaguegroups {
+        for (idx, group_tag) in tabelle.iter().enumerate() {
+            let group_rank = (idx + 1) as i32;
+            let _ = sqlx::query(
+                "UPDATE side_clans_cwl_stats SET rank = $1 WHERE clan_tag = $2 AND season = $3 AND rank IS NULL",
+            )
+            .bind(group_rank)
+            .bind(group_tag)
+            .bind(lg_season)
+            .execute(&data.db_pool)
+            .await;
         }
     }
+}
+
+/// Holt die Kriege einer CWL-Gruppe in Kurzform. Beendete Kriege ändern sich
+/// nicht mehr und bleiben im Speicher – nach dem Ende der CWL kostet ein
+/// Durchlauf also keine Abfrage mehr. `None`, sobald ein Krieg nicht zu holen
+/// ist: lieber keine neue Platzierung als eine aus halben Daten.
+async fn cwl_kriege_holen(data: &AppState, gruppe: &serde_json::Value) -> Option<Vec<serde_json::Value>> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static BEENDET: OnceLock<Mutex<HashMap<String, serde_json::Value>>> = OnceLock::new();
+    let speicher = BEENDET.get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut kriege = Vec::new();
+    for tag in crate::cwl::kriegs_tags(gruppe) {
+        if let Some(k) = speicher.lock().ok().and_then(|s| s.get(&tag).cloned()) {
+            kriege.push(k);
+            continue;
+        }
+        let url = format!(
+            "{}/clanwarleagues/wars/{}",
+            crate::utils::get_supercell_api_url(GameType::ClashOfClans),
+            crate::utils::encode_tag(&tag)
+        );
+        let antwort = data
+            .client
+            .get(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", data.clash_of_clans_api_token),
+            )
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await
+            .ok()?;
+        if !antwort.status().is_success() {
+            debug!("CWL-Krieg {} nicht abrufbar: {}", tag, antwort.status());
+            return None;
+        }
+        let voll = serde_json::from_slice::<serde_json::Value>(&antwort.bytes().await.ok()?).ok()?;
+        let kurz = crate::cwl::krieg_kurz(&voll);
+        if crate::cwl::ist_beendet(&kurz) {
+            if let Ok(mut s) = speicher.lock() {
+                // Eine Saison sind rund 700 Kriege; Altes nie einzeln räumen.
+                if s.len() > 5000 {
+                    s.clear();
+                }
+                s.insert(tag.clone(), kurz.clone());
+            }
+        }
+        kriege.push(kurz);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    Some(kriege)
 }
 
 fn get_cwl_badge_url(id: i32) -> String {
