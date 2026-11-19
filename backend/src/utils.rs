@@ -5,6 +5,56 @@ use bytes::Bytes;
 use log::error;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
+/// Bremse fuer Abrufe nach aussen, die ein Besucher ausloest (Cache verfehlt
+/// oder abgelaufen). Die Spieler- und Clanseiten nehmen beliebige Tags an; ohne
+/// Bremse koennte jeder mit ausgedachten Tags beliebig viele Supercell-Abrufe
+/// ausloesen – und der Website-Schluessel ist derselbe wie der des LOST Managers,
+/// eine Drosselung durch Supercell traefe also die Bots mit. Der Hintergrund-
+/// Abgleich (`background.rs`) ruft `update_*_cache` direkt und ist nicht gebremst.
+pub(crate) struct Abrufbremse {
+    /// (Beginn des Fensters in Sekunden, Abrufe darin)
+    stand: std::sync::Mutex<(u64, u32)>,
+    max: u32,
+    fenster_s: u64,
+    name: &'static str,
+}
+
+impl Abrufbremse {
+    pub(crate) const fn neu(name: &'static str, max: u32, fenster_s: u64) -> Self {
+        Self {
+            stand: std::sync::Mutex::new((0, 0)),
+            max,
+            fenster_s,
+            name,
+        }
+    }
+
+    /// true = Abruf erlaubt. Zaehlt ihn gleich mit.
+    pub(crate) fn darf(&self, jetzt_s: u64) -> bool {
+        let mut stand = self.stand.lock().unwrap_or_else(|e| e.into_inner());
+        let beginn = jetzt_s - jetzt_s % self.fenster_s;
+        if stand.0 != beginn {
+            *stand = (beginn, 0);
+        }
+        if stand.1 >= self.max {
+            if stand.1 == self.max {
+                // nur die erste Abweisung je Fenster ins Log
+                error!(
+                    "Abrufbremse {}: mehr als {} Abrufe in {} s, weitere aus dem alten Stand",
+                    self.name, self.max, self.fenster_s
+                );
+                stand.1 += 1;
+            }
+            return false;
+        }
+        stand.1 += 1;
+        true
+    }
+}
+
+static SUPERCELL_BREMSE: Abrufbremse = Abrufbremse::neu("Supercell", 60, 10);
+static UPSTREAM_BREMSE: Abrufbremse = Abrufbremse::neu("Bot", 60, 10);
+
 pub fn format_url(base: &str, path: &str) -> String {
     format!("{}{}", base, path)
 }
@@ -846,6 +896,13 @@ pub async fn get_cached_or_update_supercell_cache(
         return Ok(Bytes::from(body.clone()));
     }
 
+    if !SUPERCELL_BREMSE.darf(now as u64) {
+        if let Ok(Some((body, _))) = cached_result {
+            return Ok(Bytes::from(body));
+        }
+        return Err("Abrufbremse: zu viele Abrufe, bitte gleich nochmal".into());
+    }
+
     match update_supercell_cache(data, game, url_path).await {
         Ok(body) => Ok(body),
         Err(e) => {
@@ -882,6 +939,13 @@ pub async fn get_cached_or_update_upstream_cache(
         && now - updated_at < ttl_seconds
     {
         return Ok(Bytes::from(body.clone()));
+    }
+
+    if !UPSTREAM_BREMSE.darf(now as u64) {
+        if let Ok(Some((body, _))) = cached_result {
+            return Ok(Bytes::from(body));
+        }
+        return Err("Abrufbremse: zu viele Abrufe, bitte gleich nochmal".into());
     }
 
     match update_upstream_cache(data, game, url_path).await {
@@ -1054,7 +1118,7 @@ pub async fn update_supercell_cache(
 
 #[cfg(test)]
 mod tests {
-    use super::{clan_tag_normalisiert, filter_clan_data, ist_geschlossen};
+    use super::{Abrufbremse, clan_tag_normalisiert, filter_clan_data, ist_geschlossen};
     use crate::models::GameType;
     use bytes::Bytes;
 
@@ -1105,5 +1169,23 @@ mod tests {
         );
         let wert: serde_json::Value = serde_json::from_slice(&raus).unwrap();
         assert_eq!(wert.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn abrufbremse_haelt_das_fenster_ein() {
+        let b = Abrufbremse::neu("probe", 3, 10);
+        // drei im Fenster 100..109 erlaubt, der vierte nicht
+        assert!(b.darf(100));
+        assert!(b.darf(105));
+        assert!(b.darf(109));
+        assert!(!b.darf(109));
+        assert!(!b.darf(109));
+        // neues Fenster: wieder frei
+        assert!(b.darf(110));
+        assert!(b.darf(111));
+        assert!(b.darf(119));
+        assert!(!b.darf(119));
+        // lange Pause dazwischen
+        assert!(b.darf(10_000));
     }
 }
