@@ -56,6 +56,15 @@
     let laedt = true;
     let fehler: string | null = null;
 
+    // Laufnummern je Abfrageart: kommt eine Antwort an, nachdem schon eine
+    // neuere losgeschickt wurde (Server gewechselt, weitergeblättert), wird sie
+    // verworfen. Sonst stünden Tickets des vorigen Servers unter dem neuen,
+    // samt Links in den falschen Server.
+    let listeNr = 0;
+    let altdatenNr = 0;
+    let detailNr = 0;
+    let allesNr = 0;
+
     // Der Status-Filter hängt am Reiter, nicht an einem eigenen Bedienelement:
     // "offen" ist der Alltagsblick, "alle" der Nachschlageblick.
     $: status = reiter === 'offen' ? 'open' : '';
@@ -93,9 +102,14 @@
 
     async function serverWechseln(g: TicketGuild) {
         guild = g;
-        detail = null;
+        detailSchliessen();
+        allesNr++;
         seite = 0;
         altdatenSeite = 0;
+        zeilen = [];
+        gesamt = 0;
+        altdaten = [];
+        altdatenGesamt = 0;
         fehler = null;
         const verwalten = verwaltungGuilds.some((v) => v.id === g.id);
         if (nurVerwalten(g)) {
@@ -112,6 +126,7 @@
 
     async function alles() {
         if (!guild) return;
+        const nr = ++allesNr;
         laedt = true;
         fehler = null;
         try {
@@ -119,18 +134,23 @@
                 ladeStats(apiBaseUrl, guild.id),
                 ladePanels(apiBaseUrl, guild.id),
             ]);
+            if (nr !== allesNr) return;
             stats = s;
             panels = p.items;
-            await liste();
+            // Auf dem Altdaten-Reiter die Altdaten des neuen Servers holen,
+            // nicht die Ticketliste – sonst blieben die des vorigen stehen.
+            if (reiter === 'altdaten') await listeAltdaten();
+            else await liste();
         } catch (e) {
-            fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
+            if (nr === allesNr) fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
-            laedt = false;
+            if (nr === allesNr) laedt = false;
         }
     }
 
     async function liste() {
         if (!guild) return;
+        const nr = ++listeNr;
         try {
             const res = await ladeTickets(apiBaseUrl, guild.id, {
                 status,
@@ -138,15 +158,17 @@
                 limit: PRO_SEITE,
                 offset: seite * PRO_SEITE,
             });
+            if (nr !== listeNr) return;
             zeilen = res.items;
             gesamt = res.total;
         } catch (e) {
-            fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
+            if (nr === listeNr) fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
         }
     }
 
     async function listeAltdaten() {
         if (!guild) return;
+        const nr = ++altdatenNr;
         try {
             const res = await ladeLegacy(
                 apiBaseUrl,
@@ -154,16 +176,17 @@
                 PRO_SEITE,
                 altdatenSeite * PRO_SEITE,
             );
+            if (nr !== altdatenNr) return;
             altdaten = res.items;
             altdatenGesamt = res.total;
         } catch (e) {
-            fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
+            if (nr === altdatenNr) fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
         }
     }
 
     async function reiterWechseln(neu: typeof reiter) {
         reiter = neu;
-        detail = null;
+        detailSchliessen();
         if (neu === 'verwaltung') return;
         if (neu === 'altdaten') {
             altdatenSeite = 0;
@@ -190,14 +213,23 @@
         }
     }
 
+    /** Schließt die Detailansicht; eine noch laufende Abfrage öffnet sie nicht wieder. */
+    function detailSchliessen() {
+        detailNr++;
+        detail = null;
+        detailLaedt = false;
+    }
+
     async function oeffnen(id: number) {
+        const nr = ++detailNr;
         detailLaedt = true;
         try {
-            detail = await ladeDetail(apiBaseUrl, id);
+            const d = await ladeDetail(apiBaseUrl, id);
+            if (nr === detailNr) detail = d;
         } catch (e) {
-            fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
+            if (nr === detailNr) fehler = e instanceof Error ? e.message : 'Unbekannter Fehler';
         } finally {
-            detailLaedt = false;
+            if (nr === detailNr) detailLaedt = false;
         }
     }
 
@@ -293,7 +325,7 @@
         {:else if detail}
             <!-- Verlauf eines einzelnen Tickets -->
             <div class="verlauf">
-                <button class="zurueck" on:click={() => (detail = null)}>
+                <button class="zurueck" on:click={detailSchliessen}>
                     ← Zurück zur Liste
                 </button>
 
