@@ -58,11 +58,25 @@ export interface TicketAttachment {
     url: string | null;
 }
 
+/** Ein Embed aus dem Verlauf, so weit der Bot es festhält. Alles optional. */
+export interface TicketEmbed {
+    author?: string;
+    title?: string;
+    url?: string;
+    description?: string;
+    fields?: { name: string; value: string }[];
+    image?: string;
+    thumbnail?: string;
+    footer?: string;
+}
+
 export interface TicketMessage {
     author_id: string;
     author_name: string;
     bot: boolean;
     content: string | null;
+    /** Fehlt bei Nachrichten ohne Embed und bei einem Bot-Stand vor dem 20.11.2026. */
+    embeds?: TicketEmbed[];
     sent_at: string;
     edited: boolean;
     deleted: boolean;
@@ -429,6 +443,14 @@ export function groesse(bytes: number): string {
 export interface TicketNamen {
     nutzer: Map<string, string>;
     rollen: Map<string, string>;
+}
+
+/**
+ * Gibt die Adresse nur zurück, wenn sie mit http(s) beginnt. Embeds kommen von
+ * fremden Bots; ein `javascript:`-Link daraus darf nie in ein `href`.
+ */
+export function webadresse(url: string | null | undefined): string | null {
+    return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : null;
 }
 
 export function namenAusTicket(detail: TicketDetail | null): TicketNamen {

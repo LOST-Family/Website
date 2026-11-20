@@ -15,6 +15,7 @@
         datum,
         groesse,
         erwaehnungen,
+        webadresse,
         namenAusTicket,
         type TicketGuild,
         type TicketStats,
@@ -398,6 +399,50 @@
                             {#if m.content}
                                 <p class="text">{erwaehnungen(m.content, namen)}</p>
                             {/if}
+                            {#each m.embeds ?? [] as e, ei (ei)}
+                                <div class="embed">
+                                    {#if e.author}<div class="e-leise">
+                                            {e.author}
+                                        </div>{/if}
+                                    {#if e.title}
+                                        <div class="e-titel">
+                                            {#if webadresse(e.url)}
+                                                <a
+                                                    href={webadresse(e.url)}
+                                                    target="_blank"
+                                                    rel="noreferrer">{e.title}</a
+                                                >
+                                            {:else}{e.title}{/if}
+                                        </div>
+                                    {/if}
+                                    {#if e.description}
+                                        <p class="text">
+                                            {erwaehnungen(e.description, namen)}
+                                        </p>
+                                    {/if}
+                                    {#each e.fields ?? [] as f, fi (fi)}
+                                        <div class="e-feld">
+                                            <b>{f.name}</b>
+                                            <p class="text">
+                                                {erwaehnungen(f.value, namen)}
+                                            </p>
+                                        </div>
+                                    {/each}
+                                    {#each [e.image, e.thumbnail] as bild, bi (bi)}
+                                        {#if webadresse(bild)}
+                                            <a
+                                                class="anhang"
+                                                href={webadresse(bild)}
+                                                target="_blank"
+                                                rel="noreferrer">Bild im Embed</a
+                                            >
+                                        {/if}
+                                    {/each}
+                                    {#if e.footer}<div class="e-leise e-fuss">
+                                            {e.footer}
+                                        </div>{/if}
+                                </div>
+                            {/each}
                             {#each m.attachments as a (a.filename + a.url)}
                                 {#if a.url && a.content_type?.startsWith('image/')}
                                     <a
@@ -1131,6 +1176,39 @@
         white-space: pre-wrap;
         word-break: break-word;
         line-height: 1.5;
+    }
+
+    .embed {
+        margin-top: 0.4rem;
+        padding: 0.55rem 0.75rem;
+        max-width: 560px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border-left: 3px solid rgba(88, 101, 242, 0.35);
+        font-size: 0.92rem;
+    }
+    .tickets-page.light .embed {
+        background: #f7f9fc;
+    }
+    .e-leise {
+        font-size: 0.75rem;
+        color: #72767d;
+    }
+    .e-titel {
+        font-weight: 600;
+        margin: 0.1rem 0;
+    }
+    .e-titel a {
+        color: inherit;
+    }
+    .e-feld {
+        margin-top: 0.4rem;
+    }
+    .e-feld b {
+        font-size: 0.8rem;
+    }
+    .e-fuss {
+        margin-top: 0.4rem;
     }
 
     .anhang-bild {
