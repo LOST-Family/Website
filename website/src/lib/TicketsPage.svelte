@@ -15,6 +15,7 @@
         datum,
         groesse,
         erwaehnungen,
+        namenAusTicket,
         type TicketGuild,
         type TicketStats,
         type TicketPanel,
@@ -51,6 +52,7 @@
     let altdatenSeite = 0;
 
     let detail: TicketDetail | null = null;
+    $: namen = namenAusTicket(detail);
     let detailLaedt = false;
 
     let laedt = true;
@@ -394,7 +396,7 @@
                                     >{/if}
                             </div>
                             {#if m.content}
-                                <p class="text">{erwaehnungen(m.content)}</p>
+                                <p class="text">{erwaehnungen(m.content, namen)}</p>
                             {/if}
                             {#each m.attachments as a (a.filename + a.url)}
                                 {#if a.url && a.content_type?.startsWith('image/')}

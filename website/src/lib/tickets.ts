@@ -416,11 +416,37 @@ export function groesse(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Discord-Erwähnungen lesbar machen; alles andere bleibt Text. */
-export function erwaehnungen(text: string | null): string {
+/** Namen der Leute, die in einem Ticket vorkommen: wer geschrieben hat, wem es
+ *  gehört, wer es übernommen hat. Mehr weiß das Dashboard nicht – wer nur erwähnt
+ *  wurde und nie schrieb, bleibt eine Nummer. Bots zuletzt, damit ein Mensch mit
+ *  derselben ID (gibt es nicht, aber sicher ist sicher) nicht überschrieben wird;
+ *  bei mehreren Namen desselben Menschen gilt der jüngste. */
+export function namenAusTicket(detail: TicketDetail | null): Map<string, string> {
+    const namen = new Map<string, string>();
+    if (!detail) return namen;
+    for (const m of detail.messages) {
+        if (m.author_id && m.author_name) namen.set(m.author_id, m.author_name);
+    }
+    const t = detail.ticket;
+    if (t.owner_id && t.owner_name && !namen.has(t.owner_id))
+        namen.set(t.owner_id, t.owner_name);
+    if (t.claimed_by && t.claimed_by_name && !namen.has(t.claimed_by))
+        namen.set(t.claimed_by, t.claimed_by_name);
+    return namen;
+}
+
+/** Discord-Erwähnungen lesbar machen; alles andere bleibt Text. Mit `namen`
+ *  steht statt der Nummer der Name da, soweit er bekannt ist. */
+export function erwaehnungen(
+    text: string | null,
+    namen?: Map<string, string>,
+): string {
     if (!text) return '';
-    return text
-        .replace(/<@!?(\d+)>/g, '@$1')
-        .replace(/<#(\d+)>/g, '#$1')
-        .replace(/<@&(\d+)>/g, '@$1');
+    // Ein Durchgang, damit ein eingesetzter Name nicht selbst noch einmal
+    // als Erwähnung gelesen wird.
+    return text.replace(/<(@!?|@&|#)(\d+)>/g, (_, art, id) =>
+        art === '#'
+            ? '#' + id
+            : '@' + (art === '@&' ? id : (namen?.get(id) ?? id)),
+    );
 }
