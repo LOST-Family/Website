@@ -320,11 +320,10 @@ pub async fn discord_callback(
         exp: expiration as usize,
     };
 
-    let token_str = match encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(data.jwt_secret.as_bytes()),
-    ) {
+    // Seit jsonwebtoken 12 lehnt from_secret ein leeres Geheimnis ab (Result).
+    let token_str = match EncodingKey::from_secret(data.jwt_secret.as_bytes())
+        .and_then(|key| encode(&Header::default(), &claims, &key))
+    {
         Ok(t) => t,
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
@@ -430,10 +429,11 @@ impl FromRequest for AuthenticatedUser {
         };
 
         Box::pin(async move {
-            let decoding_key = jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes());
             let validation = jsonwebtoken::Validation::default();
 
-            match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
+            match jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes())
+                .and_then(|key| jsonwebtoken::decode::<Claims>(&token, &key, &validation))
+            {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
@@ -497,10 +497,11 @@ impl FromRequest for OptionalAuthenticatedUser {
         };
 
         Box::pin(async move {
-            let decoding_key = jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes());
             let validation = jsonwebtoken::Validation::default();
 
-            match jsonwebtoken::decode::<Claims>(&token, &decoding_key, &validation) {
+            match jsonwebtoken::DecodingKey::from_secret(data.jwt_secret.as_bytes())
+                .and_then(|key| jsonwebtoken::decode::<Claims>(&token, &key, &validation))
+            {
                 Ok(c) => {
                     let user_id = c.claims.sub.clone();
                     // Fetch linked players and state from DB to ensure real-time permissions
@@ -557,14 +558,24 @@ mod jwt_tests {
     const GEHEIM: &[u8] = b"probe-geheimnis";
 
     fn pruefen(token: &str, geheim: &[u8]) -> Option<Claims> {
-        decode::<Claims>(token, &DecodingKey::from_secret(geheim), &Validation::default())
+        DecodingKey::from_secret(geheim)
+            .and_then(|key| decode::<Claims>(token, &key, &Validation::default()))
             .ok()
             .map(|d| d.claims)
     }
 
     fn ausstellen(exp: i64) -> String {
         let c = Claims { sub: "123".into(), role: Some("ADMIN".into()), exp: exp as usize };
-        encode(&Header::default(), &c, &EncodingKey::from_secret(GEHEIM)).unwrap()
+        encode(&Header::default(), &c, &EncodingKey::from_secret(GEHEIM).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn leeres_geheimnis_wird_abgelehnt() {
+        // Mit leerem Geheimnis könnte jeder Kekse signieren; seit jsonwebtoken 12
+        // scheitert schon der Schlüssel, main.rs bricht deshalb beim Start ab.
+        assert!(EncodingKey::from_secret(b"").is_err());
+        let t = ausstellen(chrono::Utc::now().timestamp() + 3600);
+        assert!(pruefen(&t, b"").is_none());
     }
 
     #[test]

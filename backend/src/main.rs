@@ -106,6 +106,9 @@ async fn main() -> std::io::Result<()> {
     )
     .expect("Invalid redirect URL");
     let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    // Ein leeres Geheimnis hieße: jeder kann Anmeldekekse fälschen (bis jsonwebtoken 11)
+    // bzw. jede Anmeldung scheitert still mit 500 (ab 12). Lieber gar nicht starten.
+    assert!(!jwt_secret.trim().is_empty(), "JWT_SECRET must not be empty");
     let frontend_url =
         env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
     // Leer gesetzt heisst "nicht konfiguriert" — sonst würde eine leere Zeile
