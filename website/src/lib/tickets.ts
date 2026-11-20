@@ -370,10 +370,23 @@ export function farbeHex(wert: number | null | undefined): string | null {
 // Darstellung
 // ---------------------------------------------------------------------------
 
-/** Die API liefert Postgres-Zeitstempel als "2026-09-09 21:14:03.0". */
+/**
+ * Die API liefert Postgres-Zeitstempel als "2026-09-09 21:14:03.0" — ohne
+ * Zonenangabe, gemeint ist UTC (Datenbank und Bot laufen in UTC; gegen die
+ * Discord-Nachrichten-IDs geprüft am 20.11.2026). Ohne das angehängte "Z"
+ * liest der Browser die Angabe als Ortszeit, und jede Uhrzeit im Dashboard
+ * steht eine Stunde (im Sommer zwei) zu früh da. Bringt die Angabe schon
+ * eine Zone mit, bleibt sie unangetastet.
+ */
+export function alsDatum(roh: string): Date {
+    let iso = roh.trim().replace(' ', 'T');
+    if (iso.includes('T') && !/(Z|[+-]\d{2}(:?\d{2})?)$/i.test(iso)) iso += 'Z';
+    return new Date(iso);
+}
+
 export function zeit(roh: string | null | undefined): string {
     if (!roh || roh === 'null') return '—';
-    const d = new Date(roh.replace(' ', 'T'));
+    const d = alsDatum(roh);
     if (Number.isNaN(d.getTime())) return roh;
     return d.toLocaleString('de-DE', {
         day: '2-digit',
@@ -386,9 +399,15 @@ export function zeit(roh: string | null | undefined): string {
 
 export function datum(roh: string | null | undefined): string {
     if (!roh || roh === 'null') return '—';
-    const d = new Date(roh.replace(' ', 'T'));
+    // Tagesangaben ("2026-11-19") sind UTC-Tage des Bots; als solche zeigen,
+    // sonst rutscht der Balken westlich von Greenwich auf den Vortag.
+    const d = alsDatum(roh);
     if (Number.isNaN(d.getTime())) return roh;
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    return d.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: 'UTC',
+    });
 }
 
 export function groesse(bytes: number): string {
