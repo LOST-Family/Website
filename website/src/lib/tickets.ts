@@ -75,6 +75,12 @@ export interface TicketDetail {
         members: string[];
     };
     messages: TicketMessage[];
+    /** Namen zu den Erwähnungen im Verlauf, soweit der Bot sie kennt. Fehlt
+     *  bei einem Bot-Stand vor dem 20.11.2026. */
+    names?: {
+        users?: Record<string, string>;
+        roles?: Record<string, string>;
+    };
 }
 
 export interface LegacyRow {
@@ -416,37 +422,49 @@ export function groesse(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Namen der Leute, die in einem Ticket vorkommen: wer geschrieben hat, wem es
- *  gehört, wer es übernommen hat. Mehr weiß das Dashboard nicht – wer nur erwähnt
- *  wurde und nie schrieb, bleibt eine Nummer. Bots zuletzt, damit ein Mensch mit
- *  derselben ID (gibt es nicht, aber sicher ist sicher) nicht überschrieben wird;
- *  bei mehreren Namen desselben Menschen gilt der jüngste. */
-export function namenAusTicket(detail: TicketDetail | null): Map<string, string> {
-    const namen = new Map<string, string>();
-    if (!detail) return namen;
+/** Namen zu den Erwähnungen eines Tickets. Nutzer: was der Bot zu den erwähnten
+ *  IDs kennt, darüber wer geschrieben hat (so heißt er auch über seiner
+ *  Nachricht), dazu Besitzer und Bearbeiter. Rollen kommen nur vom Bot. Was
+ *  niemand kennt (Ausgetretene, gelöschte Rollen), bleibt eine Nummer. */
+export interface TicketNamen {
+    nutzer: Map<string, string>;
+    rollen: Map<string, string>;
+}
+
+export function namenAusTicket(detail: TicketDetail | null): TicketNamen {
+    const nutzer = new Map<string, string>();
+    const rollen = new Map<string, string>();
+    if (!detail) return { nutzer, rollen };
+    const eintragen = (ziel: Map<string, string>, quelle: unknown) => {
+        if (!quelle || typeof quelle !== 'object') return;
+        for (const [id, name] of Object.entries(quelle)) {
+            if (typeof name === 'string' && name.trim() !== '')
+                ziel.set(id, name);
+        }
+    };
+    eintragen(nutzer, detail.names?.users);
+    eintragen(rollen, detail.names?.roles);
     for (const m of detail.messages) {
-        if (m.author_id && m.author_name) namen.set(m.author_id, m.author_name);
+        if (m.author_id && m.author_name) nutzer.set(m.author_id, m.author_name);
     }
     const t = detail.ticket;
-    if (t.owner_id && t.owner_name && !namen.has(t.owner_id))
-        namen.set(t.owner_id, t.owner_name);
-    if (t.claimed_by && t.claimed_by_name && !namen.has(t.claimed_by))
-        namen.set(t.claimed_by, t.claimed_by_name);
-    return namen;
+    if (t.owner_id && t.owner_name && !nutzer.has(t.owner_id))
+        nutzer.set(t.owner_id, t.owner_name);
+    if (t.claimed_by && t.claimed_by_name && !nutzer.has(t.claimed_by))
+        nutzer.set(t.claimed_by, t.claimed_by_name);
+    return { nutzer, rollen };
 }
 
 /** Discord-Erwähnungen lesbar machen; alles andere bleibt Text. Mit `namen`
  *  steht statt der Nummer der Name da, soweit er bekannt ist. */
-export function erwaehnungen(
-    text: string | null,
-    namen?: Map<string, string>,
-): string {
+export function erwaehnungen(text: string | null, namen?: TicketNamen): string {
     if (!text) return '';
     // Ein Durchgang, damit ein eingesetzter Name nicht selbst noch einmal
     // als Erwähnung gelesen wird.
     return text.replace(/<(@!?|@&|#)(\d+)>/g, (_, art, id) =>
         art === '#'
             ? '#' + id
-            : '@' + (art === '@&' ? id : (namen?.get(id) ?? id)),
+            : '@' +
+              ((art === '@&' ? namen?.rollen : namen?.nutzer)?.get(id) ?? id),
     );
 }
